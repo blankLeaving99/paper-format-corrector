@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git config *)",
+      "Bash(New-Item -ItemType File -Force -Path \"input/.gitkeep\")",
+      "Bash(Out-Null)",
+      "Bash(New-Item -ItemType File -Force -Path \"output/.gitkeep\")",
+      "Bash(git init *)",
+      "Bash(git add *)",
+      "Bash(pip install *)",
+      "Bash(python -c \"import style_extractor; import format_corrector; import main; print\\('All imports OK'\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import style_extractor; import format_corrector; import main; print\\('All imports OK'\\)\")",
+      "Bash('E:\\\\Python\\\\python_3_13_3\\\\python.exe' -c ' *)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" test_corrector.py)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py -f input/sample_paper.docx --format txt md)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" test_requirement.py)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py -r input/requirement_natural.txt -f input/sample_paper.docx -o output/with_requirement.docx)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" test_thesis.py)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -m pytest tests/test_basic.py -v)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -m pip install pytest -q)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py -f input/thesis_sample.docx -r input/thesis_requirement.txt --score --diff -o output/thesis_v3.docx)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py -f input/thesis_sample.docx -r input/thesis_requirement.txt --score -o output/final_test.docx)"
+    ]
+  }
+}
