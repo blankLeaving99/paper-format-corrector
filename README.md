@@ -1,6 +1,6 @@
 # 论文格式自动矫正工具 v3.0
 
-基于模板和规则自动矫正 Word 论文格式的工具，支持批量处理、质量评分、差异对比、多格式导出，提供 Web GUI 和桌面 GUI 两种界面。
+基于模板和规则自动矫正 Word 论文格式的工具，支持批量处理、质量评分、差异对比、多格式导出，提供桌面 GUI 和 Web GUI 两种界面。
 
 ## 功能特性
 
@@ -18,26 +18,68 @@
 - **参考文献格式化** — GB/T 7714 国标格式
 - **页眉页脚** — 自动设置页眉、页码
 - **目录生成** — 自动生成/更新目录
-- **双 GUI 界面** — Web GUI（浏览器）+ 桌面 GUI（原生窗口）
+- **双 GUI 界面** — 桌面 GUI（原生窗口，支持拖拽）+ Web GUI（浏览器）
 - **批量处理** — 一键处理整个目录的文档
 - **插件系统** — 自定义矫正规则
 
+## 快速开始
+
+### 方式一：双击运行（推荐）
+
+直接双击项目根目录下的 `run.py`，程序会自动：
+1. 检测依赖是否安装
+2. 如有缺失，弹窗提示并让你选择安装位置
+3. 弹出模式选择窗口，选择桌面 GUI 或 Web GUI
+
+### 方式二：命令行
+
+```bash
+# 进入项目目录
+cd paper-format-corrector
+
+# 启动桌面 GUI（推荐，原生窗口，支持文件拖拽）
+python run.py
+
+# 命令行模式
+python run.py -f input/paper.docx --score
+```
+
 ## 安装
+
+### 自动安装（推荐）
+
+双击 `run.py`，程序会自动检测缺失依赖并提示安装，所有依赖安装到你选择的目录下的虚拟环境中，不污染系统 Python。
+
+### 手动安装
 
 ```bash
 git clone https://github.com/blankLeaving99/paper-format-corrector.git
 cd paper-format-corrector
+
+# 创建虚拟环境
+python -m venv .venv
+.venv\Scripts\activate
+
+# 安装依赖
 pip install -r requirements.txt
 
 # 可选依赖
-pip install gradio            # Web GUI（桌面 GUI 无需额外安装）
-pip install docx2pdf          # PDF 导出
-pip install mammoth           # 更好的 HTML 导出
-pip install pdfplumber        # PDF 文件导入
-pip install openai anthropic  # LLM 解析
+pip install tkinterdnd2        # 桌面 GUI 拖拽支持
+pip install gradio             # Web GUI
+pip install docx2pdf           # PDF 导出
+pip install mammoth            # 更好的 HTML 导出
+pip install pdfplumber         # PDF 文件导入
 ```
 
-## 快速开始
+### 打包为 exe
+
+```bash
+python build.py
+```
+
+打包完成后，`dist/` 目录下的 exe 文件可以直接发给朋友使用，无需安装 Python。
+
+## 使用说明
 
 ### 目录结构准备
 
@@ -51,48 +93,46 @@ template/
 ├── template.docx
 ```
 
-### 启动 GUI
+### 桌面 GUI 功能
 
-```bash
-# 桌面 GUI（推荐，原生窗口，无需额外依赖）
-python -m paper_format_corrector --desktop-gui
-
-# Web GUI（浏览器打开，需要安装 gradio）
-python -m paper_format_corrector --gui
-```
+- **文件拖拽** — 直接拖拽文件到输入框（需安装 tkinterdnd2）
+- **批量处理** — 点击"批量矫正"按钮选择多个文件
+- **论文矫正** — 上传论文、选择选项、一键矫正
+- **封面生成** — 填写论文信息，自动生成封面
+- **规则检查** — 上传论文和规则文件，检查格式
 
 ### 命令行用法
 
 ```bash
 # 批量处理 input/ 目录
-python -m paper_format_corrector
+python run.py
 
 # 处理单个文件
-python -m paper_format_corrector -f input/paper.docx -o output/formatted.docx
+python run.py -f input/paper.docx -o output/formatted.docx
 
 # 质量评分
-python -m paper_format_corrector -f input/paper.docx --score
+python run.py -f input/paper.docx --score
 
 # 差异对比
-python -m paper_format_corrector -f input/paper.docx --diff
+python run.py -f input/paper.docx --diff
 
 # 需求文档驱动
-python -m paper_format_corrector -r requirement.txt -f input/paper.docx
+python run.py -r requirement.txt -f input/paper.docx
 
 # LLM 智能解析
-python -m paper_format_corrector -r requirement.txt -f input/paper.docx --llm --llm-key sk-xxx
+python run.py -r requirement.txt -f input/paper.docx --llm --llm-key sk-xxx
 
 # 导出多格式
-python -m paper_format_corrector -f input/paper.docx --format pdf html md
+python run.py -f input/paper.docx --format pdf html md
 
 # 生成封面
-python -m paper_format_corrector --cover title="论文题目" author="张三" college="学院" major="专业"
+python run.py --cover title="论文题目" author="张三" college="学院" major="专业"
 
 # 自定义规则检查
-python -m paper_format_corrector -f input/paper.docx --rules my_rules.yaml
+python run.py -f input/paper.docx --rules my_rules.yaml
 
 # 查看模板信息
-python -m paper_format_corrector --extract
+python run.py --extract
 ```
 
 ## 配置
@@ -135,10 +175,49 @@ python -m paper_format_corrector --extract
 左右：3.17cm
 ```
 
+## 支持的导入格式
+
+| 格式 | 说明 | 依赖 |
+|------|------|------|
+| .docx | Word 文档（推荐） | 内置支持 |
+| .doc | 旧版 Word 文档 | LibreOffice 或 docx2docx |
+| .odt | OpenDocument 文档 | LibreOffice |
+| .rtf | Rich Text Format | LibreOffice |
+| .pdf | PDF 文档 | pdfplumber / PyMuPDF / PyPDF2 |
+| .txt | 纯文本 | 内置支持 |
+| .md | Markdown | 内置支持 |
+
+## 自定义规则检查
+
+创建 YAML 格式的规则文件：
+
+```yaml
+rules:
+  - name: "参考文献不超过50篇"
+    check: reference_count
+    params:
+      max: 50
+    severity: warning
+
+  - name: "正文字号为小四"
+    check: body_font_size
+    params:
+      expected: 12
+    severity: error
+```
+
+然后运行：
+
+```bash
+python run.py -f input/paper.docx --rules my_rules.yaml
+```
+
 ## 项目结构
 
 ```
 paper-format-corrector/
+├── run.py                           # 启动器（双击运行）
+├── build.py                         # 打包为 exe 的脚本
 ├── src/
 │   └── paper_format_corrector/
 │       ├── __init__.py
@@ -146,7 +225,7 @@ paper-format-corrector/
 │       ├── app.py                   # 主程序核心类
 │       ├── cli.py                   # CLI 命令行入口
 │       ├── gui.py                   # Web GUI (Gradio)
-│       ├── desktop_gui.py           # 桌面 GUI (tkinter)
+│       ├── desktop_gui.py           # 桌面 GUI (tkinter，支持拖拽)
 │       ├── core/                    # 核心处理引擎
 │       │   ├── format_corrector.py  # 格式矫正器
 │       │   ├── format_exporter.py   # 多格式导出
@@ -173,7 +252,8 @@ paper-format-corrector/
 │       │   └── cover_page_generator.py  # 封面生成
 │       └── infra/                   # 基础设施
 │           ├── logger.py            # 日志
-│           └── plugin_manager.py    # 插件管理
+│           ├── plugin_manager.py    # 插件管理
+│           └── path_security.py     # 路径安全校验
 ├── config/
 │   └── config.yaml                  # 配置文件
 ├── tests/                           # 测试
@@ -184,42 +264,14 @@ paper-format-corrector/
 └── requirements.txt                 # 依赖
 ```
 
-## 自定义规则检查
+## 联系我们
 
-创建 YAML 格式的规则文件：
+本项目为开源项目，如果您在使用过程中遇到任何问题或有任何建议，欢迎通过以下方式联系我们：
 
-```yaml
-rules:
-  - name: "参考文献不超过50篇"
-    check: reference_count
-    params:
-      max: 50
-    severity: warning
+- **GitHub**: https://github.com/blankLeaving99/paper-format-corrector
+- **问题反馈**: 请提交 Issue 到上述仓库，我们会第一时间处理
 
-  - name: "正文字号为小四"
-    check: body_font_size
-    params:
-      expected: 12
-    severity: error
-```
-
-然后运行：
-
-```bash
-python -m paper_format_corrector -f input/paper.docx --rules my_rules.yaml
-```
-
-## 支持的导入格式
-
-| 格式 | 说明 | 依赖 |
-|------|------|------|
-| .docx | Word 文档（推荐） | 内置支持 |
-| .doc | 旧版 Word 文档 | LibreOffice 或 docx2docx |
-| .odt | OpenDocument 文档 | LibreOffice |
-| .rtf | Rich Text Format | LibreOffice |
-| .pdf | PDF 文档 | pdfplumber / PyMuPDF / PyPDF2 |
-| .txt | 纯文本 | 内置支持 |
-| .md | Markdown | 内置支持 |
+感谢您的使用与支持！
 
 ## 许可证
 
