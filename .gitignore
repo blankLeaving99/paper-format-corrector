@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+input/*
+output/*
+!input/.gitkeep
+!output/.gitkeep
+template/*.docx
+template/*.doc
+.venv/
