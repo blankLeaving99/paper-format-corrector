@@ -39,7 +39,8 @@ def main():
     python -m paper_format_corrector -f paper.docx --format pdf html
 
   GUI界面:
-    python -m paper_format_corrector --gui
+    python -m paper_format_corrector --gui          # Web GUI（浏览器）
+    python -m paper_format_corrector --desktop-gui   # 桌面 GUI（原生窗口）
         """,
     )
 
