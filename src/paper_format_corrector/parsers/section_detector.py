@@ -18,6 +18,8 @@ class SectionType(Enum):
     FIGURE_CAPTION = auto()
     TABLE_CAPTION = auto()
     FORMULA = auto()
+    FORMULA_CONTENT = auto()
+    CODE = auto()
     REFERENCE_TITLE = auto()
     REFERENCE_ITEM = auto()
     ACKNOWLEDGMENT = auto()
@@ -72,6 +74,16 @@ class SectionDetector:
         self._seen_abstract_en = False
         self._in_references = False
         self._chapter_count = 0
+
+        # 代码/公式检测配置
+        self._mono_fonts = {"consolas", "courier new", "monospace", "fixedsys", "lucida console", "source code pro", "menlo", "monaco"}
+        self._math_fonts = {"cambria math", "symbol", "mt extra", "math"}
+        self._code_chars = set("{}();=<>[]|&!~^*/\\")
+        self._math_unicode = re.compile(
+            r"[∀-⋿←-⇿⁰-₟Α-ω°-¹"
+            r"≤≥≠∞∑∏∫√∈∉"
+            r"′″‴‵‶‷]"
+        )
 
     def reset(self):
         self._seen_title = False
@@ -128,6 +140,14 @@ class SectionDetector:
         # 附录
         if self.appendix_pattern.match(text):
             return SectionType.APPENDIX_TITLE, {}
+
+        # 代码段落检测（在章标题之前，避免代码中的数字被误判为标题）
+        if self._is_code_paragraph(paragraph, text):
+            return SectionType.CODE, {}
+
+        # 公式内容检测（非编号行的公式）
+        if self._is_formula_content(paragraph, text):
+            return SectionType.FORMULA_CONTENT, {}
 
         # 章标题
         if self.chapter_pattern.match(text):
@@ -191,6 +211,82 @@ class SectionDetector:
             en_authors = re.findall(r"[A-Z][a-z]+\.?\s+[A-Z][a-z]+", text)
             if len(en_authors) >= 2:
                 return True
+        return False
+
+    def _is_code_paragraph(self, paragraph, text):
+        """检测是否为代码段落"""
+        # 短文本跳过（避免误判）
+        if len(text) < 3:
+            return False
+
+        # 方法1：检查样式名是否包含 "Code"
+        try:
+            style_name = (paragraph.style.name or "").lower()
+            if "code" in style_name:
+                return True
+        except Exception:
+            pass
+
+        # 方法2：检查 runs 的字体是否为等宽字体
+        try:
+            runs = paragraph.runs
+        except AttributeError:
+            runs = []
+        if runs:
+            mono_count = 0
+            for run in runs:
+                font_name = (run.font.name or "").lower()
+                if font_name in self._mono_fonts:
+                    mono_count += 1
+            # 大部分 run 使用等宽字体
+            if mono_count > 0 and mono_count >= len(runs) * 0.7:
+                return True
+
+        # 方法3：原始文本首行缩进 + 包含代码特征字符
+        try:
+            raw_text = paragraph.text  # 未 strip 的原始文本
+        except AttributeError:
+            raw_text = text
+        if raw_text.startswith(("    ", "\t")):
+            code_chars_in_text = sum(1 for c in text if c in self._code_chars)
+            if code_chars_in_text >= 2:
+                return True
+
+        return False
+
+    def _is_formula_content(self, paragraph, text):
+        """检测是否为公式内容（非编号行）"""
+        # 短文本跳过
+        if len(text) < 2:
+            return False
+
+        # 方法1：检查字体是否为数学字体
+        try:
+            runs = paragraph.runs
+        except AttributeError:
+            runs = []
+        if runs:
+            math_count = 0
+            for run in runs:
+                font_name = (run.font.name or "").lower()
+                if font_name in self._math_fonts:
+                    math_count += 1
+            if math_count > 0 and math_count >= len(runs) * 0.5:
+                return True
+
+        # 方法2：包含数学 Unicode 字符
+        if self._math_unicode.search(text):
+            return True
+
+        # 方法3：纯数学表达式模式（字母、数字、运算符、空格组成，无中文）
+        if not re.search(r"[一-鿿]", text):
+            # 检查是否包含数学运算符
+            math_ops = set("=+−×÷≤≥≠≈∞∑∏∫√∈∉⊂⊃∪∩")
+            if any(c in math_ops for c in text):
+                # 且文本较短，像公式而非句子
+                if len(text) < 60:
+                    return True
+
         return False
 
     def _parse_caption_num(self, text, prefix):

@@ -174,6 +174,10 @@ class FormatCorrector:
             elif section_type in (SectionType.ACKNOWLEDGMENT_TITLE, SectionType.APPENDIX_TITLE):
                 self._apply_heading_style(paragraph, "heading1")
                 self.report["headings_fixed"] += 1
+            elif section_type == SectionType.CODE:
+                self._preserve_code_style(paragraph)
+            elif section_type == SectionType.FORMULA_CONTENT:
+                self._preserve_formula_content_style(paragraph)
             elif section_type == SectionType.FIGURE_CAPTION:
                 self.fig_table_handler.process_paragraph(paragraph, section_type, extra)
             elif section_type == SectionType.TABLE_CAPTION:
@@ -221,6 +225,23 @@ class FormatCorrector:
             self._set_run_font(run, font_rules, style_rules)
         if config.get("numbering_position") == "right":
             paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
+
+    def _preserve_code_style(self, paragraph):
+        """保留代码段落的原始格式，不做字体/行距矫正"""
+        code_config = self.config.get("format_rules", {}).get("code", {})
+
+        if code_config.get("force_mono", False):
+            mono_font = code_config.get("mono_font", "Consolas")
+            mono_size = code_config.get("mono_font_size", 10)
+            for run in paragraph.runs:
+                run.font.name = mono_font
+                run.font.size = Pt(mono_size)
+
+    def _preserve_formula_content_style(self, paragraph):
+        """保留公式内容的原始格式，不做字体矫正"""
+        formula_config = self.config.get("format_rules", {}).get("formulas", {})
+        if formula_config.get("center", False):
+            paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
 
     # ========== 各类段落样式应用 ==========
 

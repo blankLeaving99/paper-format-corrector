@@ -134,6 +134,14 @@ format_rules:
     numbering_style: "paren"  # paren: (1-1) | dot: 1.1
     numbering_position: "right"  # 右对齐
     font_size: 12
+    center: false         # 公式内容是否居中（默认保留原始对齐）
+
+  # 代码格式
+  code:
+    preserve: true        # 保留原始格式，不做矫正
+    force_mono: false     # 是否强制统一为等宽字体
+    mono_font: "Consolas" # 强制等宽字体时使用的字体
+    mono_font_size: 10    # 强制等宽字体时使用的字号
 
   # 页眉页脚
   header_footer:
