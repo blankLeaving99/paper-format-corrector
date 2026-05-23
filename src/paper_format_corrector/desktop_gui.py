@@ -620,6 +620,8 @@ class PaperFormatDesktopApp:
         # 覆盖模板文件
         tpl = self.template_path_var.get().strip()
         if tpl:
+            from .infra.path_security import validate_input_path
+            tpl = str(validate_input_path(tpl, {".docx"}))
             c.template_path = tpl
             c.corrector = FormatCorrector(tpl, c.config)
 

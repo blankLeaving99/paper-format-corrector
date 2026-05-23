@@ -1,3 +1,4 @@
+import os
 import re
 import shutil
 import logging
@@ -78,7 +79,11 @@ class FormatCorrector:
         # 修改前备份
         backup_path = None
         if backup:
-            backup_path = str(output_path) + ".backup.docx"
+            import tempfile
+            output_dir = Path(output_path).parent
+            output_dir.mkdir(parents=True, exist_ok=True)
+            backup_fd, backup_path = tempfile.mkstemp(suffix=".backup.docx", dir=str(output_dir))
+            os.close(backup_fd)
             shutil.copy2(input_path, backup_path)
             logger.info(f"已备份原始文件: {backup_path}")
 
@@ -504,9 +509,24 @@ class FormatCorrector:
         Returns:
             True if restored successfully, False otherwise
         """
-        if not Path(backup_path).is_file():
+        backup = Path(backup_path).resolve()
+        target = Path(target_path).resolve()
+
+        if not backup.is_file():
             logger.error(f"备份文件不存在: {backup_path}")
             return False
-        shutil.copy2(backup_path, target_path)
+
+        # 校验文件类型
+        if backup.suffix.lower() not in (".docx", ".doc"):
+            logger.error(f"备份文件类型不允许: {backup.suffix}")
+            return False
+        if target.suffix.lower() not in (".docx", ".doc"):
+            logger.error(f"目标文件类型不允许: {target.suffix}")
+            return False
+
+        # 确保目标目录存在
+        target.parent.mkdir(parents=True, exist_ok=True)
+
+        shutil.copy2(str(backup), str(target))
         logger.info(f"已从备份恢复: {target_path}")
         return True

@@ -531,8 +531,14 @@ class FileConverter:
 
     def _convert_tex(self, input_path: Path, output_path: Path) -> str:
         """将 LaTeX (.tex) 转换为 .docx"""
-        # 方法1: 使用 pandoc
-        pandoc = shutil.which("pandoc")
+        # 方法1: 使用 pandoc（优先硬编码路径）
+        pandoc = None
+        for p in (r"C:\Program Files\Pandoc\pandoc.exe", "/usr/bin/pandoc", "/usr/local/bin/pandoc"):
+            if Path(p).exists():
+                pandoc = p
+                break
+        if not pandoc:
+            pandoc = shutil.which("pandoc")
         if pandoc:
             try:
                 result = subprocess.run(

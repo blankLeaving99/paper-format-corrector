@@ -185,6 +185,9 @@ def main() -> None:
 
     # 处理
     if args.file:
+        if args.output:
+            from .infra.path_security import validate_output_path, ALLOWED_OUTPUT_EXTENSIONS
+            validate_output_path(args.output, ALLOWED_OUTPUT_EXTENSIONS)
         corrector.process_single(args.file, args.output, args.format, args.score, args.diff)
     else:
         if not Path(corrector.template_path).exists():

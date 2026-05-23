@@ -235,7 +235,9 @@ def check_rules(paper_file, rules_file):
             return f"文件格式转换失败: {e}"
 
     c = PaperFormatCorrector(config_path)
-    results = c.check_rules(input_path, rules_path=rules_file.name)
+    from .infra.path_security import validate_input_path
+    rules_path = str(validate_input_path(rules_file.name, {".yaml", ".yml"}))
+    results = c.check_rules(input_path, rules_path=rules_path)
     return c.rule_engine.format_report(results)
 
 

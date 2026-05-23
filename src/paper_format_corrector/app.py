@@ -93,8 +93,13 @@ class PaperFormatCorrector:
 
         # 需求文档中指定的模板路径覆盖默认模板
         if "template" in req_config and "path" in req_config["template"]:
-            self.template_path = req_config["template"]["path"]
-            self.logger.info(f"使用需求文档指定的模板: {self.template_path}")
+            tpl_path = req_config["template"]["path"]
+            try:
+                validate_input_path(tpl_path, {".docx"})
+                self.template_path = tpl_path
+                self.logger.info(f"使用需求文档指定的模板: {self.template_path}")
+            except (ValueError, FileNotFoundError) as e:
+                self.logger.warning(f"需求文档指定的模板路径无效，忽略: {e}")
 
         self.config = self._merge_config(self.config, req_config)
         self.corrector = FormatCorrector(self.template_path, self.config)
