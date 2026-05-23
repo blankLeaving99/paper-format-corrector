@@ -1,5 +1,6 @@
 import re
 import logging
+from pathlib import Path
 
 from docx import Document
 from docx.shared import Pt, Cm
@@ -21,7 +22,11 @@ class FormatCorrector:
     """论文格式矫正器（完整版）"""
 
     def __init__(self, template_path, config):
-        self.template = Document(template_path)
+        if template_path and Path(template_path).is_file():
+            self.template = Document(template_path)
+        else:
+            logger.warning(f"模板文件不存在 ({template_path})，使用默认空白模板")
+            self.template = Document()
         self.config = config
         self.style_mapping = {}
 

@@ -12,6 +12,7 @@
     python -m paper_format_corrector --desktop-gui
 """
 
+import logging
 import tempfile
 import shutil
 import threading
@@ -27,6 +28,7 @@ except ImportError:
     HAS_DND = False
 
 from .app import PaperFormatCorrector
+from .core.format_corrector import FormatCorrector
 from .quality.quality_scorer import QualityScorer
 from .quality.diff_reporter import DiffReporter
 from .core.format_exporter import FormatExporter
@@ -95,13 +97,21 @@ class DropFileEntry(ttk.Frame):
         if not data:
             return files
 
+        _allowed_ext = {".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown"}
+
         # Windows 拖拽格式：用 {} 包裹含空格的路径，空格分隔多个文件
         import re
         parts = re.findall(r'\{([^}]+)\}|(\S+)', data)
         for match in parts:
             path = match[0] or match[1]
-            if path and Path(path).exists():
-                files.append(path)
+            if not path:
+                continue
+            p = Path(path).resolve()
+            # 拒绝 UNC 网络路径
+            if str(p).startswith('\\\\'):
+                continue
+            if p.is_file() and p.suffix.lower() in _allowed_ext:
+                files.append(str(p))
 
         return files
 
@@ -190,6 +200,7 @@ class PaperFormatDesktopApp:
         # 变量
         self.paper_path = tk.StringVar()
         self.requirement_path = tk.StringVar()
+        self.template_path_var = tk.StringVar()
         self.config_path = tk.StringVar(value=CONFIG_PATH)
         self.do_score = tk.BooleanVar(value=True)
         self.do_diff = tk.BooleanVar(value=True)
@@ -258,6 +269,13 @@ class PaperFormatDesktopApp:
                        ("文本文件", "*.txt *.md"), ("所有文件", "*.*")]
         )
         self.paper_entry.pack(fill=tk.X, pady=3)
+
+        # 模板文件 - 支持拖拽
+        self.template_entry = DropFileEntry(
+            file_frame, "模板文件:", self.template_path_var,
+            filetypes=[("Word文档", "*.docx"), ("所有文件", "*.*")]
+        )
+        self.template_entry.pack(fill=tk.X, pady=3)
 
         # 格式要求 - 支持拖拽
         self.req_entry = DropFileEntry(
@@ -445,7 +463,8 @@ class PaperFormatDesktopApp:
                 result = self._process_single(paper)
                 self.root.after(0, lambda: self._show_result(result))
             except Exception as e:
-                self.root.after(0, lambda: self._show_result(f"处理失败: {e}"))
+                logging.getLogger(__name__).exception("处理失败")
+                self.root.after(0, lambda: self._show_result("处理失败，请检查输入文件是否正确。"))
 
         threading.Thread(target=do_work, daemon=True).start()
 
@@ -484,6 +503,12 @@ class PaperFormatDesktopApp:
         """处理单个文件，返回结果文本"""
         cfg = self.config_path.get().strip() or CONFIG_PATH
         c = PaperFormatCorrector(cfg)
+
+        # 覆盖模板文件
+        tpl = self.template_path_var.get().strip()
+        if tpl:
+            c.template_path = tpl
+            c.corrector = FormatCorrector(tpl, c.config)
 
         # 应用需求文档
         req = self.requirement_path.get().strip()
@@ -599,8 +624,9 @@ class PaperFormatDesktopApp:
             self.cover_status.config(text=f"封面已生成: {output_path}")
             messagebox.showinfo("成功", f"封面已生成:\n{output_path.resolve()}")
         except Exception as e:
-            self.cover_status.config(text=f"生成失败: {e}")
-            messagebox.showerror("错误", f"封面生成失败: {e}")
+            logging.getLogger(__name__).exception("封面生成失败")
+            self.cover_status.config(text="生成失败，请检查输入信息。")
+            messagebox.showerror("错误", "封面生成失败，请检查输入信息。")
 
     def _run_rule_check(self):
         """执行规则检查"""

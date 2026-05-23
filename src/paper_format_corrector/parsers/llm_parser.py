@@ -114,21 +114,23 @@ class LLMParser:
         parsed = urlparse(url)
         host = parsed.hostname or ""
 
+        if not host:
+            raise ValueError(f"URL 缺少主机名: {url}")
+
         # Ollama 只允许 localhost
         if self.provider == "ollama":
             if host not in ("localhost", "127.0.0.1"):
                 raise ValueError(f"Ollama 仅支持 localhost，不允许远程地址: {host}")
             return url
 
-        # 外部 API 必须使用 HTTPS
-        if parsed.scheme not in ("https", "http"):
-            raise ValueError(f"不支持的 URL 协议: {parsed.scheme}")
-
-        if parsed.scheme == "http" and host not in ("localhost", "127.0.0.1"):
-            raise ValueError(f"外部 API 必须使用 HTTPS，当前: {url}")
+        # 外部 API 必须使用 HTTPS（localhost 除外）
+        if parsed.scheme not in ("https",):
+            if parsed.scheme == "http" and host in ("localhost", "127.0.0.1"):
+                return url
+            raise ValueError(f"不允许的 URL 协议: {parsed.scheme}")
 
         # 检查域名白名单（自定义 base_url 时）
-        if host and host not in self.ALLOWED_DOMAINS:
+        if host not in self.ALLOWED_DOMAINS:
             raise ValueError(f"不允许的 API 域名: {host}，允许: {self.ALLOWED_DOMAINS}")
 
         return url

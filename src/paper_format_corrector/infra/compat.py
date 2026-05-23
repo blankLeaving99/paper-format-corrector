@@ -28,6 +28,21 @@ _OPTIONAL_DEPS = [
 ]
 
 
+def get_required_packages() -> list[str]:
+    """Return pip install specifiers for all required packages."""
+    return [f"{pip}>={min_ver}" for _, pip, min_ver, _, req in _DEPS if req]
+
+
+def get_optional_packages() -> list[str]:
+    """Return pip install specifiers for all optional packages."""
+    return [f"{pip}>={min_ver}" for _, pip, min_ver, _, req in _OPTIONAL_DEPS if not req]
+
+
+def get_all_packages() -> list[str]:
+    """Return pip install specifiers for every known package."""
+    return get_required_packages() + get_optional_packages()
+
+
 def _parse_version(v: str) -> tuple[int, ...]:
     """Parse version string to tuple for comparison."""
     parts = []

@@ -33,9 +33,10 @@ class PaperFormatCorrector:
 
     def __init__(self, config_path: str = "config/config.yaml", log_level: str = "INFO") -> None:
         with open(config_path, "r", encoding="utf-8") as f:
-            self.config = yaml.safe_load(f)
+            self.config = yaml.safe_load(f) or {}
 
-        self.template_path = self.config["template"]["path"]
+        self._validate_config()
+        self.template_path = self.config.get("template", {}).get("path", "")
         self.corrector = FormatCorrector(self.template_path, self.config)
         self.exporter = FormatExporter(self.config)
         self.scorer = QualityScorer(self.config)
@@ -279,6 +280,16 @@ class PaperFormatCorrector:
             except Exception as e:
                 self.logger.warning(f"  导出 {fmt} 失败: {e}")
 
+    def _validate_config(self) -> None:
+        """验证配置结构和值类型"""
+        if not isinstance(self.config, dict):
+            raise ValueError("配置文件格式错误：顶层必须是字典")
+
+        margins = self.config.get("format_rules", {}).get("margins", {})
+        for key in ("top", "bottom", "left", "right"):
+            if key in margins and not isinstance(margins[key], (int, float)):
+                raise ValueError(f"margins.{key} 必须是数字，当前值: {margins[key]}")
+
     def _merge_config(self, base: dict, override: dict) -> dict:
         result = copy.deepcopy(base)
         for key, value in override.items():
@@ -291,6 +302,9 @@ class PaperFormatCorrector:
         return result
 
     def extract_template_info(self) -> None:
+        if not Path(self.template_path).is_file():
+            print(f"模板文件不存在: {self.template_path}")
+            return
         extractor = StyleExtractor(self.template_path)
         styles = extractor.extract_all_styles()
         margins = extractor.extract_page_margins()

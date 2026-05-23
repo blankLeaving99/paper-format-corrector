@@ -14,6 +14,7 @@
     python -m paper_format_corrector --gui
 """
 
+import atexit
 import tempfile
 import shutil
 from pathlib import Path
@@ -26,6 +27,7 @@ except ImportError:
     exit(1)
 
 from .app import PaperFormatCorrector
+from .core.format_corrector import FormatCorrector
 from .quality.quality_scorer import QualityScorer
 from .quality.diff_reporter import DiffReporter
 from .core.format_exporter import FormatExporter
@@ -37,6 +39,18 @@ from .infra.preset_loader import list_presets, get_preset_choices
 # 全局实例
 corrector = None
 config_path = "config/config.yaml"
+
+# 临时目录跟踪（退出时清理）
+_temp_dirs: list[str] = []
+
+
+def _cleanup_temp_dirs():
+    for d in _temp_dirs:
+        shutil.rmtree(d, ignore_errors=True)
+    _temp_dirs.clear()
+
+
+atexit.register(_cleanup_temp_dirs)
 
 # 预设名称 -> ID 映射（避免字符串解析出错）
 _PRESET_MAP = {}
@@ -53,7 +67,7 @@ def init_corrector(config_file=None):
     return corrector
 
 
-def process_paper(paper_file, requirement_file, config_file, preset_name, export_formats, do_score, do_diff):
+def process_paper(paper_file, requirement_file, config_file, template_file, preset_name, export_formats, do_score, do_diff):
     """处理论文主函数"""
     if paper_file is None:
         return None, None, "请上传论文文件", None
@@ -61,6 +75,12 @@ def process_paper(paper_file, requirement_file, config_file, preset_name, export
     # 初始化
     cfg = config_file.name if config_file else config_path
     c = PaperFormatCorrector(cfg)
+
+    # 覆盖模板文件
+    if template_file:
+        tpl_path = template_file.name
+        c.template_path = tpl_path
+        c.corrector = FormatCorrector(tpl_path, c.config)
 
     # 应用格式预设
     if preset_name and preset_name != "无 (使用默认配置)":
@@ -79,6 +99,7 @@ def process_paper(paper_file, requirement_file, config_file, preset_name, export
 
     # 输出路径
     output_dir = Path(tempfile.mkdtemp())
+    _temp_dirs.append(str(output_dir))
     input_path = Path(paper_file.name)
 
     # 格式转换（如果需要）
@@ -176,6 +197,7 @@ def generate_cover(title, title_en, author, college, major, student_id, advisor,
     }
 
     output_dir = Path(tempfile.mkdtemp())
+    _temp_dirs.append(str(output_dir))
     output_path = output_dir / "cover.docx"
 
     generator = CoverPageGenerator()
@@ -197,6 +219,7 @@ def check_rules(paper_file, rules_file):
     if converter.needs_conversion(input_path):
         try:
             output_dir = Path(tempfile.mkdtemp())
+            _temp_dirs.append(str(output_dir))
             input_path = converter.convert(input_path, str(output_dir))
         except Exception as e:
             return f"文件格式转换失败: {e}"
@@ -242,6 +265,7 @@ def build_ui():
                             label="格式预设 (IEEE/Nature/Science/APA/毕业论文)",
                         )
 
+                        template_input = gr.File(label="模板文件 (可选, .docx)", file_types=[".docx"])
                         requirement_input = gr.File(label="格式要求文档 (可选, .txt/.md/.docx/.pdf)", file_types=[".txt", ".md", ".docx", ".pdf"])
                         config_input = gr.File(label="自定义配置 (可选, .yaml)", file_types=[".yaml", ".yml"])
 
@@ -264,7 +288,7 @@ def build_ui():
 
                 process_btn.click(
                     fn=process_paper,
-                    inputs=[paper_input, requirement_input, config_input, preset_dropdown, export_checkboxes, do_score, do_diff],
+                    inputs=[paper_input, requirement_input, config_input, template_input, preset_dropdown, export_checkboxes, do_score, do_diff],
                     outputs=[output_file, score_output, report_output, diff_output],
                 )
 
@@ -382,6 +406,7 @@ def main():
         server_port=port,
         share=False,
         inbrowser=True,
+        max_file_size="50mb",
     )
 
 

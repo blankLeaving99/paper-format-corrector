@@ -8,10 +8,8 @@ import os
 
 # 获取项目根目录（支持 exe 打包后运行）
 if getattr(sys, 'frozen', False):
-    # 打包为 exe 后，根目录是 exe 所在目录
     ROOT_DIR = os.path.dirname(sys.executable)
 else:
-    # 直接运行 Python 脚本
     ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 
 os.chdir(ROOT_DIR)
@@ -34,19 +32,69 @@ def show_error(title, msg):
         input("\n按回车键退出...")
 
 
-def check_deps():
-    """检查必要依赖是否已安装"""
+def _find_venv_python():
+    """查找已有的虚拟环境 Python 路径"""
+    import subprocess
+    for name in (".venv", ".venv\\.venv"):
+        candidate = os.path.join(ROOT_DIR, name, "Scripts", "python.exe")
+        if os.path.isfile(candidate):
+            try:
+                result = subprocess.run(
+                    [candidate, "--version"],
+                    capture_output=True, text=True, timeout=5
+                )
+                if result.returncode == 0 and "Python" in result.stdout:
+                    return candidate
+            except Exception:
+                continue
+    return None
+
+
+def _is_running_in_venv():
+    """判断当前是否已在虚拟环境中运行"""
+    return hasattr(sys, 'real_prefix') or (
+        hasattr(sys, 'base_prefix') and sys.base_prefix != sys.prefix
+    )
+
+
+def _check_deps_fast():
+    """快速检查所有必需依赖是否已安装"""
+    from importlib.metadata import version, PackageNotFoundError
     missing = []
-    for mod, pkg in [("docx", "python-docx"), ("yaml", "pyyaml"), ("lxml", "lxml")]:
+    for import_name, pip_name, min_ver, _, required in _DEPS:
+        if not required:
+            continue
         try:
-            __import__(mod)
+            __import__(import_name)
         except ImportError:
-            missing.append(pkg)
+            missing.append(f"{pip_name}>={min_ver}")
+            continue
+        try:
+            installed = version(pip_name)
+        except PackageNotFoundError:
+            missing.append(f"{pip_name}>={min_ver}")
     return missing
 
 
-def install_deps(missing):
-    """弹窗让用户选择安装依赖"""
+# 全局依赖列表（与 compat.py 保持一致，但不强依赖 compat 能 import）
+_DEPS = [
+    ("docx", "python-docx", "1.1.0", 2, True),
+    ("yaml", "pyyaml", "6.0", 7, True),
+    ("lxml", "lxml", "5.0", 7, True),
+    ("PIL", "Pillow", "9.0", 11, True),
+]
+
+_OPTIONAL_DEPS = [
+    ("gradio", "gradio", "4.0.0", None, False),
+    ("tkinterdnd2", "tkinterdnd2", "0.4.0", None, False),
+    ("docx2pdf", "docx2pdf", "0.1.8", None, False),
+    ("mammoth", "mammoth", "1.6.0", None, False),
+    ("pdfplumber", "pdfplumber", "0.10.0", None, False),
+]
+
+
+def install_deps():
+    """弹窗让用户选择安装依赖，安装完成后自动重启"""
     import tkinter as tk
     from tkinter import messagebox, filedialog
     import subprocess
@@ -54,8 +102,16 @@ def install_deps(missing):
     root = tk.Tk()
     root.withdraw()
 
-    items = "\n".join(f"  - {p}" for p in missing)
-    msg = f"以下依赖未安装：\n\n{items}\n\n是否安装？"
+    missing_required = _check_deps_fast()
+    optional_names = [f"{pip}>={min_ver}" for _, pip, min_ver, _, _ in _OPTIONAL_DEPS]
+
+    items = "\n".join(f"  - {p}" for p in missing_required)
+    opt_items = "\n".join(f"  - {p}" for p in optional_names)
+    msg = (
+        f"以下必需依赖未安装：\n{items}\n\n"
+        f"以下可选依赖也将一并安装：\n{opt_items}\n\n"
+        f"是否安装？"
+    )
     if not messagebox.askyesno("依赖检测", msg):
         show_error("提示", "缺少必要依赖，无法启动。")
         return False
@@ -73,19 +129,20 @@ def install_deps(missing):
         # 创建虚拟环境
         subprocess.run([sys.executable, "-m", "venv", venv_dir], check=True)
         pip_exe = os.path.join(venv_dir, "Scripts", "pip.exe")
+        venv_python = os.path.join(venv_dir, "Scripts", "python.exe")
 
-        # 安装依赖
+        # 安装所有依赖
+        all_pkgs = missing_required + optional_names
         subprocess.run([pip_exe, "install", "--upgrade", "pip"], capture_output=True)
-        subprocess.run([pip_exe, "install"] + missing, check=True)
+        subprocess.run([pip_exe, "install"] + all_pkgs, check=True)
 
         # 保存虚拟环境位置
         with open(os.path.join(ROOT_DIR, ".venv_location"), "w") as f:
             f.write(venv_dir)
 
-        messagebox.showinfo("安装完成",
-                            f"依赖已安装到：\n{venv_dir}\n\n"
-                            f"请重新运行 run.py")
-        return False  # 需要重新运行
+        # 自动重启：用 venv 的 Python 重新执行 run.py
+        run_script = os.path.abspath(__file__)
+        os.execv(venv_python, [venv_python, run_script])
 
     except Exception as e:
         messagebox.showerror("安装失败", f"安装失败：\n{e}")
@@ -101,7 +158,6 @@ def choose_mode():
     root.geometry("400x250")
     root.resizable(False, False)
 
-    # 居中
     root.update_idletasks()
     x = (root.winfo_screenwidth() - 400) // 2
     y = (root.winfo_screenheight() - 250) // 2
@@ -132,18 +188,24 @@ def choose_mode():
 
 def main():
     try:
-        # 1. 检查必要依赖
-        missing = check_deps()
+        # 1. 如果不在 venv 中，尝试切换到已有的 venv
+        if not _is_running_in_venv():
+            venv_python = _find_venv_python()
+            if venv_python and os.path.isfile(venv_python):
+                os.execv(venv_python, [venv_python, os.path.abspath(__file__)])
+
+        # 2. 检查必需依赖
+        missing = _check_deps_fast()
         if missing:
-            if not install_deps(missing):
+            if not install_deps():
                 return
 
-        # 2. 选择模式
+        # 3. 选择模式
         mode = choose_mode()
         if mode is None:
             return
 
-        # 3. 启动对应 GUI
+        # 4. 启动对应 GUI
         if mode == "desktop":
             from paper_format_corrector.desktop_gui import main as run
         else:
@@ -154,7 +216,9 @@ def main():
     except KeyboardInterrupt:
         pass
     except Exception as e:
-        show_error("运行错误", f"程序出错：\n\n{e}")
+        import logging
+        logging.getLogger(__name__).exception("Unhandled error")
+        show_error("运行错误", "程序出错，请检查输入文件是否正确。")
 
 
 if __name__ == "__main__":

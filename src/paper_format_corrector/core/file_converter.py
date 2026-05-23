@@ -437,9 +437,8 @@ class FileConverter:
         if self._libreoffice_path is not None:
             return self._libreoffice_path
 
+        # 只检查绝对路径，避免 PATH 污染风险
         candidates = [
-            "soffice",
-            "libreoffice",
             r"C:\Program Files\LibreOffice\program\soffice.exe",
             r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
             r"D:\Program Files\LibreOffice\program\soffice.exe",
@@ -450,9 +449,16 @@ class FileConverter:
         ]
 
         for candidate in candidates:
-            if shutil.which(candidate) or Path(candidate).exists():
+            if Path(candidate).exists():
                 self._libreoffice_path = candidate
                 return candidate
+
+        # PATH 搜索仅作最后回退
+        for name in ("soffice", "libreoffice"):
+            found = shutil.which(name)
+            if found:
+                self._libreoffice_path = found
+                return found
 
         return None
 

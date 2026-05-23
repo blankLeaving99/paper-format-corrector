@@ -6,6 +6,8 @@ Presets are YAML files in the presets/ directory.
 
 from __future__ import annotations
 
+import os
+import re
 import yaml
 from pathlib import Path
 
@@ -70,7 +72,15 @@ def load_preset(name: str) -> dict:
         FileNotFoundError: If the preset file doesn't exist
     """
     presets_dir = _presets_dir()
-    preset_path = presets_dir / f"{name}.yaml"
+
+    if not re.match(r'^[a-zA-Z0-9_-]+$', name):
+        raise ValueError(f"Invalid preset name: {name}")
+
+    preset_path = (presets_dir / name).resolve()
+    if not str(preset_path).startswith(str(presets_dir.resolve()) + os.sep):
+        raise ValueError(f"Preset path traversal detected: {name}")
+
+    preset_path = preset_path.with_suffix('.yaml')
 
     if not preset_path.exists():
         available = ", ".join(get_preset_choices())
