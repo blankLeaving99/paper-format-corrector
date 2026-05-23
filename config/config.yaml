@@ -1,0 +1,213 @@
+# 论文格式自动矫正工具 - 配置文件
+# ===========================================
+
+template:
+  path: "template/template.docx"
+
+# 语言设置（支持多语言文档）
+language:
+  # 主要语言: chinese | english | japanese | korean | auto
+  primary: "auto"
+  # 各语言默认字体
+  fonts:
+    chinese:
+      body: "宋体"
+      heading: "黑体"
+      english_in_chinese: "Times New Roman"
+    english:
+      body: "Times New Roman"
+      heading: "Times New Roman"
+    japanese:
+      body: "MS Mincho"
+      heading: "MS Gothic"
+    korean:
+      body: "Batang"
+      heading: "Dotum"
+
+format_rules:
+  # 字体设置
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    # 中文标题可用黑体
+    heading_chinese: "黑体"
+
+  # 标题层级
+  headings:
+    heading1:  # 章标题 (第一章 xxx)
+      font_size: 16    # 二号
+      bold: true
+      align: "center"
+      space_before: 24  # pt
+      space_after: 18
+      line_spacing: 1.5
+    heading2:  # 节标题 (1.1 xxx)
+      font_size: 14    # 三号
+      bold: true
+      align: "left"
+      space_before: 18
+      space_after: 12
+      line_spacing: 1.5
+    heading3:  # 小节标题 (1.1.1 xxx)
+      font_size: 12    # 四号
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.5
+
+  # 正文
+  body_text:
+    font_size: 12      # 小四
+    line_spacing: 1.5
+    first_line_indent: 2  # 首行缩进2字符
+    align: "justify"   # 两端对齐
+
+  # 页边距（单位：厘米）
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 3.17
+    right: 3.17
+
+  # 摘要格式
+  abstract:
+    title_font_size: 16   # 二号
+    title_bold: true
+    title_align: "center"
+    content_font_size: 12 # 小四
+    content_line_spacing: 1.5
+    content_first_line_indent: 0  # 摘要通常不缩进
+
+  # 关键词格式
+  keywords:
+    label: "关键词："    # 标签文本
+    font_size: 12
+    bold_label: true     # 标签加粗
+    separator: "；"      # 关键词分隔符
+
+  # 题目/作者/单位格式
+  title_page:
+    title_font_size: 22  # 二号偏大
+    title_bold: true
+    title_align: "center"
+    author_font_size: 12
+    author_align: "center"
+    affiliation_font_size: 10.5  # 五号
+    affiliation_align: "center"
+
+  # 参考文献格式
+  references:
+    style: "GB/T 7714"   # 国标格式
+    font_size: 10.5      # 五号
+    line_spacing: 1.25
+    hanging_indent: true # 悬挂缩进
+    numbering: "sequential"  # sequential | bracket
+    # GB/T 7714 格式模板
+    templates:
+      journal: "[N] {authors}. {title}[J]. {journal}, {year}, {volume}({number}): {pages}."
+      book: "[N] {authors}. {title}[M]. {city}: {publisher}, {year}: {pages}."
+      conference: "[N] {authors}. {title}[C]//{proceedings}. {city}: {publisher}, {year}: {pages}."
+      thesis: "[N] {author}. {title}[D]. {city}: {university}, {year}."
+      online: "[N] {authors}. {title}[EB/OL]. ({year}-{month}-{day})[{access_date}]. {url}."
+
+  # 图表格式
+  figures:
+    label: "图"          # 图标签前缀
+    numbering: "chapter"  # chapter (图1-1) | sequential (图1)
+    separator: "-"        # chapter 模式下的分隔符
+    caption_position: "below"  # 图标题在图下方
+    font_size: 10.5      # 五号
+    align: "center"
+
+  tables:
+    label: "表"
+    numbering: "chapter"
+    separator: "-"
+    caption_position: "above"  # 表标题在表上方
+    font_size: 10.5
+    align: "center"
+
+  # 公式格式
+  formulas:
+    numbering: true       # 是否编号
+    numbering_style: "paren"  # paren: (1-1) | dot: 1.1
+    numbering_position: "right"  # 右对齐
+    font_size: 12
+
+  # 页眉页脚
+  header_footer:
+    enabled: true
+    header:
+      text: ""           # 留空则不设置，可动态用 {chapter} 插入章名
+      font_size: 10.5
+      font_name: "宋体"
+      align: "center"
+      bottom_border: true
+    footer:
+      page_number: true
+      font_size: 10.5
+      align: "center"
+    # 首页不同
+    different_first_page: true
+    # 奇偶页不同
+    different_odd_even: false
+
+  # 页码设置
+  page_numbering:
+    enabled: true
+    front_matter:
+      style: "roman_lower"  # i, ii, iii (摘要、目录用小写罗马)
+      start: 1
+    body:
+      style: "arabic"       # 1, 2, 3 (正文用阿拉伯数字)
+      start: 1
+    position: "footer_center"
+
+  # 目录
+  toc:
+    enabled: true
+    title: "目  录"
+    title_font_size: 16
+    title_bold: true
+    title_align: "center"
+    max_level: 3          # 最大目录层级
+    font_size: 12
+    line_spacing: 1.5
+
+# 自动检测规则
+auto_detect:
+  # 标题检测
+  title_pattern: '^论文题目[:：]?|^题目[:：]?'
+  # 章节检测
+  chapter_pattern: '^第[一二三四五六七八九十百零\d]+[章部分篇]'
+  # 节检测 (1.1, 1.2.3 等)
+  section_pattern: '^\d+\.\d+'
+  subsection_pattern: '^\d+\.\d+\.\d+'
+  # 摘要检测
+  abstract_pattern: '^摘\s*要$|^Abstract$|^ABSTRACT$'
+  abstract_en_pattern: '^Abstract$|^ABSTRACT$'
+  # 关键词检测
+  keywords_pattern: '^关键词[:：]|^Key\s*[Ww]ords[:：]?'
+  # 参考文献标题
+  reference_keywords:
+    - "参考文献"
+    - "参考资料"
+    - "References"
+    - "REFERENCES"
+  # 致谢检测
+  acknowledgment_pattern: '^致\s*谢$|^Acknowledge?ments?$'
+  # 附录检测
+  appendix_pattern: '^附\s*录[A-Z]?'
+  # 图表标题检测
+  figure_caption_pattern: '^图\s*\d'
+  table_caption_pattern: '^表\s*\d'
+  # 公式检测
+  formula_pattern: '^\(?\d+[-\.]\d+\)?$'
+
+# 需要矫正的样式
+styles_to_correct:
+  - "Normal"
+  - "Heading1"
+  - "Heading2"
+  - "Heading3"

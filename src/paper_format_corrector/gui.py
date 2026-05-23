@@ -9,9 +9,9 @@
 - 下载矫正结果
 
 启动方式：
-    python gui.py
+    python -m paper_format_corrector.gui
     或
-    paper-fmt-gui
+    python -m paper_format_corrector --gui
 """
 
 import tempfile
@@ -22,19 +22,20 @@ try:
     import gradio as gr
 except ImportError:
     print("请先安装 Gradio: pip install gradio")
-    print("然后运行: python gui.py")
+    print("然后运行: python -m paper_format_corrector.gui")
     exit(1)
 
-from main import PaperFormatCorrector
-from quality_scorer import QualityScorer
-from diff_reporter import DiffReporter
-from format_exporter import FormatExporter
-from cover_page_generator import CoverPageGenerator
+from .app import PaperFormatCorrector
+from .quality.quality_scorer import QualityScorer
+from .quality.diff_reporter import DiffReporter
+from .core.format_exporter import FormatExporter
+from .generators.cover_page_generator import CoverPageGenerator
+from .core.file_converter import FileConverter
 
 
 # 全局实例
 corrector = None
-config_path = "config.yaml"
+config_path = "config/config.yaml"
 
 
 def init_corrector(config_file=None):
@@ -64,6 +65,16 @@ def process_paper(paper_file, requirement_file, config_file, export_formats, do_
     # 输出路径
     output_dir = Path(tempfile.mkdtemp())
     input_path = Path(paper_file.name)
+
+    # 格式转换（如果需要）
+    converter = FileConverter()
+    if converter.needs_conversion(str(input_path)):
+        try:
+            converted_path = converter.convert(str(input_path), str(output_dir))
+            input_path = Path(converted_path)
+        except Exception as e:
+            return None, None, f"文件格式转换失败: {e}", None
+
     output_path = output_dir / f"formatted_{input_path.name}"
 
     # 处理
@@ -165,8 +176,18 @@ def check_rules(paper_file, rules_file):
     if rules_file is None:
         return "请上传规则文件 (YAML)"
 
+    # 格式转换（如果需要）
+    input_path = paper_file.name
+    converter = FileConverter()
+    if converter.needs_conversion(input_path):
+        try:
+            output_dir = Path(tempfile.mkdtemp())
+            input_path = converter.convert(input_path, str(output_dir))
+        except Exception as e:
+            return f"文件格式转换失败: {e}"
+
     c = PaperFormatCorrector(config_path)
-    results = c.check_rules(paper_file.name, rules_path=rules_file.name)
+    results = c.check_rules(input_path, rules_path=rules_file.name)
     return c.rule_engine.format_report(results)
 
 
@@ -181,8 +202,8 @@ def build_ui():
             with gr.Tab("论文矫正"):
                 with gr.Row():
                     with gr.Column(scale=1):
-                        paper_input = gr.File(label="上传论文 (.docx)", file_types=[".docx"])
-                        requirement_input = gr.File(label="格式要求文档 (可选, .txt/.md/.docx)", file_types=[".txt", ".md", ".docx"])
+                        paper_input = gr.File(label="上传论文 (.docx/.doc/.odt/.rtf/.pdf/.txt/.md)", file_types=[".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown"])
+                        requirement_input = gr.File(label="格式要求文档 (可选, .txt/.md/.docx/.pdf)", file_types=[".txt", ".md", ".docx", ".pdf"])
                         config_input = gr.File(label="自定义配置 (可选, .yaml)", file_types=[".yaml", ".yml"])
 
                         with gr.Row():
@@ -242,7 +263,7 @@ def build_ui():
                 gr.Markdown("上传论文和自定义规则文件 (YAML)，检查是否符合要求")
                 with gr.Row():
                     with gr.Column():
-                        rule_paper = gr.File(label="上传论文", file_types=[".docx"])
+                        rule_paper = gr.File(label="上传论文", file_types=[".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown"])
                         rule_file = gr.File(label="上传规则文件 (.yaml)", file_types=[".yaml", ".yml"])
                         rule_btn = gr.Button("开始检查", variant="primary")
                     with gr.Column():
@@ -260,12 +281,13 @@ def build_ui():
 ## 功能说明
 
 ### 论文矫正
-1. 上传待矫正的 .docx 论文文件
-2. 可选上传格式要求文档（支持 .txt / .md / .docx），工具会自动解析要求并应用
-3. 可选上传自定义 config.yaml 配置文件
-4. 选择是否输出质量评分和对比报告
-5. 选择需要额外导出的格式（PDF/HTML/TXT/MD）
-6. 点击"开始矫正"
+1. 上传待矫正的论文文件（支持 .docx / .doc / .odt / .rtf / .pdf / .txt / .md 格式）
+2. 非 .docx 格式会自动转换为 .docx 后处理（.doc/.odt/.rtf 需要 LibreOffice）
+3. 可选上传格式要求文档（支持 .txt / .md / .docx），工具会自动解析要求并应用
+4. 可选上传自定义 config.yaml 配置文件
+5. 选择是否输出质量评分和对比报告
+6. 选择需要额外导出的格式（PDF/HTML/TXT/MD）
+7. 点击"开始矫正"
 
 ### 封面生成
 填写论文题目、作者、学院等信息，自动生成标准封面页。
@@ -291,10 +313,23 @@ rules:
 
 ### 命令行用法
 ```bash
-python main.py -f paper.docx --score --diff
-python main.py -r requirement.txt -f paper.docx
-python main.py --cover title="论文题目" author="张三"
+python -m paper_format_corrector -f paper.docx --score --diff
+python -m paper_format_corrector -r requirement.txt -f paper.docx
+python -m paper_format_corrector --cover title="论文题目" author="张三"
+python -m paper_format_corrector --gui          # 启动 Web GUI
+python -m paper_format_corrector --desktop-gui   # 启动桌面 GUI
 ```
+
+---
+
+## 联系我们
+
+本项目为开源项目，如果您在使用过程中遇到任何问题或有任何建议，欢迎通过以下方式联系我们：
+
+- **GitHub**: https://github.com/blankLeaving99/paper-format-corrector
+- **问题反馈**: 请提交 Issue 到上述仓库，我们会第一时间处理
+
+感谢您的使用与支持！
 """)
 
     return app

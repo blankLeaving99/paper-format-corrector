@@ -5,12 +5,12 @@ from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml.ns import qn
 
-from section_detector import SectionDetector, SectionType, detect_document_language
-from reference_formatter import ReferenceFormatter
-from figure_table_handler import FigureTableHandler
-from table_handler import TableHandler
-from header_footer_handler import HeaderFooterHandler
-from toc_handler import TOCHandler
+from ..parsers.section_detector import SectionDetector, SectionType, detect_document_language
+from ..parsers.reference_formatter import ReferenceFormatter
+from ..handlers.figure_table_handler import FigureTableHandler
+from ..handlers.table_handler import TableHandler
+from ..handlers.header_footer_handler import HeaderFooterHandler
+from ..handlers.toc_handler import TOCHandler
 
 
 class FormatCorrector:

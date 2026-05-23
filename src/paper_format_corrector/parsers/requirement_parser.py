@@ -82,8 +82,21 @@ class RequirementParser:
             self.raw_lines = self._read_docx(file_path)
         elif ext in (".txt", ".md", ".markdown"):
             self.raw_lines = self._read_text(file_path)
+        elif ext == ".pdf":
+            self.raw_lines = self._read_pdf(file_path)
+        elif ext in (".doc", ".odt", ".rtf"):
+            # 先转换为 docx，再读取
+            from ..core.file_converter import FileConverter
+            converter = FileConverter()
+            import tempfile
+            tmp_dir = Path(tempfile.mkdtemp())
+            try:
+                converted_path = converter.convert(str(file_path), str(tmp_dir))
+                self.raw_lines = self._read_docx(Path(converted_path))
+            except Exception as e:
+                raise ValueError(f"无法转换 {ext} 格式的需求文档: {e}")
         else:
-            raise ValueError(f"不支持的文件格式: {ext}，支持 .docx / .txt / .md")
+            raise ValueError(f"不支持的文件格式: {ext}，支持 .docx/.doc/.odt/.rtf/.pdf/.txt/.md")
 
         # 解析每一行
         for line in self.raw_lines:
@@ -124,6 +137,52 @@ class RequirementParser:
     def _read_text(self, path):
         text = path.read_text(encoding="utf-8")
         return text.splitlines()
+
+    def _read_pdf(self, path):
+        """读取 PDF 文件内容"""
+        # 尝试 pdfplumber
+        try:
+            import pdfplumber
+            lines = []
+            with pdfplumber.open(str(path)) as pdf:
+                for page in pdf.pages:
+                    text = page.extract_text()
+                    if text:
+                        lines.extend(text.splitlines())
+            return lines
+        except ImportError:
+            pass
+
+        # 尝试 PyMuPDF
+        try:
+            import fitz
+            doc = fitz.open(str(path))
+            lines = []
+            for page in doc:
+                text = page.get_text()
+                if text:
+                    lines.extend(text.splitlines())
+            doc.close()
+            return lines
+        except ImportError:
+            pass
+
+        # 尝试 PyPDF2
+        try:
+            from PyPDF2 import PdfReader
+            reader = PdfReader(str(path))
+            lines = []
+            for page in reader.pages:
+                text = page.extract_text()
+                if text:
+                    lines.extend(text.splitlines())
+            return lines
+        except ImportError:
+            pass
+
+        raise RuntimeError(
+            "读取 PDF 需要安装以下库之一：pip install pdfplumber / PyMuPDF / PyPDF2"
+        )
 
     # ========== 行级解析 ==========
 

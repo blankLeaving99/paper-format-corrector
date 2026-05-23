@@ -1,21 +1,22 @@
-import argparse
-import sys
+"""论文格式矫正主程序"""
+
 import yaml
 import copy
 from pathlib import Path
 
-from style_extractor import StyleExtractor
-from format_corrector import FormatCorrector
-from format_exporter import FormatExporter
-from requirement_parser import RequirementParser
-from quality_scorer import QualityScorer
-from diff_reporter import DiffReporter
-from rule_engine import RuleEngine
-from cover_page_generator import CoverPageGenerator
-from logger import Logger, ProgressBar
+from .core.style_extractor import StyleExtractor
+from .core.format_corrector import FormatCorrector
+from .core.format_exporter import FormatExporter
+from .core.file_converter import FileConverter
+from .parsers.requirement_parser import RequirementParser
+from .quality.quality_scorer import QualityScorer
+from .quality.diff_reporter import DiffReporter
+from .quality.rule_engine import RuleEngine
+from .generators.cover_page_generator import CoverPageGenerator
+from .infra.logger import Logger, ProgressBar
 
 try:
-    from llm_parser import LLMParser, llm_parse_to_config
+    from .parsers.llm_parser import LLMParser, llm_parse_to_config
     HAS_LLM = True
 except ImportError:
     HAS_LLM = False
@@ -24,7 +25,7 @@ except ImportError:
 class PaperFormatCorrector:
     """论文格式矫正主程序"""
 
-    def __init__(self, config_path="config.yaml", log_level="INFO"):
+    def __init__(self, config_path="config/config.yaml", log_level="INFO"):
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
 
@@ -43,7 +44,7 @@ class PaperFormatCorrector:
         # 尝试LLM解析
         if use_llm and HAS_LLM:
             try:
-                from llm_parser import LLMParser, llm_parse_to_config
+                from .parsers.llm_parser import LLMParser, llm_parse_to_config
                 llm = LLMParser(provider=llm_provider, api_key=llm_api_key, model=llm_model)
                 doc_text = Path(requirement_path).read_text(encoding="utf-8")
                 llm_result = llm.parse(doc_text)
@@ -69,6 +70,18 @@ class PaperFormatCorrector:
         if not input_path.exists():
             self.logger.error(f"文件不存在: {input_file}")
             return None
+
+        # 格式转换（如果需要）
+        converter = FileConverter()
+        if converter.needs_conversion(str(input_path)):
+            self.logger.info(f"正在转换文件格式: {input_path.suffix} → .docx")
+            try:
+                converted_path = converter.convert(str(input_path), str(input_path.parent))
+                input_path = Path(converted_path)
+                self.logger.info(f"格式转换完成: {input_path.name}")
+            except Exception as e:
+                self.logger.error(f"文件格式转换失败: {e}")
+                return None
 
         if output_file is None:
             output_path = Path("output") / f"formatted_{input_path.name}"
@@ -120,16 +133,19 @@ class PaperFormatCorrector:
         self.corrector.load_template_styles()
 
         input_path = Path(input_dir)
-        docx_files = sorted(
-            list(input_path.glob("*.docx")) + list(input_path.glob("*.doc")),
-            key=lambda f: f.name,
-        )
+        converter = FileConverter()
 
-        if not docx_files:
-            self.logger.warning(f"在 {input_dir} 目录下未找到Word文档")
+        # 支持所有支持的格式
+        doc_files = []
+        for ext in FileConverter.SUPPORTED_INPUT_FORMATS:
+            doc_files.extend(input_path.glob(f"*{ext}"))
+        doc_files = sorted(doc_files, key=lambda f: f.name)
+
+        if not doc_files:
+            self.logger.warning(f"在 {input_dir} 目录下未找到支持的文档文件")
             return
 
-        self.logger.info(f"找到 {len(docx_files)} 个文档需要处理")
+        self.logger.info(f"找到 {len(doc_files)} 个文档需要处理")
 
         total_report = {
             "files_processed": 0, "files_failed": 0,
@@ -137,12 +153,25 @@ class PaperFormatCorrector:
             "all_ref_issues": [], "all_fig_table_issues": [],
         }
 
-        progress = ProgressBar(len(docx_files), desc="Processing")
+        progress = ProgressBar(len(doc_files), desc="Processing")
 
-        for doc_file in docx_files:
-            output_file = Path(output_dir) / f"formatted_{doc_file.name}"
+        for doc_file in doc_files:
+            # 格式转换
+            processing_file = doc_file
+            if converter.needs_conversion(str(doc_file)):
+                self.logger.info(f"  转换格式: {doc_file.name} ({doc_file.suffix} → .docx)")
+                try:
+                    converted_path = converter.convert(str(doc_file), output_dir)
+                    processing_file = Path(converted_path)
+                except Exception as e:
+                    total_report["files_failed"] += 1
+                    self.logger.error(f"格式转换失败 {doc_file.name}: {e}")
+                    progress.update()
+                    continue
+
+            output_file = Path(output_dir) / f"formatted_{processing_file.name}"
             try:
-                report = self.corrector.correct_document(str(doc_file), str(output_file))
+                report = self.corrector.correct_document(str(processing_file), str(output_file))
                 total_report["files_processed"] += 1
                 total_report["total_paragraphs"] += report.get("paragraphs_corrected", 0)
                 total_report["total_headings"] += report.get("headings_fixed", 0)
@@ -266,153 +295,3 @@ class PaperFormatCorrector:
         print(f"  矫正段落: {report['total_paragraphs']}")
         print(f"  标题矫正: {report['total_headings']}")
         print(f"  正文矫正: {report['total_body']}")
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description="论文格式自动矫正工具 v3.0",
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-使用示例:
-  基础用法:
-    python main.py                                    # 批量处理 input/ 目录
-    python main.py -f paper.docx                      # 处理单个文件
-    python main.py -f paper.docx -o out.docx          # 指定输出路径
-
-  需求文档驱动:
-    python main.py -r requirement.txt -f paper.docx   # 根据需求文档矫正
-    python main.py -r requirement.docx                # 批量处理
-
-  质量检查:
-    python main.py -f paper.docx --score              # 矫正并评分
-    python main.py -f paper.docx --diff               # 生成对比报告
-    python main.py -f paper.docx --rules rules.yaml   # 自定义规则检查
-
-  封面生成:
-    python main.py --cover title="论文题目" author="张三"   # 生成封面
-
-  LLM智能解析:
-    python main.py -r requirement.txt -f paper.docx --llm  # 用LLM理解复杂需求
-
-  模板/导出:
-    python main.py --extract                          # 查看模板信息
-    python main.py -f paper.docx --format pdf html    # 导出多格式
-    python main.py --template t.docx                  # 使用指定模板
-
-  GUI界面:
-    python gui.py                                     # 启动Web界面
-        """,
-    )
-
-    # 基础参数
-    parser.add_argument("-f", "--file", help="处理单个文件路径")
-    parser.add_argument("-o", "--output", help="输出文件路径")
-    parser.add_argument("-i", "--input-dir", default="input", help="输入目录（默认: input）")
-    parser.add_argument("-d", "--output-dir", default="output", help="输出目录（默认: output）")
-    parser.add_argument("-t", "--template", help="模板文件路径")
-    parser.add_argument("-c", "--config", default="config.yaml", help="配置文件路径")
-
-    # 需求文档
-    parser.add_argument("-r", "--requirement", help="需求文档路径（.docx/.txt/.md）")
-
-    # LLM
-    parser.add_argument("--llm", action="store_true", help="使用LLM智能解析需求文档")
-    parser.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic", "ollama"], help="LLM提供商")
-    parser.add_argument("--llm-key", help="LLM API Key (也可用环境变量)")
-    parser.add_argument("--llm-model", help="LLM模型名称")
-
-    # 导出
-    parser.add_argument("--format", nargs="+", help="额外导出格式: pdf html txt md")
-
-    # 质量检查
-    parser.add_argument("--score", action="store_true", help="输出格式质量评分")
-    parser.add_argument("--diff", action="store_true", help="生成矫正前后对比HTML报告")
-    parser.add_argument("--rules", help="自定义规则文件路径 (YAML)")
-
-    # 封面生成
-    parser.add_argument("--cover", nargs="*", help="生成封面，参数: key=value")
-
-    # 其他
-    parser.add_argument("--gui", action="store_true", help="启动Web GUI界面")
-    parser.add_argument("--extract", action="store_true", help="仅提取模板样式信息")
-    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
-
-    args = parser.parse_args()
-
-    print("=" * 60)
-    print("  论文格式自动矫正工具 v3.0")
-    print("=" * 60)
-
-    for dir_name in ("template", "input", "output"):
-        Path(dir_name).mkdir(exist_ok=True)
-
-    corrector = PaperFormatCorrector(args.config, args.log_level)
-
-    # 需求文档
-    if args.requirement:
-        print(f"\n解析需求文档: {args.requirement}")
-        corrector.apply_requirement(
-            args.requirement,
-            use_llm=args.llm,
-            llm_provider=args.llm_provider,
-            llm_api_key=args.llm_key,
-            llm_model=args.llm_model,
-        )
-        print()
-
-    # 模板覆盖
-    if args.template:
-        corrector.template_path = args.template
-        corrector.corrector = FormatCorrector(args.template, corrector.config)
-
-    # 启动GUI
-    if args.gui:
-        try:
-            from gui import main as gui_main
-            gui_main()
-        except ImportError:
-            print("GUI需要安装gradio: pip install gradio")
-        return
-
-    # 仅提取模板信息
-    if args.extract:
-        corrector.extract_template_info()
-        return
-
-    # 封面生成
-    if args.cover is not None:
-        metadata = {}
-        for item in args.cover:
-            if "=" in item:
-                k, v = item.split("=", 1)
-                metadata[k] = v
-        if not metadata:
-            metadata = {
-                "title": "论文题目",
-                "author": "作者姓名",
-                "college": "学院名称",
-                "major": "专业名称",
-                "date": "2024年6月",
-            }
-        cover_path = Path("output") / "cover.docx"
-        corrector.generate_cover(metadata, str(cover_path))
-        return
-
-    # 自定义规则检查
-    if args.rules and args.file:
-        corrector.check_rules(args.file, rules_path=args.rules)
-        return
-
-    # 处理
-    if args.file:
-        corrector.process_single(args.file, args.output, args.format, args.score, args.diff)
-    else:
-        if not Path(corrector.template_path).exists():
-            corrector.logger.warning(f"模板文件不存在 ({corrector.template_path})")
-        corrector.process_directory(args.input_dir, args.output_dir, args.format, args.score)
-
-    print("\n处理完成！")
-
-
-if __name__ == "__main__":
-    main()

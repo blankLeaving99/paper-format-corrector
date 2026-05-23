@@ -1,5 +1,11 @@
 """测试脚本：生成一个格式错误的样例论文，然后运行矫正器验证。"""
 
+import sys
+import os
+
+# 添加 src 目录到 Python 路径
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+
 from docx import Document
 from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -196,7 +202,7 @@ def main():
 
     # 3. 运行矫正器
     print("\n[3/3] 运行格式矫正器...")
-    from main import PaperFormatCorrector
+    from paper_format_corrector.app import PaperFormatCorrector
 
     corrector = PaperFormatCorrector()
     report = corrector.process_single(str(sample_path), "output/test_formatted.docx")

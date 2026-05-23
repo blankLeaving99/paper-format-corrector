@@ -10,6 +10,12 @@
 用毕业论文格式需求文档矫正。
 """
 
+import sys
+import os
+
+# 添加 src 目录到 Python 路径
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
+
 from docx import Document
 from docx.shared import Pt, Cm, Inches
 from docx.enum.text import WD_ALIGN_PARAGRAPH
@@ -396,12 +402,12 @@ def main():
     template_path = Path("template/template.docx")
     if not template_path.exists():
         print("\n[3/4] 创建默认模板...")
-        from test_corrector import create_default_template
+        from tests.test_corrector import create_default_template
         create_default_template(str(template_path))
 
     # 3. 运行矫正
     print("\n[4/4] 运行格式矫正器（带需求文档）...")
-    from main import PaperFormatCorrector
+    from paper_format_corrector.app import PaperFormatCorrector
 
     corrector = PaperFormatCorrector()
     corrector.apply_requirement(req_path)

@@ -4,7 +4,7 @@ build-backend = "setuptools.backends._legacy:_Backend"
 
 [project]
 name = "paper-format-corrector"
-version = "2.0.0"
+version = "3.0.0"
 description = "论文格式自动矫正工具 - 支持毕业论文、期刊论文等多种格式"
 readme = "README.md"
 license = {text = "MIT"}
@@ -18,15 +18,17 @@ dependencies = [
 [project.optional-dependencies]
 pdf = ["docx2pdf>=0.1.8"]
 html = ["mammoth>=1.6.0"]
-all = ["docx2pdf>=0.1.8", "mammoth>=1.6.0"]
+pdf-import = ["pdfplumber>=0.10.0"]
+doc-convert = ["docx2docx>=0.1.0"]
+all = ["docx2pdf>=0.1.8", "mammoth>=1.6.0", "pdfplumber>=0.10.0", "docx2docx>=0.1.0"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0"]
 
 [project.scripts]
-paper-fmt = "main:main"
-paper-correct = "main:main"
+paper-fmt = "paper_format_corrector.cli:main"
+paper-correct = "paper_format_corrector.cli:main"
 
 [tool.setuptools.packages.find]
-include = ["*.py"]
+where = ["src"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

@@ -19,7 +19,17 @@
       "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -m pytest tests/test_basic.py -v)",
       "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -m pip install pytest -q)",
       "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py -f input/thesis_sample.docx -r input/thesis_requirement.txt --score --diff -o output/thesis_v3.docx)",
-      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py -f input/thesis_sample.docx -r input/thesis_requirement.txt --score -o output/final_test.docx)"
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py -f input/thesis_sample.docx -r input/thesis_requirement.txt --score -o output/final_test.docx)",
+      "Bash(python -c \"from file_converter import FileConverter; print\\('FileConverter imported successfully'\\); print\\('Supported formats:', FileConverter.SUPPORTED_INPUT_FORMATS\\)\")",
+      "Bash(python -m py_compile file_converter.py)",
+      "Bash(python -c \"import py_compile; py_compile.compile\\('file_converter.py', doraise=True\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"from file_converter import FileConverter; print\\('FileConverter imported successfully'\\); print\\('Supported formats:', FileConverter.SUPPORTED_INPUT_FORMATS\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import gui; print\\('GUI module imported successfully'\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import main; print\\('Main module imported successfully'\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"from requirement_parser import RequirementParser; print\\('RequirementParser imported successfully'\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'src'\\); from paper_format_corrector.app import PaperFormatCorrector; print\\('PaperFormatCorrector imported OK'\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'src'\\); from paper_format_corrector.cli import main; print\\('CLI imported OK'\\)\")",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'src'\\); from paper_format_corrector.desktop_gui import PaperFormatDesktopApp; print\\('Desktop GUI imported OK'\\)\")"
     ]
   }
 }
