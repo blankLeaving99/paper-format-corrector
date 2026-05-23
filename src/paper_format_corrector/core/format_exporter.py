@@ -271,12 +271,9 @@ class FormatExporter:
     def _find_libreoffice(self):
         """查找 LibreOffice 安装路径"""
         import shutil
-        import os
 
-        # 常见路径
+        # 只检查绝对路径，避免 PATH 污染风险
         candidates = [
-            "soffice",
-            "libreoffice",
             r"C:\Program Files\LibreOffice\program\soffice.exe",
             r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
             "/usr/bin/libreoffice",
@@ -284,6 +281,12 @@ class FormatExporter:
             "/Applications/LibreOffice.app/Contents/MacOS/soffice",
         ]
         for candidate in candidates:
-            if shutil.which(candidate) or Path(candidate).exists():
+            if Path(candidate).exists():
                 return candidate
+
+        # PATH 搜索仅作最后回退
+        for name in ("soffice", "libreoffice"):
+            found = shutil.which(name)
+            if found:
+                return found
         return None

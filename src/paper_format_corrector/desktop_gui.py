@@ -158,13 +158,19 @@ class MultiDropFileEntry(ttk.Frame):
     def _on_drop(self, event):
         """处理拖拽放入的文件"""
         import re
+        _allowed_ext = {".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown"}
         parts = re.findall(r'\{([^}]+)\}|(\S+)', event.data)
         for match in parts:
             path = match[0] or match[1]
-            if path and Path(path).exists():
-                if path not in self.files:
-                    self.files.append(path)
-                    self.listbox.insert(tk.END, path)
+            if not path:
+                continue
+            p = Path(path).resolve()
+            if str(p).startswith('\\\\'):
+                continue
+            if p.is_file() and p.suffix.lower() in _allowed_ext:
+                if str(p) not in self.files:
+                    self.files.append(str(p))
+                    self.listbox.insert(tk.END, str(p))
 
     def _browse(self):
         """打开文件选择对话框"""
@@ -492,7 +498,8 @@ class PaperFormatDesktopApp:
                     result = self._process_single(paper)
                     results.append(f"[{i}/{len(files)}] {Path(p).name}\n{result}\n")
                 except Exception as e:
-                    results.append(f"[{i}/{len(files)}] {Path(p).name} - 失败: {e}\n")
+                    logging.getLogger(__name__).exception("批量处理失败")
+                    results.append(f"[{i}/{len(files)}] {Path(p).name} - 处理失败，请检查文件格式\n")
 
             final = "\n" + "=" * 60 + "\n批量处理完成\n" + "=" * 60 + "\n\n" + "\n".join(results)
             self.root.after(0, lambda: self._show_result(final))
@@ -657,7 +664,8 @@ class PaperFormatDesktopApp:
                 report = c.rule_engine.format_report(results)
                 self.root.after(0, lambda: self._show_rule_result(report))
             except Exception as e:
-                self.root.after(0, lambda: self._show_rule_result(f"检查失败: {e}"))
+                logging.getLogger(__name__).exception("规则检查失败")
+                self.root.after(0, lambda: self._show_rule_result("检查失败，请检查输入文件是否正确。"))
 
         threading.Thread(target=do_work, daemon=True).start()
 
