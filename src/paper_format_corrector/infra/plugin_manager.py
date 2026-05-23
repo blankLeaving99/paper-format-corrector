@@ -123,7 +123,7 @@ class TableFormatPlugin(Plugin):
     priority = 50
 
     def process(self, doc, context):
-        from table_handler import TableHandler
+        from ..handlers.table_handler import TableHandler
         handler = TableHandler(self.config)
         count = handler.format_all_tables(doc)
         context["tables_formatted"] = count
@@ -136,7 +136,7 @@ class ImagePlugin(Plugin):
     priority = 55
 
     def process(self, doc, context):
-        from image_handler import ImageHandler
+        from ..handlers.image_handler import ImageHandler
         handler = ImageHandler(self.config)
         count = handler.process_all_images(doc)
         context["images_processed"] = count
@@ -149,7 +149,7 @@ class TOCPlugin(Plugin):
     priority = 80
 
     def process(self, doc, context):
-        from toc_handler import TOCHandler
+        from ..handlers.toc_handler import TOCHandler
         handler = TOCHandler(self.config)
         if handler.enabled and not handler.has_toc(doc):
             handler.insert_toc(doc)
@@ -163,7 +163,7 @@ class HeaderFooterPlugin(Plugin):
     priority = 90
 
     def process(self, doc, context):
-        from header_footer_handler import HeaderFooterHandler
+        from ..handlers.header_footer_handler import HeaderFooterHandler
         handler = HeaderFooterHandler(self.config)
         handler.apply(doc)
         return context

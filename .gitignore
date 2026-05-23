@@ -7,3 +7,4 @@ output/*
 template/*.docx
 template/*.doc
 .venv/
+.venv_location

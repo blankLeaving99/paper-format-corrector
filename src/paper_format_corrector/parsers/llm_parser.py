@@ -20,6 +20,7 @@ import re
 import json
 import os
 from pathlib import Path
+from urllib.parse import urlparse
 
 
 # LLM 提取格式规则的 prompt
@@ -94,11 +95,39 @@ EXTRACT_PROMPT = """你是一个论文格式规则提取专家。请从以下文
 class LLMParser:
     """LLM智能需求文档解析器"""
 
+    # 允许的外部 API 域名白名单
+    ALLOWED_DOMAINS = {
+        "api.openai.com",
+        "api.anthropic.com",
+        "localhost",
+        "127.0.0.1",
+    }
+
     def __init__(self, provider="openai", api_key=None, base_url=None, model=None):
         self.provider = provider
         self.api_key = api_key or self._get_default_key()
-        self.base_url = base_url
+        self.base_url = self._validate_url(base_url) if base_url else None
         self.model = model or self._get_default_model()
+
+    def _validate_url(self, url):
+        """校验 URL 安全性"""
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+
+        # Ollama 只允许 localhost
+        if self.provider == "ollama":
+            if host not in ("localhost", "127.0.0.1"):
+                raise ValueError(f"Ollama 仅支持 localhost，不允许远程地址: {host}")
+            return url
+
+        # 外部 API 必须使用 HTTPS
+        if parsed.scheme not in ("https", "http"):
+            raise ValueError(f"不支持的 URL 协议: {parsed.scheme}")
+
+        if parsed.scheme == "http" and host not in ("localhost", "127.0.0.1"):
+            raise ValueError(f"外部 API 必须使用 HTTPS，当前: {url}")
+
+        return url
 
     def _get_default_key(self):
         """从环境变量获取API Key"""

@@ -10,6 +10,8 @@
 import re
 from pathlib import Path
 
+from ..infra.path_security import validate_input_path, validate_output_path, ALLOWED_INPUT_EXTENSIONS, ALLOWED_OUTPUT_EXTENSIONS
+
 
 class FormatExporter:
     """论文格式导出器"""
@@ -31,8 +33,8 @@ class FormatExporter:
                 f"不支持的格式: {fmt}，支持: {', '.join(self.SUPPORTED_FORMATS)}"
             )
 
-        docx_path = Path(docx_path)
-        output_path = Path(output_path)
+        docx_path = validate_input_path(docx_path, ALLOWED_INPUT_EXTENSIONS)
+        output_path = validate_output_path(output_path, ALLOWED_OUTPUT_EXTENSIONS)
 
         if not docx_path.exists():
             raise FileNotFoundError(f"文件不存在: {docx_path}")

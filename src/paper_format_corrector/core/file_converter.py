@@ -15,6 +15,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ..infra.path_security import validate_input_path, ALLOWED_INPUT_EXTENSIONS
+
 
 class FileConverter:
     """多格式文件转换器"""
@@ -49,7 +51,7 @@ class FileConverter:
         Returns:
             转换后的 .docx 文件路径
         """
-        input_path = Path(input_path)
+        input_path = validate_input_path(input_path, ALLOWED_INPUT_EXTENSIONS)
         suffix = input_path.suffix.lower()
 
         if suffix == ".docx":

@@ -1,8 +1,8 @@
 """论文格式矫正工具 - 桌面 GUI
 
 基于 tkinter 的桌面可视化界面，功能与 Web GUI 一致：
-- 上传论文文件
-- 上传需求文档（可选）
+- 上传论文文件（支持拖拽）
+- 上传需求文档（可选，支持拖拽）
 - 一键矫正
 - 实时质量评分
 - 对比报告预览
@@ -18,6 +18,13 @@ import threading
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, scrolledtext
 from pathlib import Path
+
+# 尝试导入拖拽支持
+try:
+    from tkinterdnd2 import TkinterDnD, DND_FILES
+    HAS_DND = True
+except ImportError:
+    HAS_DND = False
 
 from .app import PaperFormatCorrector
 from .quality.quality_scorer import QualityScorer
@@ -40,11 +47,142 @@ GitHub: https://github.com/blankLeaving99/paper-format-corrector
 CONFIG_PATH = "config/config.yaml"
 
 
+class DropFileEntry(ttk.Frame):
+    """支持拖拽的文件输入框组件"""
+
+    def __init__(self, parent, label, var, filetypes=None, on_change=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.var = var
+        self.filetypes = filetypes
+        self.on_change = on_change
+
+        ttk.Label(self, text=label, width=12).pack(side=tk.LEFT)
+        self.entry = ttk.Entry(self, textvariable=var, width=50)
+        self.entry.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+        ttk.Button(self, text="浏览", width=6, command=self._browse).pack(side=tk.LEFT)
+
+        # 拖拽提示
+        self.drop_label = ttk.Label(self, text="", foreground="gray", font=("Microsoft YaHei", 8))
+        self.drop_label.pack(side=tk.LEFT, padx=(2, 0))
+
+        # 绑定拖拽事件
+        self._setup_dnd()
+
+    def _setup_dnd(self):
+        """设置拖拽支持"""
+        if HAS_DND:
+            try:
+                self.entry.drop_target_register(DND_FILES)
+                self.entry.dnd_bind('<<Drop>>', self._on_drop)
+                self.drop_label.config(text="(可拖拽)")
+            except Exception:
+                self.drop_label.config(text="")
+        else:
+            self.drop_label.config(text="")
+
+    def _on_drop(self, event):
+        """处理拖拽放入的文件"""
+        files = self._parse_dnd_data(event.data)
+        if files:
+            self.var.set(files[0])
+            if self.on_change:
+                self.on_change(files)
+
+    @staticmethod
+    def _parse_dnd_data(data):
+        """解析拖拽数据，支持多个文件"""
+        files = []
+        if not data:
+            return files
+
+        # Windows 拖拽格式：用 {} 包裹含空格的路径，空格分隔多个文件
+        import re
+        parts = re.findall(r'\{([^}]+)\}|(\S+)', data)
+        for match in parts:
+            path = match[0] or match[1]
+            if path and Path(path).exists():
+                files.append(path)
+
+        return files
+
+    def _browse(self):
+        """打开文件选择对话框"""
+        path = filedialog.askopenfilename(filetypes=self.filetypes)
+        if path:
+            self.var.set(path)
+            if self.on_change:
+                self.on_change([path])
+
+
+class MultiDropFileEntry(ttk.Frame):
+    """支持拖拽多个文件的输入框组件"""
+
+    def __init__(self, parent, label, filetypes=None, **kwargs):
+        super().__init__(parent, **kwargs)
+        self.filetypes = filetypes
+        self.files = []
+
+        # 顶部：标签 + 按钮
+        top = ttk.Frame(self)
+        top.pack(fill=tk.X)
+        ttk.Label(top, text=label, width=12).pack(side=tk.LEFT)
+        ttk.Button(top, text="添加文件", command=self._browse).pack(side=tk.LEFT, padx=5)
+        ttk.Button(top, text="清空", command=self._clear).pack(side=tk.LEFT)
+
+        if HAS_DND:
+            ttk.Label(top, text="(可拖拽多个文件到下方)", foreground="gray",
+                      font=("Microsoft YaHei", 8)).pack(side=tk.LEFT, padx=5)
+
+        # 文件列表显示
+        self.listbox = tk.Listbox(self, height=4, selectmode=tk.EXTENDED)
+        self.listbox.pack(fill=tk.X, pady=(5, 0))
+
+        # 拖拽支持
+        if HAS_DND:
+            try:
+                self.listbox.drop_target_register(DND_FILES)
+                self.listbox.dnd_bind('<<Drop>>', self._on_drop)
+            except Exception:
+                pass
+
+    def _on_drop(self, event):
+        """处理拖拽放入的文件"""
+        import re
+        parts = re.findall(r'\{([^}]+)\}|(\S+)', event.data)
+        for match in parts:
+            path = match[0] or match[1]
+            if path and Path(path).exists():
+                if path not in self.files:
+                    self.files.append(path)
+                    self.listbox.insert(tk.END, path)
+
+    def _browse(self):
+        """打开文件选择对话框"""
+        paths = filedialog.askopenfilenames(filetypes=self.filetypes)
+        for path in paths:
+            if path not in self.files:
+                self.files.append(path)
+                self.listbox.insert(tk.END, path)
+
+    def _clear(self):
+        """清空文件列表"""
+        self.files.clear()
+        self.listbox.delete(0, tk.END)
+
+    def get_files(self):
+        """获取所有文件路径"""
+        return self.files[:]
+
+
 class PaperFormatDesktopApp:
     """论文格式矫正工具 - 桌面应用"""
 
     def __init__(self):
-        self.root = tk.Tk()
+        if HAS_DND:
+            self.root = TkinterDnD.Tk()
+        else:
+            self.root = tk.Tk()
+
         self.root.title("论文格式自动矫正工具 v3.0")
         self.root.geometry("900x700")
         self.root.minsize(800, 600)
@@ -87,6 +225,12 @@ class PaperFormatDesktopApp:
         ttk.Label(title_frame, text="论文格式自动矫正工具 v3.0",
                   font=("Microsoft YaHei", 16, "bold")).pack()
 
+        if not HAS_DND:
+            hint_frame = ttk.Frame(self.root)
+            hint_frame.pack(fill=tk.X, padx=10)
+            ttk.Label(hint_frame, text="提示：安装 tkinterdnd2 可启用拖拽功能 (pip install tkinterdnd2)",
+                      foreground="gray", font=("Microsoft YaHei", 8)).pack()
+
         # 标签页
         notebook = ttk.Notebook(self.root)
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
@@ -106,16 +250,28 @@ class PaperFormatDesktopApp:
         file_frame = ttk.LabelFrame(tab, text="文件选择", padding=10)
         file_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        self._file_row(file_frame, "论文文件:", self.paper_path,
-                       filetypes=[("所有支持格式", "*.docx *.doc *.odt *.rtf *.pdf *.txt *.md"),
-                                  ("Word文档", "*.docx *.doc"), ("PDF文件", "*.pdf"),
-                                  ("文本文件", "*.txt *.md"), ("所有文件", "*.*")])
+        # 论文文件 - 支持拖拽
+        self.paper_entry = DropFileEntry(
+            file_frame, "论文文件:", self.paper_path,
+            filetypes=[("所有支持格式", "*.docx *.doc *.odt *.rtf *.pdf *.txt *.md"),
+                       ("Word文档", "*.docx *.doc"), ("PDF文件", "*.pdf"),
+                       ("文本文件", "*.txt *.md"), ("所有文件", "*.*")]
+        )
+        self.paper_entry.pack(fill=tk.X, pady=3)
 
-        self._file_row(file_frame, "格式要求:", self.requirement_path,
-                       filetypes=[("文档文件", "*.txt *.md *.docx *.pdf"), ("所有文件", "*.*")])
+        # 格式要求 - 支持拖拽
+        self.req_entry = DropFileEntry(
+            file_frame, "格式要求:", self.requirement_path,
+            filetypes=[("文档文件", "*.txt *.md *.docx *.pdf"), ("所有文件", "*.*")]
+        )
+        self.req_entry.pack(fill=tk.X, pady=3)
 
-        self._file_row(file_frame, "自定义配置:", self.config_path,
-                       filetypes=[("YAML文件", "*.yaml *.yml"), ("所有文件", "*.*")])
+        # 自定义配置
+        self.cfg_entry = DropFileEntry(
+            file_frame, "自定义配置:", self.config_path,
+            filetypes=[("YAML文件", "*.yaml *.yml"), ("所有文件", "*.*")]
+        )
+        self.cfg_entry.pack(fill=tk.X, pady=3)
 
         # 选项区
         opt_frame = ttk.LabelFrame(tab, text="处理选项", padding=10)
@@ -136,6 +292,7 @@ class PaperFormatDesktopApp:
         btn_frame = ttk.Frame(tab)
         btn_frame.pack(fill=tk.X, padx=10, pady=5)
         ttk.Button(btn_frame, text="开始矫正", command=self._run_correct).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="批量矫正（选择多个文件）", command=self._run_batch_correct).pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="打开结果目录", command=lambda: self._open_dir("output")).pack(side=tk.LEFT, padx=5)
 
         # 结果区
@@ -200,11 +357,18 @@ class PaperFormatDesktopApp:
         file_frame = ttk.LabelFrame(tab, text="文件选择", padding=10)
         file_frame.pack(fill=tk.X, padx=10, pady=5)
 
-        self._file_row(file_frame, "论文文件:", self.rule_paper_path,
-                       filetypes=[("所有支持格式", "*.docx *.doc *.odt *.rtf *.pdf *.txt *.md"),
-                                  ("所有文件", "*.*")])
-        self._file_row(file_frame, "规则文件:", self.rule_file_path,
-                       filetypes=[("YAML文件", "*.yaml *.yml"), ("所有文件", "*.*")])
+        self.rule_paper_entry = DropFileEntry(
+            file_frame, "论文文件:", self.rule_paper_path,
+            filetypes=[("所有支持格式", "*.docx *.doc *.odt *.rtf *.pdf *.txt *.md"),
+                       ("所有文件", "*.*")]
+        )
+        self.rule_paper_entry.pack(fill=tk.X, pady=3)
+
+        self.rule_file_entry = DropFileEntry(
+            file_frame, "规则文件:", self.rule_file_path,
+            filetypes=[("YAML文件", "*.yaml *.yml"), ("所有文件", "*.*")]
+        )
+        self.rule_file_entry.pack(fill=tk.X, pady=3)
 
         # 按钮
         btn_frame = ttk.Frame(tab)
@@ -227,86 +391,49 @@ class PaperFormatDesktopApp:
         text = scrolledtext.ScrolledText(tab, font=("Microsoft YaHei", 10), wrap=tk.WORD)
         text.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
-        help_content = """论文格式自动矫正工具 v3.0 - 使用说明
+        dnd_hint = "（已启用拖拽功能，可直接拖拽文件到输入框）" if HAS_DND else "（安装 tkinterdnd2 可启用拖拽：pip install tkinterdnd2）"
+
+        help_content = f"""论文格式自动矫正工具 v3.0 - 使用说明
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+拖拽功能：{dnd_hint}
 
 【论文矫正】
-1. 上传待矫正的论文文件（支持 .docx / .doc / .odt / .rtf / .pdf / .txt / .md 格式）
-2. 非 .docx 格式会自动转换为 .docx 后处理（.doc/.odt/.rtf 需要安装 LibreOffice）
-3. 可选上传格式要求文档（支持 .txt / .md / .docx / .pdf），工具会自动解析并应用
-4. 可选上传自定义 config.yaml 配置文件
-5. 选择是否输出质量评分和对比报告
-6. 选择需要额外导出的格式（PDF/HTML/TXT/MD）
-7. 点击"开始矫正"
+1. 拖拽或选择论文文件（支持 .docx/.doc/.odt/.rtf/.pdf/.txt/.md）
+2. 可选拖拽格式要求文档（支持 .txt/.md/.docx/.pdf）
+3. 可选拖拽自定义 config.yaml 配置文件
+4. 选择处理选项，点击"开始矫正"或"批量矫正"
+
+【批量处理】
+- 点击"批量矫正"按钮，可选择多个文件一次性处理
+- 也可将多个文件拖拽到论文文件输入框（会自动识别）
 
 【封面生成】
-填写论文题目、作者、学院等信息，点击"生成封面"自动生成标准封面页。
+填写论文信息，点击"生成封面"自动生成标准封面页。
 
 【规则检查】
-上传论文文件和 YAML 格式的自定义规则文件，点击"开始检查"查看结果。
-
-规则文件示例：
-  rules:
-    - name: "参考文献不超过50篇"
-      check: reference_count
-      params:
-        max: 50
-      severity: warning
-
-    - name: "正文字号为小四"
-      check: body_font_size
-      params:
-        expected: 12
-      severity: error
+拖拽论文文件和 YAML 规则文件，点击"开始检查"。
 
 【命令行用法】
-  python -m paper_format_corrector -f paper.docx --score --diff
-  python -m paper_format_corrector -r requirement.txt -f paper.docx
-  python -m paper_format_corrector --cover title="论文题目" author="张三"
-  python -m paper_format_corrector --gui          # 启动 Web GUI
-  python -m paper_format_corrector --desktop-gui   # 启动桌面 GUI
+  python run.py                              # 启动选择器
+  python main.py -f paper.docx --score       # 命令行模式
+  python gui.py                              # 直接启动 Web GUI
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 
-""" + CONTACT_INFO
+{CONTACT_INFO}"""
 
         text.insert(tk.END, help_content)
         text.config(state=tk.DISABLED)
 
-    # ── 通用文件选择行 ────────────────────────────────────────
-
-    def _file_row(self, parent, label, var, filetypes=None):
-        """创建一行：标签 + 路径输入 + 浏览按钮"""
-        row = ttk.Frame(parent)
-        row.pack(fill=tk.X, pady=3)
-        ttk.Label(row, text=label, width=12).pack(side=tk.LEFT)
-        ttk.Entry(row, textvariable=var, width=50).pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
-        ttk.Button(row, text="浏览", width=6,
-                   command=lambda: self._browse_file(var, filetypes)).pack(side=tk.LEFT)
-
-    def _browse_file(self, var, filetypes=None):
-        """打开文件选择对话框"""
-        path = filedialog.askopenfilename(filetypes=filetypes)
-        if path:
-            var.set(path)
-
-    def _open_dir(self, dir_path):
-        """打开目录"""
-        import os
-        path = Path(dir_path).resolve()
-        if path.exists():
-            os.startfile(str(path))
-        else:
-            messagebox.showinfo("提示", f"目录不存在: {path}")
-
     # ── 核心功能 ──────────────────────────────────────────────
 
     def _run_correct(self):
-        """执行论文矫正"""
+        """执行单个论文矫正"""
         paper = self.paper_path.get().strip()
         if not paper:
-            messagebox.showwarning("提示", "请先选择论文文件")
+            messagebox.showwarning("提示", "请先选择或拖拽论文文件")
             return
 
         self.result_text.delete(1.0, tk.END)
@@ -315,101 +442,132 @@ class PaperFormatDesktopApp:
 
         def do_work():
             try:
-                cfg = self.config_path.get().strip() or CONFIG_PATH
-                c = PaperFormatCorrector(cfg)
-
-                # 应用需求文档
-                req = self.requirement_path.get().strip()
-                if req:
-                    c.apply_requirement(req)
-
-                # 格式转换
-                input_path = Path(paper)
-                converter = FileConverter()
-                if converter.needs_conversion(str(input_path)):
-                    tmp_dir = Path(tempfile.mkdtemp())
-                    converted = converter.convert(str(input_path), str(tmp_dir))
-                    input_path = Path(converted)
-
-                # 输出路径
-                output_dir = Path("output")
-                output_dir.mkdir(exist_ok=True)
-                output_path = output_dir / f"formatted_{input_path.name}"
-
-                # 处理
-                report = c.corrector.correct_document(str(input_path), str(output_path))
-
-                # 质量评分
-                score_report = ""
-                if self.do_score.get():
-                    scorer = QualityScorer(c.config)
-                    total, scores, issues = scorer.score(str(output_path))
-                    score_report = scorer.format_report(total, scores, issues)
-
-                # 对比报告
-                diff_path = None
-                if self.do_diff.get():
-                    diff_path = str(output_path.with_suffix(".diff.html"))
-                    reporter = DiffReporter()
-                    orig_path = str(output_path) + ".orig.docx"
-                    shutil.copy2(str(input_path), orig_path)
-                    reporter.generate_html_report(orig_path, str(output_path), diff_path)
-                    Path(orig_path).unlink(missing_ok=True)
-
-                # 导出
-                export_formats = []
-                if self.export_pdf.get(): export_formats.append("pdf")
-                if self.export_html.get(): export_formats.append("html")
-                if self.export_txt.get(): export_formats.append("txt")
-                if self.export_md.get(): export_formats.append("md")
-
-                if export_formats:
-                    exporter = FormatExporter()
-                    for fmt in export_formats:
-                        out = output_path.with_suffix(f".{fmt}")
-                        try:
-                            exporter.export(str(output_path), str(out), fmt)
-                        except Exception:
-                            pass
-
-                # 构建结果文本
-                result_lines = [
-                    f"{'=' * 50}",
-                    f"处理完成: {input_path.name}",
-                    f"{'=' * 50}",
-                    f"输出文件: {output_path}",
-                    "",
-                    f"矫正段落数: {report['paragraphs_corrected']}",
-                    f"标题矫正:   {report['headings_fixed']}",
-                    f"正文矫正:   {report['body_fixed']}",
-                ]
-                if report.get("tables_formatted"):
-                    result_lines.append(f"表格格式化: {report['tables_formatted']}")
-                if report.get("images_centered"):
-                    result_lines.append(f"图片居中:   {report['images_centered']}")
-
-                if report.get("fig_table_issues"):
-                    result_lines.append(f"\n图表编号修正 ({len(report['fig_table_issues'])} 项):")
-                    for issue in report["fig_table_issues"]:
-                        result_lines.append(f"  - {issue}")
-
-                if report.get("ref_issues"):
-                    result_lines.append(f"\n参考文献问题 ({len(report['ref_issues'])} 项):")
-                    for issue in report["ref_issues"]:
-                        result_lines.append(f"  - {issue}")
-
-                if diff_path:
-                    result_lines.append(f"\n对比报告: {diff_path}")
-
-                if score_report:
-                    result_lines.append(f"\n{score_report}")
-
-                self.root.after(0, lambda: self._show_result("\n".join(result_lines)))
-
+                result = self._process_single(paper)
+                self.root.after(0, lambda: self._show_result(result))
             except Exception as e:
                 self.root.after(0, lambda: self._show_result(f"处理失败: {e}"))
 
         threading.Thread(target=do_work, daemon=True).start()
+
+    def _run_batch_correct(self):
+        """批量矫正 - 选择多个文件"""
+        filetypes = [
+            ("所有支持格式", "*.docx *.doc *.odt *.rtf *.pdf *.txt *.md"),
+            ("Word文档", "*.docx *.doc"), ("PDF文件", "*.pdf"),
+            ("文本文件", "*.txt *.md"), ("所有文件", "*.*")
+        ]
+        files = filedialog.askopenfilenames(filetypes=filetypes, title="选择多个论文文件")
+        if not files:
+            return
+
+        self.result_text.delete(1.0, tk.END)
+        self.result_text.insert(tk.END, f"已选择 {len(files)} 个文件，开始批量处理...\n\n")
+        self.root.update()
+
+        def do_work():
+            results = []
+            for i, paper in enumerate(files, 1):
+                self.root.after(0, lambda p=paper, idx=i: self._show_result(
+                    f"[{idx}/{len(files)}] 正在处理: {Path(p).name}...\n"))
+                try:
+                    result = self._process_single(paper)
+                    results.append(f"[{i}/{len(files)}] {Path(p).name}\n{result}\n")
+                except Exception as e:
+                    results.append(f"[{i}/{len(files)}] {Path(p).name} - 失败: {e}\n")
+
+            final = "\n" + "=" * 60 + "\n批量处理完成\n" + "=" * 60 + "\n\n" + "\n".join(results)
+            self.root.after(0, lambda: self._show_result(final))
+
+        threading.Thread(target=do_work, daemon=True).start()
+
+    def _process_single(self, paper):
+        """处理单个文件，返回结果文本"""
+        cfg = self.config_path.get().strip() or CONFIG_PATH
+        c = PaperFormatCorrector(cfg)
+
+        # 应用需求文档
+        req = self.requirement_path.get().strip()
+        if req:
+            c.apply_requirement(req)
+
+        # 格式转换
+        input_path = Path(paper)
+        converter = FileConverter()
+        if converter.needs_conversion(str(input_path)):
+            tmp_dir = Path(tempfile.mkdtemp())
+            converted = converter.convert(str(input_path), str(tmp_dir))
+            input_path = Path(converted)
+
+        # 输出路径
+        output_dir = Path("output")
+        output_dir.mkdir(exist_ok=True)
+        output_path = output_dir / f"formatted_{input_path.name}"
+
+        # 处理
+        report = c.corrector.correct_document(str(input_path), str(output_path))
+
+        # 质量评分
+        score_report = ""
+        if self.do_score.get():
+            scorer = QualityScorer(c.config)
+            total, scores, issues = scorer.score(str(output_path))
+            score_report = scorer.format_report(total, scores, issues)
+
+        # 对比报告
+        diff_path = None
+        if self.do_diff.get():
+            diff_path = str(output_path.with_suffix(".diff.html"))
+            reporter = DiffReporter()
+            orig_path = str(output_path) + ".orig.docx"
+            shutil.copy2(str(input_path), orig_path)
+            reporter.generate_html_report(orig_path, str(output_path), diff_path)
+            Path(orig_path).unlink(missing_ok=True)
+
+        # 导出
+        export_formats = []
+        if self.export_pdf.get(): export_formats.append("pdf")
+        if self.export_html.get(): export_formats.append("html")
+        if self.export_txt.get(): export_formats.append("txt")
+        if self.export_md.get(): export_formats.append("md")
+
+        if export_formats:
+            exporter = FormatExporter()
+            for fmt in export_formats:
+                out = output_path.with_suffix(f".{fmt}")
+                try:
+                    exporter.export(str(output_path), str(out), fmt)
+                except Exception:
+                    pass
+
+        # 构建结果
+        lines = [
+            f"{'=' * 50}",
+            f"处理完成: {input_path.name}",
+            f"{'=' * 50}",
+            f"输出文件: {output_path}",
+            "",
+            f"矫正段落数: {report['paragraphs_corrected']}",
+            f"标题矫正:   {report['headings_fixed']}",
+            f"正文矫正:   {report['body_fixed']}",
+        ]
+        if report.get("tables_formatted"):
+            lines.append(f"表格格式化: {report['tables_formatted']}")
+        if report.get("images_centered"):
+            lines.append(f"图片居中:   {report['images_centered']}")
+        if report.get("fig_table_issues"):
+            lines.append(f"\n图表编号修正 ({len(report['fig_table_issues'])} 项):")
+            for issue in report["fig_table_issues"]:
+                lines.append(f"  - {issue}")
+        if report.get("ref_issues"):
+            lines.append(f"\n参考文献问题 ({len(report['ref_issues'])} 项):")
+            for issue in report["ref_issues"]:
+                lines.append(f"  - {issue}")
+        if diff_path:
+            lines.append(f"\n对比报告: {diff_path}")
+        if score_report:
+            lines.append(f"\n{score_report}")
+
+        return "\n".join(lines)
 
     def _run_cover(self):
         """生成封面"""
@@ -450,10 +608,10 @@ class PaperFormatDesktopApp:
         rules = self.rule_file_path.get().strip()
 
         if not paper:
-            messagebox.showwarning("提示", "请先选择论文文件")
+            messagebox.showwarning("提示", "请先选择或拖拽论文文件")
             return
         if not rules:
-            messagebox.showwarning("提示", "请先选择规则文件")
+            messagebox.showwarning("提示", "请先选择或拖拽规则文件")
             return
 
         self.rule_result_text.delete(1.0, tk.END)
@@ -462,7 +620,6 @@ class PaperFormatDesktopApp:
 
         def do_work():
             try:
-                # 格式转换
                 input_path = paper
                 converter = FileConverter()
                 if converter.needs_conversion(input_path):
@@ -487,6 +644,15 @@ class PaperFormatDesktopApp:
         """显示规则检查结果"""
         self.rule_result_text.delete(1.0, tk.END)
         self.rule_result_text.insert(tk.END, text)
+
+    def _open_dir(self, dir_path):
+        """打开目录"""
+        import os
+        path = Path(dir_path).resolve()
+        if path.exists():
+            os.startfile(str(path))
+        else:
+            messagebox.showinfo("提示", f"目录不存在: {path}")
 
     def run(self):
         """启动应用"""

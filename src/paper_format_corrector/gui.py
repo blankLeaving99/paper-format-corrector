@@ -191,9 +191,22 @@ def check_rules(paper_file, rules_file):
     return c.rule_engine.format_report(results)
 
 
+def find_free_port(start=7860, end=7900):
+    """查找可用端口"""
+    import socket
+    for port in range(start, end):
+        with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
+            try:
+                s.bind(("127.0.0.1", port))
+                return port
+            except OSError:
+                continue
+    return start
+
+
 def build_ui():
     """构建界面"""
-    with gr.Blocks(title="论文格式矫正工具", theme=gr.themes.Soft()) as app:
+    with gr.Blocks(title="论文格式矫正工具") as app:
         gr.Markdown("# 论文格式自动矫正工具 v3.0")
         gr.Markdown("上传论文和格式要求，一键矫正论文格式")
 
@@ -337,9 +350,10 @@ python -m paper_format_corrector --desktop-gui   # 启动桌面 GUI
 
 def main():
     app = build_ui()
+    port = find_free_port()
     app.launch(
-        server_name="0.0.0.0",
-        server_port=7860,
+        server_name="127.0.0.1",
+        server_port=port,
         share=False,
         inbrowser=True,
     )

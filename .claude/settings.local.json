@@ -30,7 +30,16 @@
       "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'src'\\); from paper_format_corrector.app import PaperFormatCorrector; print\\('PaperFormatCorrector imported OK'\\)\")",
       "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'src'\\); from paper_format_corrector.cli import main; print\\('CLI imported OK'\\)\")",
       "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -c \"import sys; sys.path.insert\\(0, 'src'\\); from paper_format_corrector.desktop_gui import PaperFormatDesktopApp; print\\('Desktop GUI imported OK'\\)\")",
-      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -m pytest tests/test_basic.py -v --tb=short)"
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" -m pytest tests/test_basic.py -v --tb=short)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" run.py --help)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" gui.py --help)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" main.py --help)",
+      "Bash(netstat -ano)",
+      "Bash(findstr :7860)",
+      "Bash(taskkill *)",
+      "PowerShell(Stop-Process *)",
+      "Bash(E:\\\\Python\\\\python_3_13_3\\\\python.exe *)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" run.py)"
     ]
   }
 }
