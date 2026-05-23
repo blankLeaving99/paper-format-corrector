@@ -1,8 +1,11 @@
 """论文格式矫正主程序"""
 
+from __future__ import annotations
+
 import yaml
 import copy
 from pathlib import Path
+from typing import Any
 
 from .core.style_extractor import StyleExtractor
 from .core.format_corrector import FormatCorrector
@@ -14,6 +17,9 @@ from .quality.diff_reporter import DiffReporter
 from .quality.rule_engine import RuleEngine
 from .generators.cover_page_generator import CoverPageGenerator
 from .infra.logger import Logger, ProgressBar
+from .infra.preset_loader import load_preset, list_presets, format_preset_list
+from .infra.path_security import validate_input_path, validate_output_path, ALLOWED_INPUT_EXTENSIONS
+from .infra.compat import check_dependencies
 
 try:
     from .parsers.llm_parser import LLMParser, llm_parse_to_config
@@ -25,20 +31,44 @@ except ImportError:
 class PaperFormatCorrector:
     """论文格式矫正主程序"""
 
-    def __init__(self, config_path="config/config.yaml", log_level="INFO"):
+    def __init__(self, config_path: str = "config/config.yaml", log_level: str = "INFO") -> None:
         with open(config_path, "r", encoding="utf-8") as f:
             self.config = yaml.safe_load(f)
 
         self.template_path = self.config["template"]["path"]
         self.corrector = FormatCorrector(self.template_path, self.config)
-        self.exporter = FormatExporter()
+        self.exporter = FormatExporter(self.config)
         self.scorer = QualityScorer(self.config)
         self.diff_reporter = DiffReporter()
         self.rule_engine = RuleEngine()
         self.logger = Logger(level=log_level)
 
-    def apply_requirement(self, requirement_path, use_llm=False, llm_provider="openai", llm_api_key=None, llm_model=None):
+        # 检查依赖兼容性
+        for warning in check_dependencies():
+            if "[ERROR]" in warning:
+                self.logger.error(warning)
+            else:
+                self.logger.warning(warning)
+
+    def apply_preset(self, preset_name: str) -> None:
+        """Load and apply a format preset (e.g., 'ieee', 'nature', 'chinese_thesis')."""
+        preset_config = load_preset(preset_name)
+        self.config = self._merge_config(self.config, preset_config)
+        self.corrector = FormatCorrector(self.template_path, self.config)
+        self.scorer = QualityScorer(self.config)
+        self.logger.info(f"已应用格式预设: {preset_name}")
+
+    def apply_requirement(
+        self,
+        requirement_path: str,
+        use_llm: bool = False,
+        llm_provider: str = "openai",
+        llm_api_key: str | None = None,
+        llm_model: str | None = None,
+    ) -> None:
         """解析需求文档并应用到配置"""
+        # 校验需求文档路径
+        validate_input_path(requirement_path, ALLOWED_INPUT_EXTENSIONS)
         req_config = None
 
         # 尝试LLM解析
@@ -64,11 +94,19 @@ class PaperFormatCorrector:
         self.corrector = FormatCorrector(self.template_path, self.config)
         self.scorer = QualityScorer(self.config)
 
-    def process_single(self, input_file, output_file=None, export_formats=None, score=False, diff=False):
+    def process_single(
+        self,
+        input_file: str,
+        output_file: str | None = None,
+        export_formats: list[str] | None = None,
+        score: bool = False,
+        diff: bool = False,
+    ) -> dict[str, Any] | None:
         """处理单个文件"""
-        input_path = Path(input_file)
-        if not input_path.exists():
-            self.logger.error(f"文件不存在: {input_file}")
+        try:
+            input_path = validate_input_path(input_file, ALLOWED_INPUT_EXTENSIONS)
+        except (ValueError, FileNotFoundError) as e:
+            self.logger.error(str(e))
             return None
 
         # 格式转换（如果需要）
@@ -127,7 +165,13 @@ class PaperFormatCorrector:
             traceback.print_exc()
             return None
 
-    def process_directory(self, input_dir="input", output_dir="output", export_formats=None, score=False):
+    def process_directory(
+        self,
+        input_dir: str = "input",
+        output_dir: str = "output",
+        export_formats: list[str] | None = None,
+        score: bool = False,
+    ) -> None:
         """批量处理目录"""
         Path(output_dir).mkdir(parents=True, exist_ok=True)
         self.corrector.load_template_styles()
@@ -195,13 +239,18 @@ class PaperFormatCorrector:
         progress.finish()
         self._print_summary(total_report)
 
-    def generate_cover(self, metadata, output_path, template="standard"):
+    def generate_cover(self, metadata: dict[str, str], output_path: str, template: str = "standard") -> None:
         """生成封面页"""
         generator = CoverPageGenerator(self.config)
         generator.generate(metadata, output_path, template)
         self.logger.info(f"封面已生成: {output_path}")
 
-    def check_rules(self, doc_path, rules_path=None, rules_list=None):
+    def check_rules(
+        self,
+        doc_path: str,
+        rules_path: str | None = None,
+        rules_list: list[dict] | None = None,
+    ) -> list:
         """执行自定义规则检查"""
         from docx import Document
         doc = Document(str(doc_path))
@@ -215,7 +264,7 @@ class PaperFormatCorrector:
         print(self.rule_engine.format_report(results))
         return results
 
-    def _export_formats(self, docx_path, formats):
+    def _export_formats(self, docx_path: Path, formats: list[str]) -> None:
         docx_path = Path(docx_path)
         for fmt in formats:
             fmt = fmt.lower().strip(".")
@@ -230,7 +279,7 @@ class PaperFormatCorrector:
             except Exception as e:
                 self.logger.warning(f"  导出 {fmt} 失败: {e}")
 
-    def _merge_config(self, base, override):
+    def _merge_config(self, base: dict, override: dict) -> dict:
         result = copy.deepcopy(base)
         for key, value in override.items():
             if key.startswith("_"):
@@ -241,7 +290,7 @@ class PaperFormatCorrector:
                 result[key] = copy.deepcopy(value)
         return result
 
-    def extract_template_info(self):
+    def extract_template_info(self) -> None:
         extractor = StyleExtractor(self.template_path)
         styles = extractor.extract_all_styles()
         margins = extractor.extract_page_margins()

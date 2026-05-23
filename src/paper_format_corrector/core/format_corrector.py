@@ -1,4 +1,5 @@
 import re
+import logging
 
 from docx import Document
 from docx.shared import Pt, Cm
@@ -9,8 +10,11 @@ from ..parsers.section_detector import SectionDetector, SectionType, detect_docu
 from ..parsers.reference_formatter import ReferenceFormatter
 from ..handlers.figure_table_handler import FigureTableHandler
 from ..handlers.table_handler import TableHandler
+from ..handlers.image_handler import ImageHandler
 from ..handlers.header_footer_handler import HeaderFooterHandler
 from ..handlers.toc_handler import TOCHandler
+
+logger = logging.getLogger(__name__)
 
 
 class FormatCorrector:
@@ -26,6 +30,7 @@ class FormatCorrector:
         self.ref_formatter = ReferenceFormatter(config)
         self.fig_table_handler = FigureTableHandler(config)
         self.table_handler = TableHandler(config)
+        self.image_handler = ImageHandler(config)
         self.hf_handler = HeaderFooterHandler(config)
         self.toc_handler = TOCHandler(config)
 
@@ -52,7 +57,7 @@ class FormatCorrector:
                 self.style_mapping[style.name.lower()] = style
 
     def correct_document(self, input_path, output_path):
-        print(f"正在处理: {input_path}")
+        logger.info(f"正在处理: {input_path}")
         doc = Document(input_path)
 
         # 重置状态
@@ -72,8 +77,8 @@ class FormatCorrector:
         # 3. 表格格式矫正
         self.report["tables_formatted"] = self.table_handler.format_all_tables(doc)
 
-        # 4. 图片居中处理
-        self.report["images_centered"] = self._center_images(doc)
+        # 4. 图片处理（居中 + 调整大小 + DPI检查）
+        self.report["images_centered"] = self.image_handler.process_all_images(doc)
 
         # 5. 参考文献格式化
         self._format_references(doc)
@@ -89,7 +94,7 @@ class FormatCorrector:
         self._correct_formulas(doc)
 
         doc.save(output_path)
-        print(f"已保存: {output_path}")
+        logger.info(f"已保存: {output_path}")
         return self.report
 
     def _detect_and_apply_language(self, doc):
@@ -99,7 +104,7 @@ class FormatCorrector:
 
         if primary == "auto":
             primary = detect_document_language(doc)
-            print(f"  检测到文档语言: {primary}")
+            logger.info(f"  检测到文档语言: {primary}")
 
         # 根据语言调整字体配置
         fonts = lang_config.get("fonts", {})
@@ -211,25 +216,6 @@ class FormatCorrector:
             self._set_run_font(run, font_rules, style_rules)
         if config.get("numbering_position") == "right":
             paragraph.alignment = WD_ALIGN_PARAGRAPH.RIGHT
-
-    def _center_images(self, doc):
-        """将图片所在段落居中"""
-        count = 0
-        for para in doc.paragraphs:
-            # 检查段落是否包含图片
-            has_image = False
-            for run in para.runs:
-                if run._element.findall(qn("w:drawing")):
-                    has_image = True
-                    break
-                if run._element.findall(qn("w:pict")):
-                    has_image = True
-                    break
-
-            if has_image:
-                para.alignment = WD_ALIGN_PARAGRAPH.CENTER
-                count += 1
-        return count
 
     # ========== 各类段落样式应用 ==========
 

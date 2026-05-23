@@ -57,26 +57,34 @@ class FileConverter:
         if suffix == ".docx":
             return str(input_path)
 
+        temp_dir = None
         if output_dir is None:
-            output_dir = Path(tempfile.mkdtemp())
+            temp_dir = tempfile.mkdtemp()
+            output_dir = Path(temp_dir)
         else:
             output_dir = Path(output_dir)
             output_dir.mkdir(parents=True, exist_ok=True)
 
         output_path = output_dir / f"{input_path.stem}.docx"
 
-        if suffix == ".doc":
-            return self._convert_doc(input_path, output_path)
-        elif suffix == ".odt":
-            return self._convert_odt(input_path, output_path)
-        elif suffix == ".rtf":
-            return self._convert_rtf(input_path, output_path)
-        elif suffix == ".pdf":
-            return self._convert_pdf(input_path, output_path)
-        elif suffix in (".txt", ".md", ".markdown"):
-            return self._convert_text(input_path, output_path, is_markdown=suffix in (".md", ".markdown"))
-        else:
-            raise ValueError(f"不支持的文件格式: {suffix}")
+        try:
+            if suffix == ".doc":
+                return self._convert_doc(input_path, output_path)
+            elif suffix == ".odt":
+                return self._convert_odt(input_path, output_path)
+            elif suffix == ".rtf":
+                return self._convert_rtf(input_path, output_path)
+            elif suffix == ".pdf":
+                return self._convert_pdf(input_path, output_path)
+            elif suffix in (".txt", ".md", ".markdown"):
+                return self._convert_text(input_path, output_path, is_markdown=suffix in (".md", ".markdown"))
+            else:
+                raise ValueError(f"不支持的文件格式: {suffix}")
+        except Exception:
+            # 转换失败时清理临时目录
+            if temp_dir:
+                shutil.rmtree(temp_dir, ignore_errors=True)
+            raise
 
     # ── .doc 转换 ──────────────────────────────────────────────
 
@@ -395,24 +403,27 @@ class FileConverter:
         # 中文章节标题
         if re.match(r"^第[一二三四五六七八九十百零\d]+[章部分篇]", text):
             return True
-        # 数字编号标题
-        if re.match(r"^\d+\.?\s+\S", text) and len(text) < 80:
+        # 数字编号标题：必须是 "1.1 xxx" 或 "1. xxx" 格式且长度适中
+        if re.match(r"^\d+\.\d+\.?\s+\S", text) and len(text) < 80:
             return True
-        # 全大写英文
-        if text.isupper() and len(text) < 100:
+        if re.match(r"^\d+\.\s+[A-Z一-鿿]", text) and len(text) < 80:
+            return True
+        # 全大写英文（至少10个字符，避免误匹配缩写）
+        if text.isupper() and 10 < len(text) < 100:
             return True
         return False
 
     @staticmethod
     def _detect_encoding(file_path: Path) -> str:
         """检测文件编码"""
-        # 尝试常见编码
-        encodings = ["utf-8", "utf-8-sig", "gbk", "gb2312", "gb18030", "big5", "latin-1"]
+        encodings = ["utf-8-sig", "utf-8", "gbk", "gb18030", "big5", "latin-1"]
+
+        # 读取原始字节用于检测
+        raw_bytes = file_path.read_bytes()[:8192]
 
         for enc in encodings:
             try:
-                with open(file_path, "r", encoding=enc) as f:
-                    f.read(4096)  # 读取一部分测试
+                raw_bytes.decode(enc)
                 return enc
             except (UnicodeDecodeError, UnicodeError):
                 continue

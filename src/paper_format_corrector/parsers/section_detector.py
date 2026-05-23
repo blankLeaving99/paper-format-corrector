@@ -163,17 +163,21 @@ class SectionDetector:
 
     def _is_reference_item(self, text):
         """判断是否为参考文献条目"""
-        # 以 [1], [2] 等开头
+        # 以 [1], [2] 等开头 (IEEE, Nature, Science style)
         if re.match(r"^\[\d+\]", text):
             return True
-        # 以数字 1. 2. 开头
+        # 以数字 1. 2. 开头 (numbered references)
         if re.match(r"^\d+[\.\)]\s", text):
+            return True
+        # APA style: starts with author name(s) and year in parentheses
+        # e.g., "Smith, J. (2020). Title of the paper..."
+        if re.match(r"^[A-Z][a-z]+,?\s+[A-Z]\.", text) and re.search(r"\(\d{4}\)", text):
             return True
         return False
 
     def _is_author_line(self, text):
         """简单判断是否为作者行"""
-        if len(text) > 60:
+        if len(text) > 80:
             return False
         # 包含多个中文人名（2-4个字，用空格/逗号/、分隔）
         names = re.split(r"[,，、\s]+", text)
@@ -181,11 +185,19 @@ class SectionDetector:
             cn_names = [n for n in names if re.match(r"^[一-鿿]{2,4}$", n)]
             if len(cn_names) >= 2:
                 return True
+        # English: "First Last, First Last, and First Last" or "F. Last, F. Last"
+        if re.match(r"^[A-Z][a-z]+\.?\s+[A-Z][a-z]+", text):
+            # Count author-like patterns
+            en_authors = re.findall(r"[A-Z][a-z]+\.?\s+[A-Z][a-z]+", text)
+            if len(en_authors) >= 2:
+                return True
         return False
 
     def _parse_caption_num(self, text, prefix):
-        """解析图表编号，如 '图1-2 xxx' -> {'num': '1-2'}"""
-        m = re.match(rf"^{prefix}\s*(\d+[\-\.]\d+|\d+)", text)
+        """解析图表编号，如 '图1-2 xxx' -> {'num': '1-2'}, 'Fig. 1 xxx' -> {'num': '1'}"""
+        # Handle abbreviated prefixes like "Fig.", "Fig", "TABLE"
+        escaped = re.escape(prefix)
+        m = re.match(rf"^{escaped}\.?\s*(\d+[\-\.]\d+|\d+)", text, re.IGNORECASE)
         if m:
             return {"num": m.group(1)}
         return {}

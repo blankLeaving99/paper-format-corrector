@@ -1,0 +1,130 @@
+# IEEE Transactions / Conference Paper Format
+# Based on IEEEtran LaTeX template
+# Suitable for: IEEE journals, IEEE conferences, and similar venues
+
+description: "IEEE (Institute of Electrical and Electronics Engineers) - 期刊/会议论文格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:   # Roman numeral sections: I. INTRODUCTION
+      font_size: 10
+      bold: true
+      align: "center"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.0
+      uppercase: true
+    heading2:   # Lettered subsections: A. Methodology
+      font_size: 10
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 12
+      space_after: 3
+      line_spacing: 1.0
+    heading3:   # Numbered sub-subsections: 1) Dataset
+      font_size: 9
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 6
+      space_after: 3
+      line_spacing: 1.0
+
+  body_text:
+    font_size: 9
+    line_spacing: 1.0
+    first_line_indent: 0
+    align: "justify"
+
+  margins:
+    top: 1.905      # 0.75 inches
+    bottom: 2.54    # 1.0 inches
+    left: 1.5875    # 0.625 inches
+    right: 1.5875
+
+  abstract:
+    title_font_size: 9
+    title_bold: true
+    title_align: "left"
+    content_font_size: 9
+    content_line_spacing: 1.0
+    content_first_line_indent: 0
+
+  keywords:
+    label: "Keywords: "
+    font_size: 9
+    bold_label: true
+    separator: ", "
+
+  title_page:
+    title_font_size: 16
+    title_bold: true
+    title_align: "center"
+    author_font_size: 11
+    author_align: "center"
+    affiliation_font_size: 10
+    affiliation_align: "center"
+
+  references:
+    style: "IEEE"
+    font_size: 8
+    line_spacing: 1.0
+    hanging_indent: true
+    numbering: "sequential"
+    templates:
+      journal: "[{num}] {authors}, \"{title},\" {journal}, vol. {volume}, no. {number}, pp. {pages}, {year}."
+      book: "[{num}] {authors}, {title}. {city}: {publisher}, {year}."
+      conference: "[{num}] {authors}, \"{title},\" in {proceedings}, {city}, {year}, pp. {pages}."
+
+  figures:
+    label: "Fig."
+    numbering: "sequential"
+    separator: "."
+    caption_position: "below"
+    font_size: 8
+    align: "center"
+
+  tables:
+    label: "TABLE"
+    numbering: "sequential"
+    separator: "."
+    caption_position: "above"
+    font_size: 8
+    header_bold: true
+    align: "center"
+
+  formulas:
+    numbering: true
+    numbering_style: "paren"
+    numbering_position: "right"
+    font_size: 9
+
+  header_footer:
+    enabled: false
+
+  toc:
+    enabled: false
+
+auto_detect:
+  title_pattern: "^.*$"
+  chapter_pattern: '^(I{1,3}|IV|V|VI{0,3}|IX|X)[\.\s]'
+  section_pattern: '^[IVX]+[\.\s]'
+  subsection_pattern: '^[A-Z][\.\s]'
+  abstract_pattern: "^Abstract$|^ABSTRACT$|^摘\\s*要$"
+  abstract_en_pattern: "^Abstract$|^ABSTRACT$"
+  keywords_pattern: "^Keywords[:：]?|^Index Terms[:：]?|^关键词[:：]"
+  reference_keywords:
+    - "References"
+    - "REFERENCES"
+    - "Bibliography"
+  acknowledgment_pattern: "^Acknowledge?ments?$|^致\\s*谢$"
+  appendix_pattern: "^Appendix\\s*[A-Z]?"
+  figure_caption_pattern: "^Fig\\.?\\s*\\d"
+  table_caption_pattern: "^TABLE\\s+\\d"
+  formula_pattern: "^\\(?\\d+\\)?$"

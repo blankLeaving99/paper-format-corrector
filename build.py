@@ -77,6 +77,7 @@ if __name__ == "__main__":
         "--add-data=src;src",
         "--add-data=config;config",
         "--add-data=template;template",
+        "--add-data=presets;presets",
         "--add-data=run.py;.",               # 打包启动器
         "--add-data=requirements.txt;.",     # 打包依赖列表
         # 排除虚拟环境和缓存

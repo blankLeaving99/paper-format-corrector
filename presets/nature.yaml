@@ -1,0 +1,129 @@
+# Nature Journal Format
+# Based on Nature submission guidelines
+# Suitable for: Nature, Nature sub-journals (Nature Physics, Nature Chemistry, etc.)
+
+description: "Nature - 国际顶级期刊格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:   # Main sections: Introduction, Results, Discussion
+      font_size: 11
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.0
+    heading2:   # Subsections within Results, etc.
+      font_size: 10
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 8
+      space_after: 4
+      line_spacing: 1.0
+    heading3:
+      font_size: 10
+      bold: false
+      italic: true
+      align: "left"
+      space_before: 6
+      space_after: 3
+      line_spacing: 1.0
+
+  body_text:
+    font_size: 10
+    line_spacing: 1.0
+    first_line_indent: 0
+    align: "justify"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 2.54
+    right: 2.54
+
+  abstract:
+    title_font_size: 10
+    title_bold: true
+    title_align: "left"
+    content_font_size: 10
+    content_line_spacing: 1.0
+    content_first_line_indent: 0
+
+  keywords:
+    label: ""
+    font_size: 10
+    bold_label: false
+    separator: ", "
+
+  title_page:
+    title_font_size: 14
+    title_bold: true
+    title_align: "left"
+    author_font_size: 10
+    author_align: "left"
+    affiliation_font_size: 9
+    affiliation_align: "left"
+
+  references:
+    style: "Nature"
+    font_size: 9
+    line_spacing: 1.0
+    hanging_indent: false
+    numbering: "sequential"
+    templates:
+      journal: "{num}. {authors} {title}. {journal} {volume}, {pages} ({year})."
+      book: "{num}. {authors} {title}. ({publisher}, {year})."
+      conference: "{num}. {authors} {title}. In {proceedings} {pages} ({year})."
+      online: "{num}. {authors} {title}. {url} ({year})."
+
+  figures:
+    label: "Fig."
+    numbering: "sequential"
+    separator: " "
+    caption_position: "below"
+    font_size: 9
+    align: "left"
+
+  tables:
+    label: "Table"
+    numbering: "sequential"
+    separator: " "
+    caption_position: "above"
+    font_size: 9
+    header_bold: true
+    align: "left"
+
+  formulas:
+    numbering: true
+    numbering_style: "paren"
+    numbering_position: "right"
+    font_size: 10
+
+  header_footer:
+    enabled: false
+
+  toc:
+    enabled: false
+
+auto_detect:
+  title_pattern: "^.*$"
+  chapter_pattern: "^(Introduction|Results|Discussion|Methods|Conclusion|Summary)[s]?$"
+  section_pattern: "^(Introduction|Results|Discussion|Methods|Conclusion|Summary)[s]?$"
+  subsection_pattern: "^[A-Z][a-z]+(?:\\s+[a-z]+)*$"
+  abstract_pattern: "^Abstract$|^ABSTRACT$|^摘\\s*要$"
+  abstract_en_pattern: "^Abstract$|^ABSTRACT$"
+  keywords_pattern: "^Keywords[:：]?|^Key\\s*[Ww]ords[:：]?|^关键词[:：]"
+  reference_keywords:
+    - "References"
+    - "REFERENCES"
+  acknowledgment_pattern: "^Acknowledge?ments?$|^致\\s*谢$"
+  appendix_pattern: "^Appendix\\s*[A-Z]?"
+  figure_caption_pattern: "^Fig\\.?\\s*\\d"
+  table_caption_pattern: "^Table\\s+\\d"
+  formula_pattern: "^\\(?\\d+\\)?$"

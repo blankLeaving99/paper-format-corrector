@@ -117,15 +117,18 @@ class DiffReporter:
                 orig_run = orig_p.runs[0]
                 corr_run = corr_p.runs[0]
 
-                if orig_run.font.size != corr_run.font.size:
-                    if orig_run.font.size and corr_run.font.size:
-                        changes.append({
-                            "line": i + 1,
-                            "type": "font_size",
-                            "text": orig_p.text[:30],
-                            "from": f"{orig_run.font.size.pt}pt",
-                            "to": f"{corr_run.font.size.pt}pt",
-                        })
+                try:
+                    if orig_run.font.size != corr_run.font.size:
+                        if orig_run.font.size and corr_run.font.size:
+                            changes.append({
+                                "line": i + 1,
+                                "type": "font_size",
+                                "text": orig_p.text[:30],
+                                "from": f"{orig_run.font.size.pt}pt",
+                                "to": f"{corr_run.font.size.pt}pt",
+                            })
+                except (AttributeError, TypeError):
+                    pass
 
                 if orig_run.font.bold != corr_run.font.bold:
                     changes.append({

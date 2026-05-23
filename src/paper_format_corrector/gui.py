@@ -31,11 +31,18 @@ from .quality.diff_reporter import DiffReporter
 from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
 from .core.file_converter import FileConverter
+from .infra.preset_loader import list_presets, get_preset_choices
 
 
 # 全局实例
 corrector = None
 config_path = "config/config.yaml"
+
+# 预设名称 -> ID 映射（避免字符串解析出错）
+_PRESET_MAP = {}
+for _p in list_presets():
+    _PRESET_MAP[f"{_p['name']} - {_p['description']}"] = _p['name']
+
 
 
 def init_corrector(config_file=None):
@@ -46,7 +53,7 @@ def init_corrector(config_file=None):
     return corrector
 
 
-def process_paper(paper_file, requirement_file, config_file, export_formats, do_score, do_diff):
+def process_paper(paper_file, requirement_file, config_file, preset_name, export_formats, do_score, do_diff):
     """处理论文主函数"""
     if paper_file is None:
         return None, None, "请上传论文文件", None
@@ -54,6 +61,14 @@ def process_paper(paper_file, requirement_file, config_file, export_formats, do_
     # 初始化
     cfg = config_file.name if config_file else config_path
     c = PaperFormatCorrector(cfg)
+
+    # 应用格式预设
+    if preset_name and preset_name != "无 (使用默认配置)":
+        try:
+            preset_id = _PRESET_MAP.get(preset_name, preset_name)
+            c.apply_preset(preset_id)
+        except Exception as e:
+            return None, None, f"预设加载失败: {e}", None
 
     # 应用需求文档
     if requirement_file:
@@ -216,6 +231,17 @@ def build_ui():
                 with gr.Row():
                     with gr.Column(scale=1):
                         paper_input = gr.File(label="上传论文 (.docx/.doc/.odt/.rtf/.pdf/.txt/.md)", file_types=[".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown"])
+
+                        # 格式预设选择
+                        preset_options = ["无 (使用默认配置)"]
+                        for p in list_presets():
+                            preset_options.append(f"{p['name']} - {p['description']}")
+                        preset_dropdown = gr.Dropdown(
+                            choices=preset_options,
+                            value="无 (使用默认配置)",
+                            label="格式预设 (IEEE/Nature/Science/APA/毕业论文)",
+                        )
+
                         requirement_input = gr.File(label="格式要求文档 (可选, .txt/.md/.docx/.pdf)", file_types=[".txt", ".md", ".docx", ".pdf"])
                         config_input = gr.File(label="自定义配置 (可选, .yaml)", file_types=[".yaml", ".yml"])
 
@@ -238,7 +264,7 @@ def build_ui():
 
                 process_btn.click(
                     fn=process_paper,
-                    inputs=[paper_input, requirement_input, config_input, export_checkboxes, do_score, do_diff],
+                    inputs=[paper_input, requirement_input, config_input, preset_dropdown, export_checkboxes, do_score, do_diff],
                     outputs=[output_file, score_output, report_output, diff_output],
                 )
 

@@ -1,14 +1,19 @@
 """论文格式矫正工具 - CLI 入口"""
 
+from __future__ import annotations
+
 import argparse
 import sys
 from pathlib import Path
 
 from .app import PaperFormatCorrector
 from .core.format_corrector import FormatCorrector
+from .infra.preset_loader import get_preset_choices, format_preset_list
 
 
-def main():
+def main() -> None:
+    preset_choices = get_preset_choices()
+
     parser = argparse.ArgumentParser(
         description="论文格式自动矫正工具 v3.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
@@ -18,6 +23,12 @@ def main():
     python -m paper_format_corrector                         # 批量处理 input/ 目录
     python -m paper_format_corrector -f paper.docx           # 处理单个文件
     python -m paper_format_corrector -f paper.docx -o out    # 指定输出路径
+
+  格式预设（SCI/IEEE/Nature/APA/毕业论文）:
+    python -m paper_format_corrector --list-presets          # 列出所有预设
+    python -m paper_format_corrector --preset ieee -f paper.docx
+    python -m paper_format_corrector --preset nature -f paper.docx
+    python -m paper_format_corrector --preset chinese_thesis -f paper.docx
 
   需求文档驱动:
     python -m paper_format_corrector -r requirement.txt -f paper.docx
@@ -51,6 +62,14 @@ def main():
     parser.add_argument("-d", "--output-dir", default="output", help="输出目录（默认: output）")
     parser.add_argument("-t", "--template", help="模板文件路径")
     parser.add_argument("-c", "--config", default="config/config.yaml", help="配置文件路径")
+
+    # 格式预设
+    parser.add_argument(
+        "--preset",
+        choices=preset_choices if preset_choices else None,
+        help=f"格式预设: {', '.join(preset_choices)}",
+    )
+    parser.add_argument("--list-presets", action="store_true", help="列出所有可用的格式预设")
 
     # 需求文档
     parser.add_argument("-r", "--requirement", help="需求文档路径（.docx/.txt/.md）")
@@ -88,6 +107,17 @@ def main():
         Path(dir_name).mkdir(exist_ok=True)
 
     corrector = PaperFormatCorrector(args.config, args.log_level)
+
+    # 列出预设
+    if args.list_presets:
+        print(format_preset_list())
+        return
+
+    # 应用格式预设
+    if args.preset:
+        print(f"\n应用格式预设: {args.preset}")
+        corrector.apply_preset(args.preset)
+        print()
 
     # 需求文档
     if args.requirement:

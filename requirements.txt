@@ -1,23 +1,29 @@
-python-docx>=1.1.0
-pyyaml>=6.0
-lxml>=5.0
+python-docx>=1.1.0,<2.0
+pyyaml>=6.0,<7.0
+lxml>=5.0,<7.0
+Pillow>=9.0
 
-# 可选：桌面 GUI 拖拽支持
-# tkinterdnd2>=0.4.0
+# === Optional dependencies (install as needed) ===
 
-# 可选：Web GUI
-# gradio>=4.0.0
+# Web GUI
+# pip install gradio>=4.0.0
+# Or: pip install paper-format-corrector[gui]
 
-# 可选：PDF 导出
-# docx2pdf>=0.1.8
+# Desktop GUI drag-and-drop support
+# pip install tkinterdnd2>=0.4.0
+# Or: pip install paper-format-corrector[drag-drop]
 
-# 可选：HTML 导出（更好的 HTML 转换）
-# mammoth>=1.6.0
+# PDF export
+# pip install docx2pdf>=0.1.8
 
-# 可选：PDF 文本提取（用于 PDF 文件导入）
-# pdfplumber>=0.10.0
-# PyMuPDF>=1.23.0
-# PyPDF2>=3.0.0
+# HTML export (better conversion)
+# pip install mammoth>=1.6.0
 
-# 可选：旧版 .doc 文件转换
-# docx2docx>=0.1.0
+# PDF text extraction (for importing PDF files)
+# pip install pdfplumber>=0.10.0
+
+# Legacy .doc file conversion
+# pip install docx2docx>=0.1.0
+
+# Install all optional dependencies at once:
+# pip install paper-format-corrector[all]

@@ -30,12 +30,17 @@ def validate_input_path(path: str, allowed_extensions: set = None) -> Path:
 
     Raises:
         ValueError: 路径不安全或扩展名不允许
+        FileNotFoundError: 文件不存在
     """
     p = Path(path).resolve()
 
-    # 检查路径穿越
-    if ".." in str(path):
-        raise ValueError(f"路径不允许包含 '..': {path}")
+    # 检查文件是否存在
+    if not p.exists():
+        raise FileNotFoundError(f"文件不存在: {path}")
+
+    # 检查是否为文件（不是目录）
+    if not p.is_file():
+        raise ValueError(f"路径不是文件: {path}")
 
     # 检查扩展名
     if allowed_extensions and p.suffix.lower() not in allowed_extensions:
@@ -55,10 +60,6 @@ def validate_output_path(path: str, allowed_extensions: set = None) -> Path:
         校验后的 Path 对象
     """
     p = Path(path).resolve()
-
-    # 检查路径穿越
-    if ".." in str(path):
-        raise ValueError(f"路径不允许包含 '..': {path}")
 
     # 检查扩展名
     if allowed_extensions and p.suffix.lower() not in allowed_extensions:
@@ -92,8 +93,10 @@ def safe_join(base_dir: str, filename: str) -> Path:
 
     result = (base / filename).resolve()
 
-    # 确保结果在 base 目录下
-    if not str(result).startswith(str(base)):
+    # 确保结果在 base 目录下（用 os.sep 确保前缀匹配准确）
+    base_str = str(base)
+    result_str = str(result)
+    if not result_str.startswith(base_str + os.sep) and result_str != base_str:
         raise ValueError(f"路径穿越检测: {result} 不在 {base} 下")
 
     return result

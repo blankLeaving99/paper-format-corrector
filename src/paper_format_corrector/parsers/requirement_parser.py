@@ -89,12 +89,15 @@ class RequirementParser:
             from ..core.file_converter import FileConverter
             converter = FileConverter()
             import tempfile
-            tmp_dir = Path(tempfile.mkdtemp())
+            import shutil
+            tmp_dir = tempfile.mkdtemp()
             try:
-                converted_path = converter.convert(str(file_path), str(tmp_dir))
+                converted_path = converter.convert(str(file_path), tmp_dir)
                 self.raw_lines = self._read_docx(Path(converted_path))
             except Exception as e:
                 raise ValueError(f"无法转换 {ext} 格式的需求文档: {e}")
+            finally:
+                shutil.rmtree(tmp_dir, ignore_errors=True)
         else:
             raise ValueError(f"不支持的文件格式: {ext}，支持 .docx/.doc/.odt/.rtf/.pdf/.txt/.md")
 
@@ -135,7 +138,15 @@ class RequirementParser:
         return lines
 
     def _read_text(self, path):
-        text = path.read_text(encoding="utf-8")
+        # 尝试常见编码
+        for enc in ("utf-8-sig", "utf-8", "gbk", "gb18030", "big5", "latin-1"):
+            try:
+                text = path.read_text(encoding=enc)
+                return text.splitlines()
+            except (UnicodeDecodeError, UnicodeError):
+                continue
+        # 最终回退
+        text = path.read_text(encoding="utf-8", errors="replace")
         return text.splitlines()
 
     def _read_pdf(self, path):

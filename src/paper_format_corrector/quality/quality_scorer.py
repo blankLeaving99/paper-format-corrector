@@ -26,6 +26,13 @@ class QualityScorer:
         self.config = config
         self.issues = []
         self.scores = {}
+        # 从 config 中读取标题检测模式
+        detect = config.get("auto_detect", {})
+        self._heading_patterns = [
+            re.compile(detect.get("chapter_pattern", r"^第[一二三四五六七八九十百零\d]+[章部分篇]")),
+            re.compile(detect.get("section_pattern", r"^\d+\.\d+")),
+            re.compile(detect.get("subsection_pattern", r"^\d+\.\d+\.\d+")),
+        ]
 
     def score(self, doc_path):
         """对文档评分，返回 (total_score, details)"""
@@ -57,11 +64,7 @@ class QualityScorer:
             if not text:
                 continue
 
-            is_heading = False
-            if re.match(r"^第[一二三四五六七八九十\d]+[章部分篇]", text):
-                is_heading = True
-            elif re.match(r"^\d+\.\d+", text):
-                is_heading = True
+            is_heading = any(p.match(text) for p in self._heading_patterns)
 
             if is_heading:
                 heading_count += 1
@@ -87,7 +90,7 @@ class QualityScorer:
         body_paras = []
         for para in doc.paragraphs:
             text = para.text.strip()
-            if len(text) > 30 and not re.match(r"^第[一二三四五六七八九十\d]+[章部分篇]", text):
+            if len(text) > 30 and not any(p.match(text) for p in self._heading_patterns):
                 body_paras.append(para)
 
         if not body_paras:
@@ -183,7 +186,8 @@ class QualityScorer:
             text = doc.paragraphs[i].text.strip()
             if not text:
                 continue
-            if re.match(r"^第[一二三四五六七八九十\d]+[章部分篇]", text):
+            # 遇到新章节标题时停止
+            if any(p.match(text) for p in self._heading_patterns):
                 break
             if re.match(r"^\d+[\.\)]", text) or re.match(r"^\[\d+\]", text):
                 ref_count += 1
@@ -215,7 +219,7 @@ class QualityScorer:
         for section in doc.sections:
             for direction, expected in [("top", "top"), ("bottom", "bottom"), ("left", "left"), ("right", "right")]:
                 actual = getattr(section, f"{direction}_margin")
-                if actual:
+                if actual is not None and actual > 0:
                     actual_cm = actual / 360000
                     expected_cm = margins.get(expected, 2.54)
                     if abs(actual_cm - expected_cm) > 0.3:

@@ -40,7 +40,19 @@
       "PowerShell(Stop-Process *)",
       "Bash(E:\\\\Python\\\\python_3_13_3\\\\python.exe *)",
       "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" run.py)",
-      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" build.py)"
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" build.py)",
+      "Bash(Select-Object FullName, Length)",
+      "Bash(Format-Table -AutoSize)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short、)",
+      "Bash(.venv/Scripts/pip.exe install *)",
+      "Bash(.venv/Scripts/python.exe -m pytest tests/ -v --tb=short)",
+      "Bash(.venv/Scripts/python.exe -c ' *)",
+      "Bash(.venv/Scripts/python.exe -c \"import paper_format_corrector; print\\(f'v{paper_format_corrector.__version__}'\\)\")",
+      "Bash(.venv/Scripts/python.exe -c \"import sys; sys.path.insert\\(0, 'src'\\); import paper_format_corrector; print\\(f'v{paper_format_corrector.__version__}'\\)\")",
+      "WebSearch",
+      "Bash(.venv/Scripts/python.exe -m paper_format_corrector --list-presets)",
+      "Bash(PYTHONPATH=src .venv/Scripts/python.exe -m paper_format_corrector --list-presets)",
+      "Bash(.venv/Scripts/pip.exe list *)"
     ]
   }
 }

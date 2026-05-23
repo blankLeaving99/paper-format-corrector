@@ -18,9 +18,19 @@ class FormatExporter:
 
     SUPPORTED_FORMATS = ("pdf", "html", "txt", "md", "markdown")
 
-    def __init__(self):
+    def __init__(self, config=None):
         self._docx2pdf = None
         self._mammoth = None
+        self._config = config or {}
+        # 从 config 读取标题检测模式
+        detect = self._config.get("auto_detect", {})
+        self._chapter_re = re.compile(
+            detect.get("chapter_pattern", r"^第[一二三四五六七八九十百零\d]+[章部分篇]")
+        )
+        self._section_re = re.compile(detect.get("section_pattern", r"^\d+\.\d+"))
+        self._subsection_re = re.compile(detect.get("subsection_pattern", r"^\d+\.\d+\.\d+"))
+        self._fig_re = re.compile(detect.get("figure_caption_pattern", r"^图\s*\d"))
+        self._tab_re = re.compile(detect.get("table_caption_pattern", r"^表\s*\d"))
 
     def export(self, docx_path, output_path, fmt):
         """导出为指定格式"""
@@ -61,8 +71,6 @@ class FormatExporter:
 
         # 回退：使用 LibreOffice
         import subprocess
-        import shutil
-        import tempfile
 
         lo_path = self._find_libreoffice()
         if lo_path:
@@ -246,19 +254,19 @@ class FormatExporter:
         )
 
     def _is_chapter(self, text):
-        return bool(re.match(r"^第[一二三四五六七八九十百零\d]+[章部分篇]", text))
+        return bool(self._chapter_re.match(text))
 
     def _is_section(self, text):
-        return bool(re.match(r"^\d+\.\d+\s", text))
+        return bool(self._section_re.match(text))
 
     def _is_subsection(self, text):
-        return bool(re.match(r"^\d+\.\d+\.\d+\s", text))
+        return bool(self._subsection_re.match(text))
 
     def _is_figure_caption(self, text):
-        return bool(re.match(r"^图\s*\d", text))
+        return bool(self._fig_re.match(text))
 
     def _is_table_caption(self, text):
-        return bool(re.match(r"^表\s*\d", text))
+        return bool(self._tab_re.match(text))
 
     def _find_libreoffice(self):
         """查找 LibreOffice 安装路径"""

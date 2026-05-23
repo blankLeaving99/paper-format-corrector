@@ -69,8 +69,10 @@ class FigureTableHandler:
             correct_num = str(count)
 
         # 提取现有标题文本（去掉编号前缀）
-        caption_text = re.sub(rf"^{label}\s*\d+[\-\.]\d+\s*", "", text)
-        caption_text = re.sub(rf"^{label}\s*\d+\s*", "", caption_text)
+        # 使用 re.escape(label) 支持 "Fig." 等含特殊字符的标签
+        escaped_label = re.escape(label)
+        caption_text = re.sub(rf"^{escaped_label}\s*\d+[\-\.]\d+\s*", "", text)
+        caption_text = re.sub(rf"^{escaped_label}\s*\d+\.?\s*", "", caption_text)
 
         # 重建段落内容
         correct_label = f"{label}{correct_num} {caption_text.strip()}"

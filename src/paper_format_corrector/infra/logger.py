@@ -10,6 +10,7 @@
 import sys
 import os
 import time
+from pathlib import Path
 from datetime import datetime
 
 
@@ -60,6 +61,10 @@ class Logger:
     def close(self):
         if self._file_handle:
             self._file_handle.close()
+            self._file_handle = None
+
+    def __del__(self):
+        self.close()
 
 
 class ProgressBar:
@@ -101,7 +106,3 @@ class ProgressBar:
     def finish(self):
         self.current = self.total
         self._display()
-
-
-# 兼容导入
-from pathlib import Path

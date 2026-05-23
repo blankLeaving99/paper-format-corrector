@@ -127,6 +127,10 @@ class LLMParser:
         if parsed.scheme == "http" and host not in ("localhost", "127.0.0.1"):
             raise ValueError(f"外部 API 必须使用 HTTPS，当前: {url}")
 
+        # 检查域名白名单（自定义 base_url 时）
+        if host and host not in self.ALLOWED_DOMAINS:
+            raise ValueError(f"不允许的 API 域名: {host}，允许: {self.ALLOWED_DOMAINS}")
+
         return url
 
     def _get_default_key(self):
