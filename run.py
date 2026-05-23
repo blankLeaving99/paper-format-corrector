@@ -1,13 +1,19 @@
 """论文格式自动矫正工具 v3.0 - 启动器
 
-双击运行即可使用。
+双击运行即可使用。支持直接运行和打包为 exe 后运行。
 """
 
 import sys
 import os
 
-# 切换工作目录到脚本所在目录（双击运行时很重要）
-ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+# 获取项目根目录（支持 exe 打包后运行）
+if getattr(sys, 'frozen', False):
+    # 打包为 exe 后，根目录是 exe 所在目录
+    ROOT_DIR = os.path.dirname(sys.executable)
+else:
+    # 直接运行 Python 脚本
+    ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
+
 os.chdir(ROOT_DIR)
 sys.path.insert(0, os.path.join(ROOT_DIR, "src"))
 

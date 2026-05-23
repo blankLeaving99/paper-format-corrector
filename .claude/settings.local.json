@@ -39,7 +39,8 @@
       "Bash(taskkill *)",
       "PowerShell(Stop-Process *)",
       "Bash(E:\\\\Python\\\\python_3_13_3\\\\python.exe *)",
-      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" run.py)"
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" run.py)",
+      "Bash(\"E:\\\\Python\\\\python_3_13_3\\\\python.exe\" build.py)"
     ]
   }
 }

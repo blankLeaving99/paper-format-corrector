@@ -1,9 +1,10 @@
-"""打包脚本 - 将桌面 GUI 打包为 exe
+"""打包脚本 - 将项目打包为 exe
 
 用法：
-    E:\Python\python_3_13_3\python.exe build.py
+    python build.py
 
-打包完成后，exe 文件在 dist/ 目录下。
+打包内容：仅源码 + 配置 + 模板，不包含虚拟环境。
+朋友电脑上运行 exe 后会自动检测依赖并提示安装。
 """
 
 import subprocess
@@ -27,37 +28,7 @@ def main():
         print("正在安装 PyInstaller...")
         subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
 
-    # 2. 检查必要依赖
-    print("\n检查依赖...")
-    required = ["docx", "yaml", "lxml"]
-    missing = []
-    for mod in required:
-        try:
-            __import__(mod)
-        except ImportError:
-            missing.append(mod)
-
-    if missing:
-        print(f"缺少依赖: {missing}")
-        print("请先安装: pip install python-docx pyyaml lxml")
-        return
-
-    # 3. 检查可选依赖
-    optional_ok = []
-    optional_missing = []
-    for mod, name in [("tkinterdnd2", "拖拽支持"), ("gradio", "Web GUI")]:
-        try:
-            __import__(mod)
-            optional_ok.append(name)
-        except ImportError:
-            optional_missing.append(name)
-
-    if optional_ok:
-        print(f"已安装可选功能: {', '.join(optional_ok)}")
-    if optional_missing:
-        print(f"未安装可选功能: {', '.join(optional_missing)}（不影响打包）")
-
-    # 4. 清理旧的构建文件
+    # 2. 清理旧的构建文件
     for d in ["build", "dist"]:
         path = os.path.join(ROOT_DIR, d)
         if os.path.exists(path):
@@ -68,72 +39,65 @@ def main():
     if os.path.exists(spec_file):
         os.remove(spec_file)
 
-    # 5. 创建入口脚本
+    # 3. 创建打包专用入口脚本（不包含虚拟环境）
     entry_script = os.path.join(ROOT_DIR, "_build_entry.py")
     with open(entry_script, "w", encoding="utf-8") as f:
-        f.write('''"""打包入口"""
+        f.write('''"""打包入口 - 仅用于 PyInstaller"""
 import sys
 import os
 
+# 获取 exe 所在目录
 if getattr(sys, 'frozen', False):
     BASE_DIR = os.path.dirname(sys.executable)
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
+# 切换工作目录
+os.chdir(BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 
-from paper_format_corrector.desktop_gui import main
+# 导入并运行启动器（包含依赖检测和 GUI 选择）
+from run import main
 
 if __name__ == "__main__":
     main()
 ''')
 
-    # 6. 收集数据文件
-    datas = []
-
-    # config 目录
-    config_dir = os.path.join(ROOT_DIR, "config")
-    if os.path.exists(config_dir):
-        datas.append((config_dir, "config"))
-
-    # template 目录
-    template_dir = os.path.join(ROOT_DIR, "template")
-    if os.path.exists(template_dir):
-        datas.append((template_dir, "template"))
-
-    # src 目录（包含所有 Python 模块）
-    src_dir = os.path.join(ROOT_DIR, "src")
-    if os.path.exists(src_dir):
-        datas.append((src_dir, "src"))
-
-    # 7. 构建 PyInstaller 参数
+    # 4. 构建 PyInstaller 参数
+    # 只打包必要的数据文件，不打包 .venv
     cmd = [
         sys.executable, "-m", "PyInstaller",
         "--noconfirm",
         "--clean",
-        "--windowed",              # 不显示控制台窗口
-        "--name=论文格式矫正工具",   # exe 文件名
-        "--icon=NONE",             # 可以替换为 .ico 图标文件
+        "--onefile",                         # 打包为单个 exe 文件
+        "--windowed",                        # 不显示控制台窗口
+        "--name=论文格式矫正工具",             # exe 文件名
+        "--icon=static/tubiao02.ico",          # exe 图标
+        # 数据文件：只打包 src、config、template
+        "--add-data=src;src",
         "--add-data=config;config",
         "--add-data=template;template",
-        "--add-data=src;src",
+        "--add-data=run.py;.",               # 打包启动器
+        "--add-data=requirements.txt;.",     # 打包依赖列表
+        # 排除虚拟环境和缓存
+        "--exclude-module=.venv",
+        "--exclude-module=__pycache__",
+        # 隐藏导入
         "--hidden-import=docx",
         "--hidden-import=yaml",
         "--hidden-import=lxml",
         "--hidden-import=tkinter",
         "--hidden-import=tkinterdnd2",
-        "--hidden-import=gradio",
         entry_script,
     ]
 
     print(f"\n开始打包...")
-    print(f"命令: {' '.join(cmd)}")
-    print()
+    print(f"注意：不包含虚拟环境和依赖\n")
 
-    # 8. 执行打包
+    # 5. 执行打包
     result = subprocess.run(cmd, cwd=ROOT_DIR)
 
-    # 9. 清理临时文件
+    # 6. 清理临时文件
     if os.path.exists(entry_script):
         os.remove(entry_script)
 
@@ -149,9 +113,10 @@ if __name__ == "__main__":
             print(f"  大小: {size_mb:.1f} MB")
             print(f"{'=' * 50}")
             print(f"\n使用方法:")
-            print(f"  1. 将 dist/论文格式矫正工具.exe 发给朋友")
-            print(f"  2. 朋友双击即可运行，无需安装 Python")
-            print(f"  3. 首次运行会自动检测并提示安装依赖")
+            print(f"  1. 将 dist/论文格式矫正工具.exe 发给他人")
+            print(f"  2. 您双击即可运行")
+            print(f"  3. 首次运行会自动检测依赖并提示安装")
+            print(f"  4. 您可以选择自己的安装路径")
         else:
             print(f"\n打包完成，但未找到 exe 文件，请检查 dist/ 目录")
     else:
