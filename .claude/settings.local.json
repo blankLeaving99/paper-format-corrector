@@ -60,7 +60,8 @@
       "Bash(git commit -m ' *)",
       "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/ -v --tb=short)",
       "Bash(E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\pip.exe install *)",
-      "Bash(E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\ruff.exe check *)"
+      "Bash(E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\ruff.exe check *)",
+      "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/ --tb=short)"
     ]
   }
 }
