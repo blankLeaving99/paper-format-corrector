@@ -23,7 +23,7 @@ class FileConverter:
 
     # 支持的输入格式
     SUPPORTED_INPUT_FORMATS = (
-        ".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown",
+        ".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown", ".tex",
     )
 
     def __init__(self):
@@ -78,6 +78,8 @@ class FileConverter:
                 return self._convert_pdf(input_path, output_path)
             elif suffix in (".txt", ".md", ".markdown"):
                 return self._convert_text(input_path, output_path, is_markdown=suffix in (".md", ".markdown"))
+            elif suffix == ".tex":
+                return self._convert_tex(input_path, output_path)
             else:
                 raise ValueError(f"不支持的文件格式: {suffix}")
         except Exception:
@@ -526,6 +528,74 @@ class FileConverter:
             raise RuntimeError("无法从 RTF 文件中提取文本")
 
         return self._text_to_docx(text, output_path, source_path=input_path)
+
+    def _convert_tex(self, input_path: Path, output_path: Path) -> str:
+        """将 LaTeX (.tex) 转换为 .docx"""
+        # 方法1: 使用 pandoc
+        pandoc = shutil.which("pandoc")
+        if pandoc:
+            try:
+                result = subprocess.run(
+                    [pandoc, str(input_path), "-o", str(output_path), "--from=latex", "--to=docx"],
+                    capture_output=True, text=True, timeout=60,
+                )
+                if result.returncode == 0 and output_path.exists():
+                    return str(output_path)
+            except (subprocess.TimeoutExpired, Exception):
+                pass
+
+        # 方法2: 手动解析 LaTeX 提取文本
+        encoding = self._detect_encoding(input_path)
+        with open(input_path, "r", encoding=encoding) as f:
+            tex_content = f.read()
+
+        text = self._extract_text_from_latex(tex_content)
+        if not text:
+            raise RuntimeError("无法从 LaTeX 文件中提取文本内容")
+
+        return self._text_to_docx(text, output_path, source_path=input_path)
+
+    @staticmethod
+    def _extract_text_from_latex(tex: str) -> str:
+        """从 LaTeX 源码中提取纯文本内容"""
+        # 移除注释行
+        tex = re.sub(r"^%.*$", "", tex, flags=re.MULTILINE)
+
+        # 移除 preamble（\documentclass 到 \begin{document} 之间）
+        tex = re.sub(r"\\documentclass.*?\\begin\{document\}", "", tex, flags=re.DOTALL)
+
+        # 移除 \end{document} 及之后
+        tex = re.sub(r"\\end\{document\}.*", "", tex, flags=re.DOTALL)
+
+        # 提取章节标题
+        tex = re.sub(r"\\(?:part|chapter)\*?\{(.+?)\}", r"\n\n# \1\n", tex)
+        tex = re.sub(r"\\section\*?\{(.+?)\}", r"\n\n## \1\n", tex)
+        tex = re.sub(r"\\subsection\*?\{(.+?)\}", r"\n\n### \1\n", tex)
+        tex = re.sub(r"\\subsubsection\*?\{(.+?)\}", r"\n\n#### \1\n", tex)
+
+        # 提取摘要
+        tex = re.sub(r"\\begin\{abstract\}", "\n\n摘要\n", tex)
+        tex = re.sub(r"\\end\{abstract\}", "\n\n", tex)
+
+        # 移除命令但保留内容
+        tex = re.sub(r"\\(?:textbf|textit|emph|texttt|underline)\{([^}]*)\}", r"\1", tex)
+        tex = re.sub(r"\\(?:cite|ref|label|pageref)\{[^}]*\}", "", tex)
+
+        # 移除环境标记
+        tex = re.sub(r"\\begin\{(?:figure|table|equation|enumerate|itemize|tabular|lstlisting|verbatim)\}.*?\\end\{(?:figure|table|equation|enumerate|itemize|tabular|lstlisting|verbatim)\}", "", tex, flags=re.DOTALL)
+
+        # 移除剩余的 LaTeX 命令
+        tex = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^}]*\})*", "", tex)
+
+        # 移除特殊字符
+        tex = tex.replace("~", " ")
+        tex = re.sub(r"[{}$\\&^_~]", "", tex)
+
+        # 清理空行
+        tex = re.sub(r"\n{3,}", "\n\n", tex)
+        tex = tex.strip()
+
+        return tex
 
 
 def get_supported_formats_display() -> str:

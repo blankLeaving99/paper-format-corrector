@@ -223,6 +223,10 @@ class FormatCorrector:
                 ref_start = i
                 break
         if ref_start is not None:
+            # 检测引用风格
+            citation_style = self.ref_formatter.detect_citation_style(doc, ref_start)
+            self.report["citation_style"] = self.ref_formatter.get_citation_style_name(citation_style)
+
             self.ref_formatter.format_references(doc, ref_start)
             self.report["ref_issues"] = self.ref_formatter.validate_references(doc, ref_start)
             # 引用一致性检查

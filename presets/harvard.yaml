@@ -1,0 +1,141 @@
+# Harvard Referencing Style
+# Author-Date system
+# Suitable for: Business, Social Sciences, some Natural Sciences
+
+description: "Harvard 引用格式 - 商科/社会科学论文格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 12
+      bold: true
+      align: "center"
+      space_before: 24
+      space_after: 12
+      line_spacing: 2.0
+    heading2:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 24
+      space_after: 12
+      line_spacing: 2.0
+    heading3:
+      font_size: 12
+      bold: false
+      italic: true
+      align: "left"
+      space_before: 24
+      space_after: 12
+      line_spacing: 2.0
+
+  body_text:
+    font_size: 12
+    line_spacing: 2.0
+    first_line_indent: 2
+    align: "left"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 2.54
+    right: 2.54
+
+  abstract:
+    title_font_size: 12
+    title_bold: true
+    title_align: "center"
+    content_font_size: 12
+    content_line_spacing: 2.0
+    content_first_line_indent: 0
+
+  keywords:
+    label: "Keywords: "
+    font_size: 12
+    bold_label: true
+    separator: ", "
+
+  title_page:
+    title_font_size: 12
+    title_bold: true
+    title_align: "center"
+    author_font_size: 12
+    author_align: "center"
+    affiliation_font_size: 12
+    affiliation_align: "center"
+
+  references:
+    style: "Harvard"
+    font_size: 12
+    line_spacing: 1.5
+    hanging_indent: true
+    numbering: "none"
+    templates:
+      journal: "{authors} ({year}) '{title}', {journal}, {volume}({number}), pp. {pages}."
+      book: "{authors} ({year}) {title}. {city}: {publisher}."
+      conference: "{authors} ({year}) '{title}', in {proceedings}. {city}: {publisher}, pp. {pages}."
+      online: "{authors} ({year}) '{title}'. Available at: {url} (Accessed: {access_date})."
+      thesis: "{author} ({year}) '{title}'. {paper_type}, {university}."
+
+  figures:
+    label: "Figure"
+    numbering: "sequential"
+    separator: " "
+    caption_position: "below"
+    font_size: 12
+    align: "left"
+
+  tables:
+    label: "Table"
+    numbering: "sequential"
+    separator: " "
+    caption_position: "above"
+    font_size: 12
+    align: "left"
+
+  formulas:
+    numbering: true
+    numbering_style: "paren"
+    numbering_position: "right"
+    font_size: 12
+
+  header_footer:
+    enabled: true
+    header:
+      text: ""
+      font_size: 12
+      font_name: "Times New Roman"
+      align: "center"
+      bottom_border: false
+    footer:
+      page_number: true
+      font_size: 12
+      align: "center"
+    different_first_page: false
+
+  toc:
+    enabled: false
+
+auto_detect:
+  title_pattern: "^.*$"
+  chapter_pattern: "^第[一二三四五六七八九十百零\\d]+[章部分篇]|^Introduction$|^Conclusion$"
+  section_pattern: "^\\d+\\.\\d+"
+  subsection_pattern: "^\\d+\\.\\d+\\.\\d+"
+  abstract_pattern: "^Abstract$|^ABSTRACT$|^摘\\s*要$"
+  abstract_en_pattern: "^Abstract$|^ABSTRACT$"
+  keywords_pattern: "^Keywords[:：]?|^Key\\s*[Ww]ords[:：]?|^关键词[:：]"
+  reference_keywords:
+    - "Reference List"
+    - "References"
+    - "REFERENCES"
+    - "参考文献"
+  acknowledgment_pattern: "^Acknowledge?ments?$|^致\\s*谢$"
+  appendix_pattern: "^Appendix\\s*[A-Z]?"
+  figure_caption_pattern: "^Figure\\s+\\d|^Fig\\.?\\s*\\d|^图\\s*\\d"
+  table_caption_pattern: "^Table\\s+\\d|^表\\s*\\d"
+  formula_pattern: "^\\(?\\d+[-\\.\\)]\\d+\\)?$"

@@ -348,6 +348,8 @@ class PaperFormatCorrector:
             print(f"\n  图表编号修正 ({len(report['fig_table_issues'])} 项):")
             for issue in report["fig_table_issues"]:
                 print(f"    - {issue}")
+        if report.get("citation_style"):
+            print(f"\n  检测到引用风格: {report['citation_style']}")
         if report.get("ref_issues"):
             print(f"\n  参考文献问题 ({len(report['ref_issues'])} 项):")
             for issue in report["ref_issues"]:

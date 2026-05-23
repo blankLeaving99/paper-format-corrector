@@ -29,6 +29,73 @@ class ReferenceFormatter:
         self.numbering = ref_config.get("numbering", "sequential")
         self.font_rules = config.get("format_rules", {}).get("font", {})
 
+    # 引用风格常量
+    CITATION_BRACKET = "bracket"        # [1], [2], [1-3]
+    CITATION_SUPERSCRIPT = "superscript"  # ¹, ², ³
+    CITATION_AUTHOR_YEAR = "author_year"  # (Smith, 2020), (Smith and Jones, 2020)
+    CITATION_UNKNOWN = "unknown"
+
+    # 上标数字 Unicode 映射
+    _SUPERSCRIPT_DIGITS = set("⁰¹²³⁴⁵⁶⁷⁸⁹")
+
+    def detect_citation_style(self, doc, ref_start_idx):
+        """自动检测文档使用的引用风格
+
+        Args:
+            doc: Document 对象
+            ref_start_idx: 参考文献起始段落索引
+
+        Returns:
+            str: CITATION_BRACKET / CITATION_SUPERSCRIPT / CITATION_AUTHOR_YEAR / CITATION_UNKNOWN
+        """
+        bracket_count = 0
+        superscript_count = 0
+        author_year_count = 0
+
+        # 只扫描正文部分（参考文献之前）
+        for i in range(min(ref_start_idx, len(doc.paragraphs))):
+            text = doc.paragraphs[i].text.strip()
+            if not text:
+                continue
+
+            # 方括号引用: [1], [2], [1-3], [1,2]
+            bracket_matches = re.findall(r"\[\d+(?:[,\s\-–—]*\d+)*\]", text)
+            bracket_count += len(bracket_matches)
+
+            # 上标引用: ¹²³
+            for char in text:
+                if char in self._SUPERSCRIPT_DIGITS:
+                    superscript_count += 1
+
+            # 作者-年份引用: (Smith, 2020), (Smith and Jones, 2020), (张三, 2020)
+            ay_matches = re.findall(
+                r"\([A-Z][a-z一-鿿]+(?:\s+(?:and|&|和|、)\s+[A-Z][a-z一-鿿]+)*,?\s*\d{4}[a-z]?\)",
+                text
+            )
+            author_year_count += len(ay_matches)
+
+        # 判断主要引用风格
+        max_count = max(bracket_count, superscript_count, author_year_count)
+        if max_count == 0:
+            return self.CITATION_UNKNOWN
+
+        if bracket_count == max_count:
+            return self.CITATION_BRACKET
+        elif superscript_count == max_count:
+            return self.CITATION_SUPERSCRIPT
+        else:
+            return self.CITATION_AUTHOR_YEAR
+
+    def get_citation_style_name(self, style):
+        """返回引用风格的中文名称"""
+        names = {
+            self.CITATION_BRACKET: "方括号编号 [1]",
+            self.CITATION_SUPERSCRIPT: "上标数字 ¹",
+            self.CITATION_AUTHOR_YEAR: "作者-年份 (Smith, 2020)",
+            self.CITATION_UNKNOWN: "未知",
+        }
+        return names.get(style, "未知")
+
     def format_references(self, doc, ref_start_idx, ref_end_idx=None):
         """格式化参考文献区域"""
         paragraphs = doc.paragraphs

@@ -232,6 +232,11 @@ class PaperFormatDesktopApp:
         self.rule_paper_path = tk.StringVar()
         self.rule_file_path = tk.StringVar()
 
+        # 预览数据
+        self._last_report = None
+        self._last_diff_path = None
+        self._last_score_report = ""
+
         self._build_ui()
 
     def _build_ui(self):
@@ -253,6 +258,7 @@ class PaperFormatDesktopApp:
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         self._build_correct_tab(notebook)
+        self._build_preview_tab(notebook)
         self._build_cover_tab(notebook)
         self._build_rule_tab(notebook)
         self._build_help_tab(notebook)
@@ -328,7 +334,95 @@ class PaperFormatDesktopApp:
         self.result_text = scrolledtext.ScrolledText(result_frame, height=15, font=("Consolas", 10))
         self.result_text.pack(fill=tk.BOTH, expand=True)
 
-    # ── Tab 2: 封面生成 ──────────────────────────────────────
+    # ── Tab 2: 矫正预览 ──────────────────────────────────────
+
+    def _build_preview_tab(self, notebook):
+        tab = ttk.Frame(notebook)
+        notebook.add(tab, text="矫正预览")
+
+        # 刷新按钮
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(fill=tk.X, padx=10, pady=5)
+        ttk.Button(btn_frame, text="刷新预览", command=self._refresh_preview).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="打开对比报告", command=self._open_diff_report).pack(side=tk.LEFT, padx=5)
+
+        # 分栏：左侧建议列表，右侧评分报告
+        paned = ttk.PanedWindow(tab, orient=tk.HORIZONTAL)
+        paned.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        # 左侧：矫正建议列表
+        left_frame = ttk.LabelFrame(paned, text="矫正建议", padding=5)
+        self.preview_tree = ttk.Treeview(left_frame, columns=("type", "message"), show="headings", height=15)
+        self.preview_tree.heading("type", text="类型")
+        self.preview_tree.heading("message", text="描述")
+        self.preview_tree.column("type", width=80, anchor="center")
+        self.preview_tree.column("message", width=400)
+        scrollbar = ttk.Scrollbar(left_frame, orient=tk.VERTICAL, command=self.preview_tree.yview)
+        self.preview_tree.configure(yscrollcommand=scrollbar.set)
+        self.preview_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        paned.add(left_frame, weight=1)
+
+        # 右侧：评分报告
+        right_frame = ttk.LabelFrame(paned, text="质量评分", padding=5)
+        self.preview_score_text = scrolledtext.ScrolledText(right_frame, height=15, font=("Consolas", 10))
+        self.preview_score_text.pack(fill=tk.BOTH, expand=True)
+        paned.add(right_frame, weight=1)
+
+    def _refresh_preview(self):
+        """刷新矫正预览"""
+        # 清空
+        for item in self.preview_tree.get_children():
+            self.preview_tree.delete(item)
+        self.preview_score_text.delete(1.0, tk.END)
+
+        if self._last_report is None:
+            self.preview_score_text.insert(tk.END, "请先执行论文矫正")
+            return
+
+        report = self._last_report
+
+        # 填充建议列表
+        suggestions = []
+        if report.get("fig_table_issues"):
+            for issue in report["fig_table_issues"]:
+                suggestions.append(("图表", issue))
+        if report.get("ref_issues"):
+            for issue in report["ref_issues"]:
+                suggestions.append(("文献", issue))
+        if report.get("warnings"):
+            for w in report["warnings"]:
+                suggestions.append(("警告", w))
+
+        # 统计信息
+        suggestions.append(("统计", f"矫正段落: {report.get('paragraphs_corrected', 0)}"))
+        suggestions.append(("统计", f"标题矫正: {report.get('headings_fixed', 0)}"))
+        suggestions.append(("统计", f"正文矫正: {report.get('body_fixed', 0)}"))
+        if report.get("tables_formatted"):
+            suggestions.append(("统计", f"表格格式化: {report['tables_formatted']}"))
+        if report.get("images_centered"):
+            suggestions.append(("统计", f"图片居中: {report['images_centered']}"))
+        if report.get("citation_style"):
+            suggestions.append(("统计", f"引用风格: {report['citation_style']}"))
+
+        for typ, msg in suggestions:
+            self.preview_tree.insert("", tk.END, values=(typ, msg))
+
+        # 填充评分报告
+        if self._last_score_report:
+            self.preview_score_text.insert(tk.END, self._last_score_report)
+        else:
+            self.preview_score_text.insert(tk.END, "未启用质量评分（矫正时勾选'输出质量评分'）")
+
+    def _open_diff_report(self):
+        """打开对比报告"""
+        if self._last_diff_path and Path(self._last_diff_path).exists():
+            import os
+            os.startfile(str(self._last_diff_path))
+        else:
+            messagebox.showinfo("提示", "无对比报告（矫正时勾选'生成对比报告'）")
+
+    # ── Tab 3: 封面生成 ──────────────────────────────────────
 
     def _build_cover_tab(self, notebook):
         tab = ttk.Frame(notebook)
@@ -602,6 +696,8 @@ class PaperFormatDesktopApp:
             lines.append(f"\n图表编号修正 ({len(report['fig_table_issues'])} 项):")
             for issue in report["fig_table_issues"]:
                 lines.append(f"  - {issue}")
+        if report.get("citation_style"):
+            lines.append(f"\n检测到引用风格: {report['citation_style']}")
         if report.get("ref_issues"):
             lines.append(f"\n参考文献问题 ({len(report['ref_issues'])} 项):")
             for issue in report["ref_issues"]:
@@ -610,6 +706,11 @@ class PaperFormatDesktopApp:
             lines.append(f"\n对比报告: {diff_path}")
         if score_report:
             lines.append(f"\n{score_report}")
+
+        # 存储预览数据
+        self._last_report = report
+        self._last_diff_path = diff_path
+        self._last_score_report = score_report
 
         return "\n".join(lines)
 

@@ -1,0 +1,141 @@
+# MLA Handbook, 9th Edition
+# Modern Language Association
+# Suitable for: Literature, Languages, Linguistics, Cultural Studies
+
+description: "MLA 第9版 - 文学/语言学论文格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 24
+      space_after: 12
+      line_spacing: 2.0
+    heading2:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 24
+      space_after: 12
+      line_spacing: 2.0
+    heading3:
+      font_size: 12
+      bold: false
+      italic: true
+      align: "left"
+      space_before: 24
+      space_after: 12
+      line_spacing: 2.0
+
+  body_text:
+    font_size: 12
+    line_spacing: 2.0
+    first_line_indent: 2
+    align: "left"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 2.54
+    right: 2.54
+
+  abstract:
+    title_font_size: 12
+    title_bold: true
+    title_align: "center"
+    content_font_size: 12
+    content_line_spacing: 2.0
+    content_first_line_indent: 0
+
+  keywords:
+    label: "Keywords: "
+    font_size: 12
+    bold_label: false
+    separator: ", "
+
+  title_page:
+    title_font_size: 12
+    title_bold: false
+    title_align: "center"
+    author_font_size: 12
+    author_align: "center"
+    affiliation_font_size: 12
+    affiliation_align: "center"
+
+  references:
+    style: "MLA"
+    font_size: 12
+    line_spacing: 2.0
+    hanging_indent: true
+    numbering: "none"
+    templates:
+      journal: "{authors}. \"{title}.\" {journal}, vol. {volume}, no. {number}, {year}, pp. {pages}."
+      book: "{authors}. {title}. {publisher}, {year}."
+      conference: "{authors}. \"{title}.\" {proceedings}, {publisher}, {year}, pp. {pages}."
+      online: "{authors}. \"{title}.\" {journal}, {year}, {url}."
+      thesis: "{author}. \"{title}.\" {university}, {year}."
+
+  figures:
+    label: "Fig."
+    numbering: "sequential"
+    separator: " "
+    caption_position: "below"
+    font_size: 12
+    align: "left"
+
+  tables:
+    label: "Table"
+    numbering: "sequential"
+    separator: " "
+    caption_position: "above"
+    font_size: 12
+    align: "left"
+
+  formulas:
+    numbering: true
+    numbering_style: "paren"
+    numbering_position: "right"
+    font_size: 12
+
+  header_footer:
+    enabled: true
+    header:
+      text: ""
+      font_size: 12
+      font_name: "Times New Roman"
+      align: "right"
+      bottom_border: false
+    footer:
+      page_number: true
+      font_size: 12
+      align: "right"
+    different_first_page: true
+
+  toc:
+    enabled: false
+
+auto_detect:
+  title_pattern: "^.*$"
+  chapter_pattern: "^第[一二三四五六七八九十百零\\d]+[章部分篇]"
+  section_pattern: "^\\d+\\.\\d+"
+  subsection_pattern: "^\\d+\\.\\d+\\.\\d+"
+  abstract_pattern: "^Abstract$|^ABSTRACT$|^摘\\s*要$"
+  abstract_en_pattern: "^Abstract$|^ABSTRACT$"
+  keywords_pattern: "^Keywords[:：]?|^Key\\s*[Ww]ords[:：]?|^关键词[:：]"
+  reference_keywords:
+    - "Works Cited"
+    - "Works Cited"
+    - "References"
+    - "参考文献"
+  acknowledgment_pattern: "^Acknowledge?ments?$|^致\\s*谢$"
+  appendix_pattern: "^Appendix\\s*[A-Z]?"
+  figure_caption_pattern: "^Fig\\.?\\s*\\d|^图\\s*\\d"
+  table_caption_pattern: "^Table\\s+\\d|^表\\s*\\d"
+  formula_pattern: "^\\(?\\d+[-\\.\\)]\\d+\\)?$"

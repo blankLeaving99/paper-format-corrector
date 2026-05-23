@@ -8,7 +8,7 @@ from pathlib import Path
 
 # 允许的文件扩展名
 ALLOWED_INPUT_EXTENSIONS = {
-    ".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown",
+    ".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown", ".tex",
     ".yaml", ".yml",
 }
 

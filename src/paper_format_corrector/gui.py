@@ -179,6 +179,8 @@ def format_report_text(report):
         lines.append(f"\n图表编号修正 ({len(report['fig_table_issues'])}):")
         for issue in report["fig_table_issues"]:
             lines.append(f"  - {issue}")
+    if report.get("citation_style"):
+        lines.append(f"\n检测到引用风格: {report['citation_style']}")
     if report.get("ref_issues"):
         lines.append(f"\n参考文献问题 ({len(report['ref_issues'])}):")
         for issue in report["ref_issues"]:
