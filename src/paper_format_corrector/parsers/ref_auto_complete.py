@@ -8,11 +8,11 @@
 - 完整作者名
 """
 
-import re
 import json
-import urllib.request
-import urllib.parse
+import re
 import time
+import urllib.parse
+import urllib.request
 
 
 class RefAutoComplete:
@@ -126,7 +126,7 @@ class RefAutoComplete:
                 "pages": self._get_field(item, "page"),
                 "doi": self._get_field(item, "DOI"),
             }
-        except Exception as e:
+        except Exception:
             return None
 
     def _get_field(self, item, field):

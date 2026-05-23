@@ -16,13 +16,11 @@
 5. 失败时fallback到正则解析
 """
 
-import re
+import ipaddress
 import json
 import os
-import ipaddress
-from pathlib import Path
+import re
 from urllib.parse import urlparse
-
 
 # LLM 提取格式规则的 prompt
 EXTRACT_PROMPT = """你是一个论文格式规则提取专家。请从以下文档中提取所有论文格式要求，输出为JSON格式。

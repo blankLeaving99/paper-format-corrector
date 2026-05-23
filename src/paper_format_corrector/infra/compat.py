@@ -7,9 +7,7 @@ and raises errors for missing required deps.
 
 from __future__ import annotations
 
-import sys
-from importlib.metadata import version, PackageNotFoundError
-
+from importlib.metadata import PackageNotFoundError, version
 
 # (package_name, pip_name, min_version, max_major, required)
 _DEPS = [

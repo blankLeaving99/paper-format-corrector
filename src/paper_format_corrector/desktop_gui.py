@@ -13,27 +13,27 @@
 """
 
 import logging
-import tempfile
 import shutil
+import tempfile
 import threading
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox, scrolledtext
 from pathlib import Path
+from tkinter import filedialog, messagebox, scrolledtext, ttk
 
 # 尝试导入拖拽支持
 try:
-    from tkinterdnd2 import TkinterDnD, DND_FILES
+    from tkinterdnd2 import DND_FILES, TkinterDnD
     HAS_DND = True
 except ImportError:
     HAS_DND = False
 
 from .app import PaperFormatCorrector
+from .core.file_converter import FileConverter
 from .core.format_corrector import FormatCorrector
-from .quality.quality_scorer import QualityScorer
-from .quality.diff_reporter import DiffReporter
 from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
-from .core.file_converter import FileConverter
+from .quality.diff_reporter import DiffReporter
+from .quality.quality_scorer import QualityScorer
 
 # 联系我们信息
 CONTACT_INFO = """联系我们
@@ -570,7 +570,7 @@ class PaperFormatDesktopApp:
             try:
                 result = self._process_single(paper)
                 self.root.after(0, lambda: self._show_result(result))
-            except Exception as e:
+            except Exception:
                 logging.getLogger(__name__).exception("处理失败")
                 self.root.after(0, lambda: self._show_result("处理失败，请检查输入文件是否正确。"))
             finally:
@@ -601,10 +601,10 @@ class PaperFormatDesktopApp:
                     f"[{idx}/{len(files)}] 正在处理: {Path(p).name}...\n"))
                 try:
                     result = self._process_single(paper)
-                    results.append(f"[{i}/{len(files)}] {Path(p).name}\n{result}\n")
-                except Exception as e:
+                    results.append(f"[{i}/{len(files)}] {Path(paper).name}\n{result}\n")
+                except Exception:
                     logging.getLogger(__name__).exception("批量处理失败")
-                    results.append(f"[{i}/{len(files)}] {Path(p).name} - 处理失败，请检查文件格式\n")
+                    results.append(f"[{i}/{len(files)}] {Path(paper).name} - 处理失败，请检查文件格式\n")
 
             final = "\n" + "=" * 60 + "\n批量处理完成\n" + "=" * 60 + "\n\n" + "\n".join(results)
             self.root.after(0, lambda: self._show_result(final))
@@ -665,10 +665,14 @@ class PaperFormatDesktopApp:
 
         # 导出
         export_formats = []
-        if self.export_pdf.get(): export_formats.append("pdf")
-        if self.export_html.get(): export_formats.append("html")
-        if self.export_txt.get(): export_formats.append("txt")
-        if self.export_md.get(): export_formats.append("md")
+        if self.export_pdf.get():
+            export_formats.append("pdf")
+        if self.export_html.get():
+            export_formats.append("html")
+        if self.export_txt.get():
+            export_formats.append("txt")
+        if self.export_md.get():
+            export_formats.append("md")
 
         if export_formats:
             exporter = FormatExporter()
@@ -745,7 +749,7 @@ class PaperFormatDesktopApp:
             generator.generate(metadata, str(output_path), self.cover_template.get())
             self.cover_status.config(text=f"封面已生成: {output_path}")
             messagebox.showinfo("成功", f"封面已生成:\n{output_path.resolve()}")
-        except Exception as e:
+        except Exception:
             logging.getLogger(__name__).exception("封面生成失败")
             self.cover_status.config(text="生成失败，请检查输入信息。")
             messagebox.showerror("错误", "封面生成失败，请检查输入信息。")
@@ -778,7 +782,7 @@ class PaperFormatDesktopApp:
                 results = c.check_rules(input_path, rules_path=rules)
                 report = c.rule_engine.format_report(results)
                 self.root.after(0, lambda: self._show_rule_result(report))
-            except Exception as e:
+            except Exception:
                 logging.getLogger(__name__).exception("规则检查失败")
                 self.root.after(0, lambda: self._show_rule_result("检查失败，请检查输入文件是否正确。"))
 

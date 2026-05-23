@@ -1,19 +1,18 @@
 """Tests for the format preset system."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
+
 import pytest
-import yaml
-from pathlib import Path
 
 from paper_format_corrector.infra.preset_loader import (
+    format_preset_list,
+    get_preset_choices,
     list_presets,
     load_preset,
-    get_preset_choices,
-    format_preset_list,
 )
 
 
@@ -149,11 +148,11 @@ def test_preset_apply_to_corrector(sample_paper_path, template_path, config, tmp
     """Applying a preset and running correction should work end-to-end."""
     from paper_format_corrector.app import PaperFormatCorrector
     from paper_format_corrector.core.format_corrector import FormatCorrector
-    from paper_format_corrector.quality.quality_scorer import QualityScorer
-    from paper_format_corrector.quality.diff_reporter import DiffReporter
-    from paper_format_corrector.quality.rule_engine import RuleEngine
     from paper_format_corrector.core.format_exporter import FormatExporter
     from paper_format_corrector.infra.logger import Logger
+    from paper_format_corrector.quality.diff_reporter import DiffReporter
+    from paper_format_corrector.quality.quality_scorer import QualityScorer
+    from paper_format_corrector.quality.rule_engine import RuleEngine
 
     output_path = str(tmp_path / "preset_test.docx")
 

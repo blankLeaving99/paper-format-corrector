@@ -1,21 +1,21 @@
+import logging
 import os
 import re
 import shutil
-import logging
 from pathlib import Path
 
 from docx import Document
-from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml.ns import qn
+from docx.shared import Cm, Pt
 
-from ..parsers.section_detector import SectionDetector, SectionType, detect_document_language
-from ..parsers.reference_formatter import ReferenceFormatter
 from ..handlers.figure_table_handler import FigureTableHandler
-from ..handlers.table_handler import TableHandler
-from ..handlers.image_handler import ImageHandler
 from ..handlers.header_footer_handler import HeaderFooterHandler
+from ..handlers.image_handler import ImageHandler
+from ..handlers.table_handler import TableHandler
 from ..handlers.toc_handler import TOCHandler
+from ..parsers.reference_formatter import ReferenceFormatter
+from ..parsers.section_detector import SectionDetector, SectionType, detect_document_language
 
 logger = logging.getLogger(__name__)
 

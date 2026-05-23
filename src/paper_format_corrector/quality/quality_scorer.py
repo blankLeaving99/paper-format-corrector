@@ -14,8 +14,8 @@
 """
 
 import re
+
 from docx import Document
-from docx.shared import Pt
 from docx.oxml.ns import qn
 
 
@@ -64,7 +64,6 @@ class QualityScorer:
     def _score_headings(self, doc):
         """标题格式评分 (满分20)"""
         score = 20
-        rules = self.config.get("format_rules", {}).get("headings", {})
         body_size = self.config.get("format_rules", {}).get("body_text", {}).get("font_size", 12)
 
         heading_count = 0
@@ -94,7 +93,7 @@ class QualityScorer:
         score = 20
         body_config = self.config.get("format_rules", {}).get("body_text", {})
         expected_size = body_config.get("font_size", 12)
-        expected_spacing = body_config.get("line_spacing", 1.5)
+        _expected_spacing = body_config.get("line_spacing", 1.5)
 
         body_paras = []
         for para in doc.paragraphs:

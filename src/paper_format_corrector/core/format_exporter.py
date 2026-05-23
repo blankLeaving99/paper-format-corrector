@@ -10,7 +10,12 @@
 import re
 from pathlib import Path
 
-from ..infra.path_security import validate_input_path, validate_output_path, ALLOWED_INPUT_EXTENSIONS, ALLOWED_OUTPUT_EXTENSIONS
+from ..infra.path_security import (
+    ALLOWED_INPUT_EXTENSIONS,
+    ALLOWED_OUTPUT_EXTENSIONS,
+    validate_input_path,
+    validate_output_path,
+)
 
 
 class FormatExporter:
@@ -133,8 +138,8 @@ class FormatExporter:
 
     def _export_markdown(self, docx_path, output_path):
         """导出为 Markdown"""
+
         from docx import Document
-        import re
 
         doc = Document(str(docx_path))
         lines = []

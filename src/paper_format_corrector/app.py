@@ -2,28 +2,29 @@
 
 from __future__ import annotations
 
-import yaml
 import copy
 from pathlib import Path
 from typing import Any
 
-from .core.style_extractor import StyleExtractor
+import yaml
+
+from .core.file_converter import FileConverter
 from .core.format_corrector import FormatCorrector
 from .core.format_exporter import FormatExporter
-from .core.file_converter import FileConverter
-from .parsers.requirement_parser import RequirementParser
-from .quality.quality_scorer import QualityScorer
-from .quality.diff_reporter import DiffReporter
-from .quality.rule_engine import RuleEngine
+from .core.style_extractor import StyleExtractor
 from .generators.cover_page_generator import CoverPageGenerator
-from .infra.logger import Logger, ProgressBar
-from .infra.preset_loader import load_preset, list_presets, format_preset_list
-from .infra.path_security import validate_input_path, validate_output_path, ALLOWED_INPUT_EXTENSIONS
 from .infra.compat import check_dependencies
+from .infra.logger import Logger, ProgressBar
+from .infra.path_security import ALLOWED_INPUT_EXTENSIONS, validate_input_path
+from .infra.preset_loader import load_preset
+from .parsers.requirement_parser import RequirementParser
+from .quality.diff_reporter import DiffReporter
+from .quality.quality_scorer import QualityScorer
+from .quality.rule_engine import RuleEngine
 
 try:
-    from .parsers.llm_parser import LLMParser, llm_parse_to_config
-    HAS_LLM = True
+    from importlib.util import find_spec as _find_spec
+    HAS_LLM = _find_spec("paper_format_corrector.parsers.llm_parser") is not None
 except ImportError:
     HAS_LLM = False
 
@@ -332,7 +333,7 @@ class PaperFormatCorrector:
                 print(f"    对齐: {style_info['alignment']}")
                 print(f"    行距: {style_info['line_spacing']}")
 
-        print(f"\n页面边距:")
+        print("\n页面边距:")
         print(f"  上: {margins['top']:.2f}cm  下: {margins['bottom']:.2f}cm")
         print(f"  左: {margins['left']:.2f}cm  右: {margins['right']:.2f}cm")
         print("=" * 60)

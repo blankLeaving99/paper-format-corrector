@@ -11,7 +11,6 @@
 import re
 from pathlib import Path
 
-
 # ========== 中文字号 -> pt 映射 ==========
 FONT_SIZE_MAP = {
     "初号": 42, "小初": 36,
@@ -88,8 +87,8 @@ class RequirementParser:
             # 先转换为 docx，再读取
             from ..core.file_converter import FileConverter
             converter = FileConverter()
-            import tempfile
             import shutil
+            import tempfile
             tmp_dir = tempfile.mkdtemp()
             try:
                 converted_path = converter.convert(str(file_path), tmp_dir)

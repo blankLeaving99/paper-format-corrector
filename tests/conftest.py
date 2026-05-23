@@ -1,17 +1,18 @@
 """Shared pytest fixtures for paper-format-corrector tests."""
 
-import sys
 import os
 import shutil
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
+from pathlib import Path
+
 import pytest
 import yaml
-from pathlib import Path
 from docx import Document
-from docx.shared import Pt, Cm
 from docx.enum.text import WD_ALIGN_PARAGRAPH
+from docx.shared import Cm, Pt
 
 
 @pytest.fixture

@@ -1,16 +1,14 @@
 """Tests for code block and formula content preservation."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
+
 import pytest
-from pathlib import Path
 from docx import Document
 from docx.shared import Pt
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-
 
 # ── Section detection ──────────────────────────────────────
 
@@ -163,8 +161,8 @@ class TestCodeFormatPreservation:
 
     def test_code_line_spacing_not_changed(self, config, tmp_path):
         """Code paragraphs should preserve their original line spacing."""
+
         from paper_format_corrector.core.format_corrector import FormatCorrector
-        from docx.oxml.ns import qn
 
         doc = Document()
         p = doc.add_paragraph()

@@ -15,8 +15,8 @@
 """
 
 import atexit
-import tempfile
 import shutil
+import tempfile
 from pathlib import Path
 
 try:
@@ -27,14 +27,13 @@ except ImportError:
     exit(1)
 
 from .app import PaperFormatCorrector
+from .core.file_converter import FileConverter
 from .core.format_corrector import FormatCorrector
-from .quality.quality_scorer import QualityScorer
-from .quality.diff_reporter import DiffReporter
 from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
-from .core.file_converter import FileConverter
-from .infra.preset_loader import list_presets, get_preset_choices
-
+from .infra.preset_loader import list_presets
+from .quality.diff_reporter import DiffReporter
+from .quality.quality_scorer import QualityScorer
 
 # 全局实例
 corrector = None
@@ -76,8 +75,8 @@ def process_paper(paper_file, requirement_file, config_file, template_file, pres
     try:
         cfg = config_file.name if config_file else config_path
         c = PaperFormatCorrector(cfg)
-    except Exception as e:
-        return None, None, f"配置加载失败，请检查配置文件格式。", None
+    except Exception:
+        return None, None, "配置加载失败，请检查配置文件格式。", None
 
     # 覆盖模板文件
     if template_file:
@@ -87,7 +86,7 @@ def process_paper(paper_file, requirement_file, config_file, template_file, pres
         try:
             c.template_path = tpl_path
             c.corrector = FormatCorrector(tpl_path, c.config)
-        except Exception as e:
+        except Exception:
             return None, None, "模板文件加载失败，请检查文件是否为有效的 .docx 文件。", None
 
     # 应用格式预设
@@ -95,14 +94,14 @@ def process_paper(paper_file, requirement_file, config_file, template_file, pres
         try:
             preset_id = _PRESET_MAP.get(preset_name, preset_name)
             c.apply_preset(preset_id)
-        except Exception as e:
+        except Exception:
             return None, None, "预设加载失败，请检查预设名称。", None
 
     # 应用需求文档
     if requirement_file:
         try:
             c.apply_requirement(requirement_file.name)
-        except Exception as e:
+        except Exception:
             return None, None, "需求文档解析失败，请检查文件格式。", None
 
     # 输出路径
@@ -116,7 +115,7 @@ def process_paper(paper_file, requirement_file, config_file, template_file, pres
         try:
             converted_path = converter.convert(str(input_path), str(output_dir))
             input_path = Path(converted_path)
-        except Exception as e:
+        except Exception:
             return None, None, "文件格式转换失败，请检查文件格式是否支持。", None
 
     output_path = output_dir / f"formatted_{input_path.name}"
@@ -124,7 +123,7 @@ def process_paper(paper_file, requirement_file, config_file, template_file, pres
     # 处理
     try:
         report = c.corrector.correct_document(str(input_path), str(output_path))
-    except Exception as e:
+    except Exception:
         return None, None, "处理失败，请检查论文文件是否为有效的 .docx 文件。", None
 
     # 质量评分
@@ -157,7 +156,7 @@ def process_paper(paper_file, requirement_file, config_file, template_file, pres
             try:
                 exporter.export(str(output_path), str(out), fmt)
                 exported_files.append(str(out))
-            except Exception as e:
+            except Exception:
                 pass
 
     # 处理报告文本

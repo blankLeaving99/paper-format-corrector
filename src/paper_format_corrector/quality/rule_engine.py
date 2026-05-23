@@ -24,8 +24,8 @@ rules:
 """
 
 import re
+
 import yaml
-from pathlib import Path
 
 
 class RuleEngine:

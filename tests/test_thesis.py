@@ -1,18 +1,19 @@
 """Integration tests for thesis-format correction with requirement documents."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
 from pathlib import Path
+
 from paper_format_corrector.app import PaperFormatCorrector
 from paper_format_corrector.core.format_corrector import FormatCorrector
-from paper_format_corrector.quality.quality_scorer import QualityScorer
-from paper_format_corrector.quality.diff_reporter import DiffReporter
-from paper_format_corrector.quality.rule_engine import RuleEngine
 from paper_format_corrector.core.format_exporter import FormatExporter
 from paper_format_corrector.infra.logger import Logger
+from paper_format_corrector.quality.diff_reporter import DiffReporter
+from paper_format_corrector.quality.quality_scorer import QualityScorer
+from paper_format_corrector.quality.rule_engine import RuleEngine
 
 
 def _make_corrector(config, template_path):

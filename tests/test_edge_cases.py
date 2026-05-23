@@ -1,14 +1,15 @@
 """Edge case tests for the format corrector."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from docx import Document
-from docx.shared import Pt, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
 from pathlib import Path
+
+from docx import Document
+from docx.shared import Pt
+
 from paper_format_corrector.core.format_corrector import FormatCorrector
 
 

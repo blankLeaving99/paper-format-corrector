@@ -7,9 +7,9 @@
 - 支持内联图片和浮动图片
 """
 
-from docx.shared import Pt, Cm, Emu
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
+from docx.shared import Cm
 
 
 class ImageHandler:
@@ -117,7 +117,7 @@ class ImageHandler:
                 if cx_emu > 0 and cy_emu > 0:
                     # EMU 转英寸: 1 inch = 914400 EMU
                     width_inches = cx_emu / 914400
-                    height_inches = cy_emu / 914400
+                    _height_inches = cy_emu / 914400
                     # 如果图片很小（< 1英寸宽），可能DPI不足
                     if width_inches < 1.0:
                         self._warnings.append(

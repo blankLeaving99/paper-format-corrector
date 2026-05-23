@@ -1,22 +1,18 @@
 """Tests for image handling, table handling, and figure/table caption detection."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-import pytest
 from docx import Document
-from docx.shared import Pt, Cm
-from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.enum.table import WD_TABLE_ALIGNMENT, WD_CELL_VERTICAL_ALIGNMENT
-from pathlib import Path
+from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
+from docx.shared import Cm
 
+from paper_format_corrector.handlers.figure_table_handler import FigureTableHandler
 from paper_format_corrector.handlers.image_handler import ImageHandler
 from paper_format_corrector.handlers.table_handler import TableHandler
-from paper_format_corrector.handlers.figure_table_handler import FigureTableHandler
 from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
-
 
 # ========== ImageHandler tests ==========
 

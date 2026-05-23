@@ -8,8 +8,9 @@ from __future__ import annotations
 
 import os
 import re
-import yaml
 from pathlib import Path
+
+import yaml
 
 
 def _presets_dir() -> Path:

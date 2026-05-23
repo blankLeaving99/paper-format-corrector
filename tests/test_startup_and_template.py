@@ -1,13 +1,13 @@
 """Tests for startup flow, template fallback, and dependency handling."""
 
-import sys
 import os
+import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-import pytest
 from pathlib import Path
 
+import pytest
 
 # ── compat module ────────────────────────────────────────────
 
@@ -31,7 +31,7 @@ class TestCompat:
         assert any("pdfplumber" in p for p in pkgs)
 
     def test_get_all_packages(self):
-        from paper_format_corrector.infra.compat import get_all_packages, get_required_packages, get_optional_packages
+        from paper_format_corrector.infra.compat import get_all_packages, get_optional_packages, get_required_packages
         all_pkgs = get_all_packages()
         assert all_pkgs == get_required_packages() + get_optional_packages()
 
@@ -102,6 +102,7 @@ class TestAppTemplateHandling:
     def test_missing_template_config_does_not_crash(self, tmp_path):
         """App should handle config without template section."""
         import yaml
+
         from paper_format_corrector.app import PaperFormatCorrector
 
         config_path = tmp_path / "config.yaml"
@@ -115,6 +116,7 @@ class TestAppTemplateHandling:
     def test_template_path_from_config(self, tmp_path):
         """App should read template path from config."""
         import yaml
+
         from paper_format_corrector.app import PaperFormatCorrector
 
         config_path = tmp_path / "config.yaml"
@@ -127,6 +129,7 @@ class TestAppTemplateHandling:
     def test_template_override(self, config, template_path, tmp_path):
         """Template path can be overridden after initialization."""
         import yaml
+
         from paper_format_corrector.app import PaperFormatCorrector
         from paper_format_corrector.core.format_corrector import FormatCorrector
 
@@ -247,6 +250,7 @@ class TestConfigValidation:
     def test_margins_must_be_numbers(self, tmp_path):
         """App should reject config with non-numeric margins."""
         import yaml
+
         from paper_format_corrector.app import PaperFormatCorrector
 
         config_path = tmp_path / "config.yaml"
@@ -263,6 +267,7 @@ class TestConfigValidation:
     def test_config_must_be_dict(self, tmp_path):
         """App should reject config that is not a dict."""
         import yaml
+
         from paper_format_corrector.app import PaperFormatCorrector
 
         config_path = tmp_path / "config.yaml"
@@ -274,6 +279,7 @@ class TestConfigValidation:
     def test_valid_config_passes_validation(self, tmp_path):
         """App should accept valid config."""
         import yaml
+
         from paper_format_corrector.app import PaperFormatCorrector
 
         config_path = tmp_path / "config.yaml"

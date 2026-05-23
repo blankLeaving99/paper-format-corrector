@@ -15,7 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from ..infra.path_security import validate_input_path, ALLOWED_INPUT_EXTENSIONS
+from ..infra.path_security import ALLOWED_INPUT_EXTENSIONS, validate_input_path
 
 
 class FileConverter:
@@ -227,8 +227,8 @@ class FileConverter:
     def _text_to_docx(self, text: str, output_path: Path, source_path: Path = None) -> str:
         """将纯文本转换为 .docx"""
         from docx import Document
-        from docx.shared import Pt, Cm
         from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Cm, Pt
 
         doc = Document()
 
@@ -277,8 +277,7 @@ class FileConverter:
     def _markdown_to_docx(self, md_text: str, output_path: Path) -> str:
         """将 Markdown 转换为 .docx"""
         from docx import Document
-        from docx.shared import Pt, Cm
-        from docx.enum.text import WD_ALIGN_PARAGRAPH
+        from docx.shared import Cm, Pt
 
         doc = Document()
 
