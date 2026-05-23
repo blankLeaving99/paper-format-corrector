@@ -52,7 +52,12 @@
       "WebSearch",
       "Bash(.venv/Scripts/python.exe -m paper_format_corrector --list-presets)",
       "Bash(PYTHONPATH=src .venv/Scripts/python.exe -m paper_format_corrector --list-presets)",
-      "Bash(.venv/Scripts/pip.exe list *)"
+      "Bash(.venv/Scripts/pip.exe list *)",
+      "Bash(python -m pytest tests/test_startup_and_template.py -v)",
+      "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_startup_and_template.py -v)",
+      "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/test_startup_and_template.py -v)",
+      "Bash(E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe *)",
+      "Bash(git commit -m ' *)"
     ]
   }
 }
