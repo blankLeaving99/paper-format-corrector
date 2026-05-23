@@ -144,6 +144,53 @@ class ReferenceFormatter:
             return True
         return False
 
+    def check_citation_consistency(self, doc, ref_start_idx):
+        """检查正文引用与参考文献列表的一致性
+
+        Returns:
+            list of dict: [{"type": "orphan"|"missing"|"duplicate", "message": str}]
+        """
+        issues = []
+        paragraphs = doc.paragraphs
+
+        # 1. 收集正文中所有引用编号
+        cited_nums = set()
+        for i in range(ref_start_idx):
+            text = paragraphs[i].text.strip()
+            if not text:
+                continue
+            # 匹配 [1], [2], [1-3], [1,2,3], [1, 2, 3] 等
+            for m in re.finditer(r"\[(\d+)(?:[,\s\-–—]*(\d+))*\]", text):
+                for num_str in re.findall(r"\d+", m.group(0)):
+                    cited_nums.add(int(num_str))
+
+        # 2. 收集参考文献列表中的编号
+        ref_nums = {}
+        for i in range(ref_start_idx + 1, len(paragraphs)):
+            text = paragraphs[i].text.strip()
+            if not text:
+                continue
+            if self._is_new_section(text):
+                break
+            m = re.match(r"^\[(\d+)\]", text)
+            if m:
+                num = int(m.group(1))
+                if num in ref_nums:
+                    issues.append({"type": "duplicate", "message": f"参考文献 [{num}] 重复出现"})
+                ref_nums[num] = text[:50]
+
+        # 3. 检查孤立引用（正文引用了但参考文献列表中没有）
+        for num in sorted(cited_nums):
+            if num not in ref_nums:
+                issues.append({"type": "orphan", "message": f"正文引用 [{num}] 在参考文献列表中不存在"})
+
+        # 4. 检查未引用文献（参考文献列表中有但正文未引用）
+        for num in sorted(ref_nums.keys()):
+            if num not in cited_nums:
+                issues.append({"type": "missing", "message": f"参考文献 [{num}] 未在正文中被引用"})
+
+        return issues
+
     def _set_east_asian_font(self, run, font_name):
         rpr = run._element.get_or_add_rPr()
         rFonts = rpr.find(qn("w:rFonts"))

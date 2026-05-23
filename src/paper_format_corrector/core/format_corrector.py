@@ -1,4 +1,5 @@
 import re
+import shutil
 import logging
 from pathlib import Path
 
@@ -61,14 +62,33 @@ class FormatCorrector:
             if style.type == 1:
                 self.style_mapping[style.name.lower()] = style
 
-    def correct_document(self, input_path, output_path):
+    def correct_document(self, input_path, output_path, backup=True):
+        """矫正文档格式
+
+        Args:
+            input_path: 输入文档路径
+            output_path: 输出文档路径
+            backup: 是否在修改前备份原始文件
+
+        Returns:
+            矫正报告字典
+        """
         logger.info(f"正在处理: {input_path}")
+
+        # 修改前备份
+        backup_path = None
+        if backup:
+            backup_path = str(output_path) + ".backup.docx"
+            shutil.copy2(input_path, backup_path)
+            logger.info(f"已备份原始文件: {backup_path}")
+
         doc = Document(input_path)
 
         # 重置状态
         self.section_detector.reset()
         self.fig_table_handler.reset()
         self.report = self._empty_report()
+        self.report["backup_path"] = backup_path
 
         # 检测文档语言并调整字体配置
         self._detect_and_apply_language(doc)
@@ -205,6 +225,10 @@ class FormatCorrector:
         if ref_start is not None:
             self.ref_formatter.format_references(doc, ref_start)
             self.report["ref_issues"] = self.ref_formatter.validate_references(doc, ref_start)
+            # 引用一致性检查
+            consistency_issues = self.ref_formatter.check_citation_consistency(doc, ref_start)
+            for issue in consistency_issues:
+                self.report["ref_issues"].append(issue["message"])
 
     def _correct_formulas(self, doc):
         formula_config = self.config.get("format_rules", {}).get("formulas", {})
@@ -464,3 +488,21 @@ class FormatCorrector:
 
     def get_report(self):
         return self.report
+
+    @staticmethod
+    def restore_from_backup(backup_path, target_path):
+        """从备份恢复原始文件
+
+        Args:
+            backup_path: 备份文件路径
+            target_path: 恢复目标路径
+
+        Returns:
+            True if restored successfully, False otherwise
+        """
+        if not Path(backup_path).is_file():
+            logger.error(f"备份文件不存在: {backup_path}")
+            return False
+        shutil.copy2(backup_path, target_path)
+        logger.info(f"已从备份恢复: {target_path}")
+        return True

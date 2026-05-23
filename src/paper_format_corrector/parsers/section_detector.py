@@ -178,6 +178,11 @@ class SectionDetector:
         if self._is_author_line(text):
             return SectionType.AUTHORS, {}
 
+        # 启发式标题检测（根据字体属性推断）
+        heuristic = self._heuristic_heading(paragraph, text)
+        if heuristic is not None:
+            return heuristic
+
         # 正文
         return SectionType.BODY, {}
 
@@ -288,6 +293,59 @@ class SectionDetector:
                     return True
 
         return False
+
+    def _heuristic_heading(self, paragraph, text):
+        """启发式标题检测：根据字体属性推断疑似标题
+
+        很多论文的标题不使用 Word 样式，而是手动设置加粗+大字号。
+        此方法通过字体属性推断这些"硬编码"的标题。
+
+        Returns:
+            SectionType or None: 推断的标题类型，或 None 表示不是标题
+        """
+        # 短文本才可能是标题（< 80 字符）
+        if len(text) > 80:
+            return None
+
+        try:
+            runs = paragraph.runs
+        except AttributeError:
+            return None
+
+        if not runs:
+            return None
+
+        # 统计第一个 run 的属性（代表段落主要格式）
+        first_run = runs[0]
+        try:
+            is_bold = first_run.font.bold
+            font_size = first_run.font.size
+            font_size_pt = font_size.pt if font_size else None
+        except Exception:
+            return None
+
+        if not is_bold:
+            return None
+
+        # 检查对齐方式
+        try:
+            alignment = paragraph.alignment
+            is_centered = (alignment == 1)  # WD_ALIGN_PARAGRAPH.CENTER = 1
+        except Exception:
+            is_centered = False
+
+        # 章标题启发式：加粗 + 居中 + 短文本 + 大字号 (>= 14pt)
+        if is_centered and font_size_pt and font_size_pt >= 14:
+            # 排除纯数字行、公式编号等
+            if not re.match(r"^[\d\s\.\-\(\)]+$", text):
+                self._chapter_count += 1
+                return SectionType.CHAPTER, {"chapter_num": self._chapter_count}
+
+        # 节标题启发式：加粗 + 大字号 (>= 13pt) + 短文本
+        if font_size_pt and font_size_pt >= 13 and len(text) < 50:
+            return SectionType.SECTION, {}
+
+        return None
 
     def _parse_caption_num(self, text, prefix):
         """解析图表编号，如 '图1-2 xxx' -> {'num': '1-2'}, 'Fig. 1 xxx' -> {'num': '1'}"""

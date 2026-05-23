@@ -24,7 +24,7 @@ class QualityScorer:
 
     def __init__(self, config):
         self.config = config
-        self.issues = []
+        self.issues = []  # list of {"severity": "error"|"warning"|"info", "message": str}
         self.scores = {}
         # 从 config 中读取标题检测模式
         detect = config.get("auto_detect", {})
@@ -33,6 +33,15 @@ class QualityScorer:
             re.compile(detect.get("section_pattern", r"^\d+\.\d+")),
             re.compile(detect.get("subsection_pattern", r"^\d+\.\d+\.\d+")),
         ]
+
+    def _add_issue(self, message, severity="warning"):
+        """添加问题到列表
+
+        Args:
+            message: 问题描述
+            severity: "error"（必须修复）, "warning"（建议修复）, "info"（提示信息）
+        """
+        self.issues.append({"severity": severity, "message": message})
 
     def score(self, doc_path):
         """对文档评分，返回 (total_score, details)"""
@@ -70,12 +79,12 @@ class QualityScorer:
                 heading_count += 1
                 for run in para.runs:
                     if run.font.size and run.font.size.pt < body_size:
-                        self.issues.append(f"标题 '{text[:20]}...' 字号小于正文")
+                        self._add_issue(f"标题 '{text[:20]}...' 字号小于正文", "warning")
                         score -= 1
                         break
 
         if heading_count == 0:
-            self.issues.append("未检测到任何标题")
+            self._add_issue("未检测到任何标题", "error")
             score -= 5
 
         return max(0, score)
@@ -105,7 +114,7 @@ class QualityScorer:
                     break
 
         if size_issues > len(body_paras[:20]) * 0.3:
-            self.issues.append(f"正文字号不一致，{size_issues}/{min(20, len(body_paras))} 段不符合要求")
+            self._add_issue(f"正文字号不一致，{size_issues}/{min(20, len(body_paras))} 段不符合要求", "warning")
             score -= 5
 
         # 检查首行缩进
@@ -116,7 +125,7 @@ class QualityScorer:
                 if para.paragraph_format.first_line_indent is None or para.paragraph_format.first_line_indent == 0:
                     no_indent += 1
             if no_indent > len(body_paras[:20]) * 0.3:
-                self.issues.append(f"部分正文缺少首行缩进")
+                self._add_issue("部分正文缺少首行缩进", "warning")
                 score -= 3
 
         # 检查两端对齐
@@ -128,7 +137,7 @@ class QualityScorer:
                 if para.alignment != WD_ALIGN_PARAGRAPH.JUSTIFY and para.alignment is not None:
                     not_justified += 1
             if not_justified > len(body_paras[:20]) * 0.5:
-                self.issues.append("部分正文未两端对齐")
+                self._add_issue("部分正文未两端对齐", "info")
                 score -= 2
 
         return max(0, score)
@@ -157,7 +166,7 @@ class QualityScorer:
                 continue
             for i in range(1, len(nums)):
                 if nums[i] == nums[i-1]:
-                    self.issues.append(f"{name}编号重复: {name}{nums[i]}")
+                    self._add_issue(f"{name}编号重复: {name}{nums[i]}", "error")
                     score -= 2
 
         return max(0, score)
@@ -175,7 +184,7 @@ class QualityScorer:
                 break
 
         if ref_start is None:
-            self.issues.append("未找到参考文献章节")
+            self._add_issue("未找到参考文献章节", "error")
             return 5
 
         ref_count = 0
@@ -197,14 +206,14 @@ class QualityScorer:
                     has_numbering += 1
 
         if ref_count == 0:
-            self.issues.append("参考文献列表为空")
+            self._add_issue("参考文献列表为空", "error")
             score -= 10
         else:
             if has_type_tag < ref_count * 0.8:
-                self.issues.append(f"部分参考文献缺少文献类型标识 ({has_type_tag}/{ref_count})")
+                self._add_issue(f"部分参考文献缺少文献类型标识 ({has_type_tag}/{ref_count})", "warning")
                 score -= 3
             if has_numbering < ref_count * 0.8:
-                self.issues.append(f"部分参考文献编号格式不规范")
+                self._add_issue("部分参考文献编号格式不规范", "warning")
                 score -= 2
 
         return max(0, score)
@@ -223,7 +232,7 @@ class QualityScorer:
                     actual_cm = actual / 360000
                     expected_cm = margins.get(expected, 2.54)
                     if abs(actual_cm - expected_cm) > 0.3:
-                        self.issues.append(f"页面{direction}边距偏差: {actual_cm:.1f}cm (应为{expected_cm}cm)")
+                        self._add_issue(f"页面{direction}边距偏差: {actual_cm:.1f}cm (应为{expected_cm}cm)", "warning")
                         score -= 1
 
         return max(0, score)
@@ -242,10 +251,10 @@ class QualityScorer:
                 has_keywords = True
 
         if not has_abstract:
-            self.issues.append("未检测到摘要")
+            self._add_issue("未检测到摘要", "warning")
             score -= 5
         if not has_keywords:
-            self.issues.append("未检测到关键词")
+            self._add_issue("未检测到关键词", "warning")
             score -= 5
 
         return max(0, score)
@@ -269,10 +278,10 @@ class QualityScorer:
                     break
 
         if not has_header:
-            self.issues.append("页眉为空")
+            self._add_issue("页眉为空", "info")
             score -= 2
         if not has_footer:
-            self.issues.append("页脚无页码")
+            self._add_issue("页脚无页码", "info")
             score -= 3
 
         return max(0, score)
@@ -294,7 +303,7 @@ class QualityScorer:
                 break
 
         if not has_toc:
-            self.issues.append("未检测到目录")
+            self._add_issue("未检测到目录", "info")
             score -= 3
 
         return max(0, score)
@@ -328,9 +337,22 @@ class QualityScorer:
             lines.append(f"    {label:　<6} {bar} {s}/{max_score}")
 
         if issues:
-            lines.append(f"\n  发现的问题 ({len(issues)}):")
-            for issue in issues:
-                lines.append(f"    - {issue}")
+            errors = [i for i in issues if i["severity"] == "error"]
+            warnings = [i for i in issues if i["severity"] == "warning"]
+            infos = [i for i in issues if i["severity"] == "info"]
+
+            if errors:
+                lines.append(f"\n  必须修复 ({len(errors)}):")
+                for issue in errors:
+                    lines.append(f"    [ERROR] {issue['message']}")
+            if warnings:
+                lines.append(f"\n  建议修复 ({len(warnings)}):")
+                for issue in warnings:
+                    lines.append(f"    [WARN]  {issue['message']}")
+            if infos:
+                lines.append(f"\n  提示信息 ({len(infos)}):")
+                for issue in infos:
+                    lines.append(f"    [INFO]  {issue['message']}")
 
         lines.append("=" * 50)
         return "\n".join(lines)
