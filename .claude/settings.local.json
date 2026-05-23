@@ -57,7 +57,8 @@
       "Bash(.venv\\\\Scripts\\\\python.exe -m pytest tests/test_startup_and_template.py -v)",
       "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/test_startup_and_template.py -v)",
       "Bash(E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe *)",
-      "Bash(git commit -m ' *)"
+      "Bash(git commit -m ' *)",
+      "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/ -v --tb=short)"
     ]
   }
 }
