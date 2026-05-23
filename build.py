@@ -54,6 +54,7 @@ else:
 
 # 切换工作目录
 os.chdir(BASE_DIR)
+sys.path.insert(0, BASE_DIR)
 sys.path.insert(0, os.path.join(BASE_DIR, "src"))
 
 # 导入并运行启动器（包含依赖检测和 GUI 选择）

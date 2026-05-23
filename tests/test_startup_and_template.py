@@ -189,3 +189,100 @@ class TestOptionalDeps:
         except (ImportError, SystemExit):
             # gui.py calls exit(1) when gradio is missing
             pytest.skip("gradio not installed - expected for optional dep")
+
+
+# ── Security boundary tests ────────────────────────────────
+
+class TestPresetSecurity:
+    def test_preset_name_rejects_path_traversal(self):
+        """load_preset should reject names with path traversal."""
+        from paper_format_corrector.infra.preset_loader import load_preset
+
+        with pytest.raises(ValueError, match="Invalid preset name"):
+            load_preset("../../etc/passwd")
+
+    def test_preset_name_rejects_dot_dot(self):
+        """load_preset should reject '../' in names."""
+        from paper_format_corrector.infra.preset_loader import load_preset
+
+        with pytest.raises(ValueError, match="Invalid preset name"):
+            load_preset("../config")
+
+    def test_preset_name_rejects_backslash(self):
+        """load_preset should reject backslash in names."""
+        from paper_format_corrector.infra.preset_loader import load_preset
+
+        with pytest.raises(ValueError, match="Invalid preset name"):
+            load_preset("..\\windows\\system32")
+
+    def test_preset_name_rejects_slash(self):
+        """load_preset should reject forward slash in names."""
+        from paper_format_corrector.infra.preset_loader import load_preset
+
+        with pytest.raises(ValueError, match="Invalid preset name"):
+            load_preset("sub/dir/name")
+
+    def test_preset_name_rejects_special_chars(self):
+        """load_preset should reject special characters."""
+        from paper_format_corrector.infra.preset_loader import load_preset
+
+        for name in ["ieee;rm -rf", "ieee|cmd", "ieee&whoami", "ieee`id`"]:
+            with pytest.raises(ValueError, match="Invalid preset name"):
+                load_preset(name)
+
+    def test_preset_name_accepts_valid_names(self):
+        """load_preset should accept valid preset names without raising ValueError."""
+        from paper_format_corrector.infra.preset_loader import load_preset
+
+        # "ieee" exists as a preset file - should load without error
+        result = load_preset("ieee")
+        assert isinstance(result, dict)
+
+        # Non-existent but valid names should get FileNotFoundError, not ValueError
+        with pytest.raises(FileNotFoundError):
+            load_preset("nonexistent_preset_123")
+
+
+class TestConfigValidation:
+    def test_margins_must_be_numbers(self, tmp_path):
+        """App should reject config with non-numeric margins."""
+        import yaml
+        from paper_format_corrector.app import PaperFormatCorrector
+
+        config_path = tmp_path / "config.yaml"
+        config_data = {
+            "format_rules": {
+                "margins": {"top": "not_a_number", "bottom": 2.54, "left": 3.17, "right": 3.17}
+            }
+        }
+        config_path.write_text(yaml.dump(config_data, allow_unicode=True), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="必须是数字"):
+            PaperFormatCorrector(str(config_path))
+
+    def test_config_must_be_dict(self, tmp_path):
+        """App should reject config that is not a dict."""
+        import yaml
+        from paper_format_corrector.app import PaperFormatCorrector
+
+        config_path = tmp_path / "config.yaml"
+        config_path.write_text(yaml.dump("just a string"), encoding="utf-8")
+
+        with pytest.raises(ValueError, match="顶层必须是字典"):
+            PaperFormatCorrector(str(config_path))
+
+    def test_valid_config_passes_validation(self, tmp_path):
+        """App should accept valid config."""
+        import yaml
+        from paper_format_corrector.app import PaperFormatCorrector
+
+        config_path = tmp_path / "config.yaml"
+        config_data = {
+            "format_rules": {
+                "margins": {"top": 2.54, "bottom": 2.54, "left": 3.17, "right": 3.17}
+            }
+        }
+        config_path.write_text(yaml.dump(config_data, allow_unicode=True), encoding="utf-8")
+
+        c = PaperFormatCorrector(str(config_path))
+        assert c.config is not None

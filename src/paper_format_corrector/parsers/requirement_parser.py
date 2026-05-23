@@ -199,6 +199,11 @@ class RequirementParser:
 
     def _parse_line(self, line):
         """解析单行规则"""
+        # 模板路径提取
+        tpl = self._try_extract_template_path(line)
+        if tpl:
+            return
+
         # 优先尝试表格格式（用 | 或 \t 分隔）
         if self._try_parse_table_row(line):
             return
@@ -209,6 +214,14 @@ class RequirementParser:
 
         # 自然语言解析
         self._try_parse_natural_language(line)
+
+    def _try_extract_template_path(self, line):
+        """尝试提取模板文件路径：模板：xxx.docx / 使用模板 xxx.docx"""
+        m = re.match(r"^(?:使用)?模板[文件]?[：:]\s*(.+\.docx?)$", line, re.IGNORECASE)
+        if m:
+            self.rules["_template_path"] = m.group(1).strip()
+            return True
+        return False
 
     def _try_parse_table_row(self, line):
         """尝试解析表格行：项目 | 字体 | 字号 | 对齐 | 加粗"""
@@ -668,6 +681,10 @@ class RequirementParser:
         if "table_style" in all_attrs:
             style = self._get_most_common(rules, "table_style", "full_border")
             config.setdefault("format_rules", {})["_table_style"] = style
+
+        # 模板路径
+        if "_template_path" in rules:
+            config["template"] = {"path": rules["_template_path"]}
 
         return config
 

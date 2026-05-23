@@ -91,6 +91,11 @@ class PaperFormatCorrector:
             req_config = parser.parse(requirement_path)
             parser.print_parsed_rules()
 
+        # 需求文档中指定的模板路径覆盖默认模板
+        if "template" in req_config and "path" in req_config["template"]:
+            self.template_path = req_config["template"]["path"]
+            self.logger.info(f"使用需求文档指定的模板: {self.template_path}")
+
         self.config = self._merge_config(self.config, req_config)
         self.corrector = FormatCorrector(self.template_path, self.config)
         self.scorer = QualityScorer(self.config)

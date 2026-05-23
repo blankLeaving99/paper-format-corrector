@@ -315,8 +315,10 @@ class PaperFormatDesktopApp:
         # 操作按钮
         btn_frame = ttk.Frame(tab)
         btn_frame.pack(fill=tk.X, padx=10, pady=5)
-        ttk.Button(btn_frame, text="开始矫正", command=self._run_correct).pack(side=tk.LEFT, padx=5)
-        ttk.Button(btn_frame, text="批量矫正（选择多个文件）", command=self._run_batch_correct).pack(side=tk.LEFT, padx=5)
+        self.correct_btn = ttk.Button(btn_frame, text="开始矫正", command=self._run_correct)
+        self.correct_btn.pack(side=tk.LEFT, padx=5)
+        self.batch_btn = ttk.Button(btn_frame, text="批量矫正（选择多个文件）", command=self._run_batch_correct)
+        self.batch_btn.pack(side=tk.LEFT, padx=5)
         ttk.Button(btn_frame, text="打开结果目录", command=lambda: self._open_dir("output")).pack(side=tk.LEFT, padx=5)
 
         # 结果区
@@ -453,6 +455,11 @@ class PaperFormatDesktopApp:
 
     # ── 核心功能 ──────────────────────────────────────────────
 
+    def _set_buttons_state(self, state):
+        """启用/禁用处理按钮"""
+        self.correct_btn.config(state=state)
+        self.batch_btn.config(state=state)
+
     def _run_correct(self):
         """执行单个论文矫正"""
         paper = self.paper_path.get().strip()
@@ -462,6 +469,7 @@ class PaperFormatDesktopApp:
 
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, "正在处理，请稍候...\n")
+        self._set_buttons_state("disabled")
         self.root.update()
 
         def do_work():
@@ -471,6 +479,8 @@ class PaperFormatDesktopApp:
             except Exception as e:
                 logging.getLogger(__name__).exception("处理失败")
                 self.root.after(0, lambda: self._show_result("处理失败，请检查输入文件是否正确。"))
+            finally:
+                self.root.after(0, lambda: self._set_buttons_state("normal"))
 
         threading.Thread(target=do_work, daemon=True).start()
 
@@ -487,6 +497,7 @@ class PaperFormatDesktopApp:
 
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, f"已选择 {len(files)} 个文件，开始批量处理...\n\n")
+        self._set_buttons_state("disabled")
         self.root.update()
 
         def do_work():
@@ -503,6 +514,7 @@ class PaperFormatDesktopApp:
 
             final = "\n" + "=" * 60 + "\n批量处理完成\n" + "=" * 60 + "\n\n" + "\n".join(results)
             self.root.after(0, lambda: self._show_result(final))
+            self.root.after(0, lambda: self._set_buttons_state("normal"))
 
         threading.Thread(target=do_work, daemon=True).start()
 

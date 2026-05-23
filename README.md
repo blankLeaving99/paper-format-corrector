@@ -35,9 +35,12 @@
 ### 方式二：双击 run.py
 
 直接双击项目根目录下的 `run.py`，程序会自动：
-1. 检测依赖是否安装
-2. 如有缺失，弹窗提示并让你选择安装位置
-3. 弹出模式选择窗口，选择桌面 GUI 或 Web GUI
+1. 检测是否有已存在的虚拟环境（`.venv`），如有则自动切换过去
+2. 检测依赖是否安装（包括可选依赖：gradio、tkinterdnd2、pdfplumber 等）
+3. 如有缺失，弹窗提示并让你选择安装位置，安装完成后自动重启
+4. 弹出模式选择窗口，选择桌面 GUI 或 Web GUI
+
+全程无需手动激活虚拟环境或打开命令行。
 
 ### 方式三：命令行
 
@@ -56,7 +59,12 @@ python run.py -f input/paper.docx --score
 
 ### 自动安装（推荐）
 
-双击 `run.py`，程序会自动检测缺失依赖并提示安装，所有依赖安装到你选择的目录下的虚拟环境中，不污染系统 Python。
+双击 `run.py`，程序会自动：
+- 创建虚拟环境（`.venv`）
+- 安装所有必需和可选依赖
+- 安装完成后自动重启，无需手动操作
+
+所有依赖安装到你选择的目录下的虚拟环境中，不污染系统 Python。
 
 ### 手动安装
 
@@ -141,8 +149,11 @@ python -m paper_format_corrector -f input/paper.docx -o output/formatted.docx
 # 使用格式预设
 python -m paper_format_corrector --preset ieee -f paper.docx
 
-# 需求文档驱动
+# 需求文档驱动（需求文档中可指定模板路径）
 python -m paper_format_corrector -r requirement.txt -f input/paper.docx
+
+# 不使用模板，直接用配置规则矫正
+python -m paper_format_corrector --no-template -f paper.docx
 
 # 质量评分 + 差异对比
 python -m paper_format_corrector -f input/paper.docx --score --diff
@@ -307,16 +318,18 @@ pytest tests/test_thesis.py -v        # 毕业论文集成测试
 
 ```
 paper-format-corrector/
-├── run.py                              # 启动器（双击运行）
+├── run.py                              # 启动器（双击运行，自动管理虚拟环境）
 ├── build.py                            # 打包为 exe 的脚本
+├── CLAUDE.md                           # Claude Code 项目指引
+├── .claude/
+│   ├── tasks.md                        # 任务分解计划
+│   └── settings.local.json             # 本地配置
 ├── presets/                            # 格式预设文件
 │   ├── ieee.yaml                       # IEEE 期刊/会议格式
 │   ├── nature.yaml                     # Nature 期刊格式
 │   ├── science.yaml                    # Science 期刊格式
 │   ├── apa.yaml                        # APA 第 7 版格式
 │   └── chinese_thesis.yaml             # 中国大学毕业论文格式
-├── plugins/                            # 插件示例
-│   └── example_word_count_plugin.py    # 字数统计插件示例
 ├── src/
 │   └── paper_format_corrector/
 │       ├── __init__.py
@@ -326,47 +339,23 @@ paper-format-corrector/
 │       ├── gui.py                      # Web GUI (Gradio)
 │       ├── desktop_gui.py              # 桌面 GUI (tkinter)
 │       ├── core/                       # 核心处理引擎
-│       │   ├── format_corrector.py     # 格式矫正器
-│       │   ├── format_exporter.py      # 多格式导出
-│       │   ├── file_converter.py       # 文件格式转换
-│       │   └── style_extractor.py      # 模板样式提取
 │       ├── handlers/                   # 文档组件处理器
-│       │   ├── table_handler.py        # 表格处理
-│       │   ├── header_footer_handler.py # 页眉页脚
-│       │   ├── image_handler.py        # 图片处理
-│       │   ├── figure_table_handler.py # 图表编号
-│       │   └── toc_handler.py          # 目录处理
 │       ├── parsers/                    # 文档解析与检测
-│       │   ├── section_detector.py     # 章节检测
-│       │   ├── requirement_parser.py   # 需求文档解析
-│       │   ├── reference_formatter.py  # 参考文献格式化
-│       │   ├── ref_auto_complete.py    # 参考文献自动补全
-│       │   ├── cross_reference.py      # 交叉引用
-│       │   └── llm_parser.py           # LLM 智能解析
 │       ├── quality/                    # 质量评估与规则
-│       │   ├── quality_scorer.py       # 质量评分
-│       │   ├── diff_reporter.py        # 差异对比报告
-│       │   └── rule_engine.py          # 自定义规则引擎
 │       ├── generators/                 # 内容生成
-│       │   └── cover_page_generator.py # 封面生成
-│       └── infra/                      # 基础设施
-│           ├── logger.py               # 日志
-│           ├── plugin_manager.py       # 插件管理
-│           ├── preset_loader.py        # 格式预设加载器
-│           └── path_security.py        # 路径安全校验
+│       └── infra/                      # 基础设施（日志、预设、路径安全）
 ├── config/
 │   └── config.yaml                     # 默认配置文件
-├── static/
-│   └── tubiao02.ico                    # 应用图标
 ├── template/
 │   └── template.docx                   # 模板文件
-├── tests/                              # 测试套件
+├── tests/                              # 测试套件（93 个测试）
 │   ├── conftest.py                     # 共享测试 fixtures
 │   ├── test_basic.py                   # 基础导入测试
 │   ├── test_corrector.py              # 矫正器功能测试
 │   ├── test_edge_cases.py             # 边界情况测试
 │   ├── test_presets.py                # 格式预设测试
 │   ├── test_requirement.py            # 需求文档解析测试
+│   ├── test_startup_and_template.py   # 启动流程 + 安全边界测试
 │   └── test_thesis.py                 # 毕业论文集成测试
 ├── .github/
 │   └── workflows/

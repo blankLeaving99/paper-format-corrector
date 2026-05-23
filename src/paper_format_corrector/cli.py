@@ -61,6 +61,7 @@ def main() -> None:
     parser.add_argument("-i", "--input-dir", default="input", help="输入目录（默认: input）")
     parser.add_argument("-d", "--output-dir", default="output", help="输出目录（默认: output）")
     parser.add_argument("-t", "--template", help="模板文件路径")
+    parser.add_argument("--no-template", action="store_true", help="不使用模板，直接用配置规则矫正")
     parser.add_argument("-c", "--config", default="config/config.yaml", help="配置文件路径")
 
     # 格式预设
@@ -132,7 +133,10 @@ def main() -> None:
         print()
 
     # 模板覆盖
-    if args.template:
+    if args.no_template:
+        corrector.template_path = ""
+        corrector.corrector = FormatCorrector("", corrector.config)
+    elif args.template:
         corrector.template_path = args.template
         corrector.corrector = FormatCorrector(args.template, corrector.config)
 
