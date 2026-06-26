@@ -1,4 +1,4 @@
-"""论文格式矫正工具 - 桌面 GUI
+"""论文格式矫正工具 - 桌面 GUI v2
 
 基于 tkinter 的桌面可视化界面，功能与 Web GUI 一致：
 - 上传论文文件（支持拖拽）
@@ -7,6 +7,7 @@
 - 实时质量评分
 - 对比报告预览
 - 下载矫正结果
+- AI文档生成（对话式，流式输出）
 
 启动方式：
     python -m paper_format_corrector --desktop-gui
@@ -28,10 +29,12 @@ except ImportError:
     HAS_DND = False
 
 from .app import PaperFormatCorrector
+from .core.doc_generator import DocGenerator
 from .core.file_converter import FileConverter
 from .core.format_corrector import FormatCorrector
 from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
+from .infra.doc_template_loader import list_doc_templates
 from .quality.diff_reporter import DiffReporter
 from .quality.quality_scorer import QualityScorer
 
@@ -232,6 +235,18 @@ class PaperFormatDesktopApp:
         self.rule_paper_path = tk.StringVar()
         self.rule_file_path = tk.StringVar()
 
+        # AI文档生成变量
+        self.gen_doc_type = tk.StringVar(value="通用文档")
+        self.gen_template = tk.StringVar(value="无")
+        self.gen_provider = tk.StringVar(value="openai")
+        self.gen_key = tk.StringVar()
+        self.gen_model = tk.StringVar()
+
+        # AI对话状态
+        self._ai_session = None
+        self._ai_outline = None
+        self._ai_structure = None
+
         # 预览数据
         self._last_report = None
         self._last_diff_path = None
@@ -260,6 +275,7 @@ class PaperFormatDesktopApp:
         self._build_correct_tab(notebook)
         self._build_preview_tab(notebook)
         self._build_cover_tab(notebook)
+        self._build_ai_gen_tab(notebook)
         self._build_rule_tab(notebook)
         self._build_help_tab(notebook)
 
@@ -445,7 +461,7 @@ class PaperFormatDesktopApp:
             ("论文类型:", self.cover_type),
         ]
 
-        for i, (label, var) in enumerate(fields):
+        for _i, (label, var) in enumerate(fields):
             row = ttk.Frame(form_frame)
             row.pack(fill=tk.X, pady=2)
             ttk.Label(row, text=label, width=12).pack(side=tk.LEFT)
@@ -467,7 +483,122 @@ class PaperFormatDesktopApp:
         self.cover_status = ttk.Label(tab, text="", font=("Microsoft YaHei", 10))
         self.cover_status.pack(padx=10, pady=5)
 
-    # ── Tab 3: 规则检查 ──────────────────────────────────────
+    # ── Tab 4: AI文档生成（对话式） ────────────────────────────
+
+    def _build_ai_gen_tab(self, notebook):
+        tab = ttk.Frame(notebook)
+        notebook.add(tab, text="AI文档生成")
+
+        # 主面板：左侧聊天区，右侧配置区
+        main_paned = ttk.PanedWindow(tab, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # ── 左侧：聊天区 ──
+        left_frame = ttk.Frame(main_paned)
+        main_paned.add(left_frame, weight=3)
+
+        # 聊天历史显示
+        chat_label = ttk.LabelFrame(left_frame, text="对话历史", padding=5)
+        chat_label.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.chat_display = scrolledtext.ScrolledText(
+            chat_label, height=20, font=("Microsoft YaHei", 10),
+            wrap=tk.WORD, state=tk.DISABLED
+        )
+        self.chat_display.pack(fill=tk.BOTH, expand=True)
+
+        # 配置聊天显示区域的标签样式
+        self.chat_display.tag_configure("user_name", foreground="#2196F3", font=("Microsoft YaHei", 10, "bold"))
+        self.chat_display.tag_configure("ai_name", foreground="#4CAF50", font=("Microsoft YaHei", 10, "bold"))
+        self.chat_display.tag_configure("system_msg", foreground="#FF9800", font=("Microsoft YaHei", 9, "italic"))
+
+        # 输入区
+        input_frame = ttk.Frame(left_frame)
+        input_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        self.chat_input = tk.Text(input_frame, height=3, font=("Microsoft YaHei", 10), wrap=tk.WORD)
+        self.chat_input.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+
+        # 按钮区
+        btn_frame = ttk.Frame(input_frame)
+        btn_frame.pack(side=tk.RIGHT)
+
+        self.send_btn = ttk.Button(btn_frame, text="发送", command=self._ai_chat_send)
+        self.send_btn.pack(pady=2)
+
+        self.confirm_btn = ttk.Button(btn_frame, text="确认大纲", command=self._ai_confirm_outline, state=tk.DISABLED)
+        self.confirm_btn.pack(pady=2)
+
+        self.reset_btn = ttk.Button(btn_frame, text="重新开始", command=self._ai_reset)
+        self.reset_btn.pack(pady=2)
+
+        self.export_btn = ttk.Button(btn_frame, text="导出docx", command=self._ai_export, state=tk.DISABLED)
+        self.export_btn.pack(pady=2)
+
+        # 绑定回车键
+        self.chat_input.bind("<Return>", lambda e: self._ai_chat_send())
+
+        # ── 右侧：配置区 ──
+        right_frame = ttk.Frame(main_paned)
+        main_paned.add(right_frame, weight=1)
+
+        # LLM配置
+        llm_frame = ttk.LabelFrame(right_frame, text="LLM配置", padding=10)
+        llm_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        row1 = ttk.Frame(llm_frame)
+        row1.pack(fill=tk.X, pady=2)
+        ttk.Label(row1, text="提供商:", width=8).pack(side=tk.LEFT)
+        ttk.Combobox(row1, textvariable=self.gen_provider, values=["openai", "anthropic", "ollama"], width=12).pack(side=tk.LEFT, padx=5)
+
+        row2 = ttk.Frame(llm_frame)
+        row2.pack(fill=tk.X, pady=2)
+        ttk.Label(row2, text="API Key:", width=8).pack(side=tk.LEFT)
+        ttk.Entry(row2, textvariable=self.gen_key, width=20, show="*").pack(side=tk.LEFT, padx=5)
+
+        row3 = ttk.Frame(llm_frame)
+        row3.pack(fill=tk.X, pady=2)
+        ttk.Label(row3, text="模型:", width=8).pack(side=tk.LEFT)
+        ttk.Entry(row3, textvariable=self.gen_model, width=20).pack(side=tk.LEFT, padx=5)
+
+        # 文档类型
+        doc_frame = ttk.LabelFrame(right_frame, text="文档设置", padding=10)
+        doc_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        row4 = ttk.Frame(doc_frame)
+        row4.pack(fill=tk.X, pady=2)
+        ttk.Label(row4, text="类型:", width=8).pack(side=tk.LEFT)
+        ttk.Entry(row4, textvariable=self.gen_doc_type, width=20).pack(side=tk.LEFT, padx=5)
+
+        row5 = ttk.Frame(doc_frame)
+        row5.pack(fill=tk.X, pady=2)
+        ttk.Label(row5, text="模板:", width=8).pack(side=tk.LEFT)
+        doc_templates = ["无"] + [f"{t['name']} - {t['description']}" for t in list_doc_templates()]
+        ttk.Combobox(row5, textvariable=self.gen_template, values=doc_templates, width=20).pack(side=tk.LEFT, padx=5)
+
+        # 状态显示
+        status_frame = ttk.LabelFrame(right_frame, text="状态", padding=10)
+        status_frame.pack(fill=tk.X, padx=5, pady=5)
+
+        self.ai_status_label = ttk.Label(status_frame, text="就绪", wraplength=200, font=("Microsoft YaHei", 9))
+        self.ai_status_label.pack(fill=tk.X)
+
+        # 提示信息
+        tip_frame = ttk.LabelFrame(right_frame, text="使用提示", padding=10)
+        tip_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        tips = """1. 输入文档描述，AI会自动识别类型并生成大纲
+
+2. 确认大纲后，AI会逐节生成内容
+
+3. 生成完成后点击"导出docx"下载
+
+4. 支持多轮对话修改文档内容
+
+5. 回复"重新开始"可开始新文档"""
+        ttk.Label(tip_frame, text=tips, wraplength=200, justify=tk.LEFT, font=("Microsoft YaHei", 9)).pack(fill=tk.BOTH, expand=True)
+
+    # ── Tab 5: 规则检查 ──────────────────────────────────────
 
     def _build_rule_tab(self, notebook):
         tab = ttk.Frame(notebook)
@@ -502,7 +633,7 @@ class PaperFormatDesktopApp:
         self.rule_result_text = scrolledtext.ScrolledText(result_frame, height=15, font=("Consolas", 10))
         self.rule_result_text.pack(fill=tk.BOTH, expand=True)
 
-    # ── Tab 4: 使用说明 ──────────────────────────────────────
+    # ── Tab 6: 使用说明 ──────────────────────────────────────
 
     def _build_help_tab(self, notebook):
         tab = ttk.Frame(notebook)
@@ -532,12 +663,22 @@ class PaperFormatDesktopApp:
 【封面生成】
 填写论文信息，点击"生成封面"自动生成标准封面页。
 
+【AI文档生成（对话式）】
+1. 输入文档描述（如"写一个项目可行性报告"）
+2. AI自动识别文档类型并生成大纲
+3. 点击"确认大纲"后，AI逐节生成内容
+4. 生成完成后点击"导出docx"下载
+5. 支持多轮对话修改文档内容
+
+支持的文档类型：报告、公文、合同、方案、论文、会议纪要等。
+
 【规则检查】
 拖拽论文文件和 YAML 规则文件，点击"开始检查"。
 
 【命令行用法】
   python run.py                              # 启动选择器
   python main.py -f paper.docx --score       # 命令行模式
+  python main.py --generate "写一个可行性报告"  # AI生成文档
   python gui.py                              # 直接启动 Web GUI
 
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
@@ -806,6 +947,185 @@ class PaperFormatDesktopApp:
             os.startfile(str(path))
         else:
             messagebox.showinfo("提示", f"目录不存在: {path}")
+
+    # ── AI文档生成对话功能 ─────────────────────────────────────
+
+    def _get_ai_generator(self):
+        """获取或创建AI文档生成器"""
+        from .parsers.ai_doc_generator import AIDocGenerator
+
+        if self._ai_session is None:
+            self._ai_session = AIDocGenerator(
+                provider=self.gen_provider.get(),
+                api_key=self.gen_key.get() or None,
+                model=self.gen_model.get() or None,
+            )
+        return self._ai_session
+
+    def _append_chat(self, role: str, content: str):
+        """向聊天窗口追加消息"""
+        self.chat_display.config(state=tk.NORMAL)
+
+        if role == "user":
+            self.chat_display.insert(tk.END, "\n你: ", "user_name")
+        elif role == "assistant":
+            self.chat_display.insert(tk.END, "\nAI: ", "ai_name")
+        elif role == "system":
+            self.chat_display.insert(tk.END, "\n[系统] ", "system_msg")
+
+        self.chat_display.insert(tk.END, content + "\n")
+        self.chat_display.see(tk.END)
+        self.chat_display.config(state=tk.DISABLED)
+
+    def _update_status(self, text: str):
+        """更新状态标签"""
+        self.ai_status_label.config(text=text)
+
+    def _ai_chat_send(self):
+        """发送消息（在后台线程执行）"""
+        message = self.chat_input.get("1.0", tk.END).strip()
+        if not message:
+            return
+
+        self.chat_input.delete("1.0", tk.END)
+        self._append_chat("user", message)
+        self._update_status("正在处理...")
+
+        # 禁用按钮
+        self.send_btn.config(state=tk.DISABLED)
+        self.confirm_btn.config(state=tk.DISABLED)
+
+        def do_work():
+            try:
+                gen = self._get_ai_generator()
+
+                if self._ai_outline is None:
+                    # 首次对话，生成大纲
+                    self.root.after(0, lambda: self._update_status("正在生成大纲..."))
+                    outline = gen.generate_outline(message, self.gen_doc_type.get() or "通用文档")
+                    self._ai_outline = outline
+
+                    # 格式化大纲显示
+                    outline_text = f"识别的文档类型: {outline.get('doc_type', '未知')}\n"
+                    outline_text += f"文档标题: {outline.get('title', '未知')}\n"
+                    outline_text += f"摘要: {outline.get('abstract', '')}\n\n"
+                    outline_text += "大纲结构:\n"
+
+                    for item in outline.get("outline", []):
+                        item_type = item.get("type", "")
+                        title = item.get("title", "")
+                        desc = item.get("description", "")
+                        indent = "  " if "2" in item_type or "3" in item_type else ""
+                        outline_text += f"{indent}{title}\n"
+                        if desc:
+                            outline_text += f"{indent}  ({desc})\n"
+
+                    outline_text += '\n请确认大纲是否满意，点击"确认大纲"开始生成内容。'
+                    self.root.after(0, lambda: self._append_chat("assistant", outline_text))
+                    self.root.after(0, lambda: self._update_status("大纲已生成，请确认"))
+                    self.root.after(0, lambda: self.confirm_btn.config(state=tk.NORMAL))
+
+                elif self._ai_structure is None:
+                    # 大纲已生成，等待确认或修改
+                    if "确认" in message or "ok" in message.lower() or "开始" in message:
+                        self._ai_confirm_outline()
+                    else:
+                        self.root.after(0, lambda: self._append_chat("assistant",
+                            '请告诉我具体需要调整的内容，或者点击"确认大纲"开始生成。'))
+                        self.root.after(0, lambda: self.confirm_btn.config(state=tk.NORMAL))
+                else:
+                    # 文档已生成
+                    self.root.after(0, lambda: self._append_chat("assistant",
+                        '文档已生成完成。\n你可以：\n1. 点击"导出docx"下载\n2. 告诉我需要修改的内容\n3. 回复"重新开始"生成新文档'))
+                    self.root.after(0, lambda: self.export_btn.config(state=tk.NORMAL))
+
+            except Exception as e:
+                logging.getLogger(__name__).exception("AI处理失败")
+                error_msg = str(e)
+                self.root.after(0, lambda msg=error_msg: self._append_chat("system", f"出错了: {msg}"))
+                self.root.after(0, lambda msg=error_msg: self._update_status(f"错误: {msg}"))
+            finally:
+                self.root.after(0, lambda: self.send_btn.config(state=tk.NORMAL))
+
+        threading.Thread(target=do_work, daemon=True).start()
+
+    def _ai_confirm_outline(self):
+        """确认大纲并开始生成内容"""
+        if self._ai_outline is None:
+            messagebox.showinfo("提示", "请先生成大纲")
+            return
+
+        self._append_chat("user", "确认大纲")
+        self._update_status("正在生成文档内容...")
+        self.send_btn.config(state=tk.DISABLED)
+        self.confirm_btn.config(state=tk.DISABLED)
+
+        def do_work():
+            try:
+                gen = self._get_ai_generator()
+                gen.confirm_outline(True)
+
+                self.root.after(0, lambda: self._append_chat("system", "大纲已确认，开始逐节生成内容..."))
+
+                # 生成完整文档
+                structure = gen.generate_structure(
+                    self._ai_outline.get("title", ""),
+                    self.gen_doc_type.get() or "通用文档",
+                )
+                self._ai_structure = structure
+
+                # 生成预览
+                doc_gen = DocGenerator()
+                preview = doc_gen.generate_preview(structure)
+
+                self.root.after(0, lambda: self._append_chat("assistant",
+                    f'文档生成完成！\n\n预览:\n{preview[:500]}...\n\n点击"导出docx"下载。'))
+                self.root.after(0, lambda: self._update_status("文档生成完成"))
+                self.root.after(0, lambda: self.export_btn.config(state=tk.NORMAL))
+
+            except Exception as e:
+                logging.getLogger(__name__).exception("AI文档生成失败")
+                error_msg = str(e)
+                self.root.after(0, lambda msg=error_msg: self._append_chat("system", f"生成失败: {msg}"))
+                self.root.after(0, lambda msg=error_msg: self._update_status(f"错误: {msg}"))
+            finally:
+                self.root.after(0, lambda: self.send_btn.config(state=tk.NORMAL))
+
+        threading.Thread(target=do_work, daemon=True).start()
+
+    def _ai_export(self):
+        """导出文档为docx"""
+        if self._ai_structure is None:
+            messagebox.showinfo("提示", "文档尚未生成完成")
+            return
+
+        output_dir = Path("output")
+        output_dir.mkdir(exist_ok=True)
+        output_path = output_dir / "generated_document.docx"
+
+        try:
+            doc_gen = DocGenerator()
+            doc_gen.generate(self._ai_structure, str(output_path))
+            self._append_chat("system", f"文档已导出: {output_path}")
+            self._update_status(f"导出成功: {output_path}")
+            messagebox.showinfo("成功", f"文档已导出:\n{output_path.resolve()}")
+        except Exception as e:
+            logging.getLogger(__name__).exception("导出失败")
+            messagebox.showerror("错误", f"导出失败: {str(e)}")
+
+    def _ai_reset(self):
+        """重置AI会话"""
+        self._ai_session = None
+        self._ai_outline = None
+        self._ai_structure = None
+
+        self.chat_display.config(state=tk.NORMAL)
+        self.chat_display.delete("1.0", tk.END)
+        self.chat_display.config(state=tk.DISABLED)
+
+        self.confirm_btn.config(state=tk.DISABLED)
+        self.export_btn.config(state=tk.DISABLED)
+        self._update_status("会话已重置，可以开始新文档")
 
     def run(self):
         """启动应用"""

@@ -38,7 +38,7 @@ def list_presets() -> list[dict[str, str]]:
 
     for yaml_file in sorted(presets_dir.glob("*.yaml")):
         try:
-            with open(yaml_file, "r", encoding="utf-8") as f:
+            with open(yaml_file, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             result.append({
                 "name": yaml_file.stem,
@@ -90,7 +90,7 @@ def load_preset(name: str) -> dict:
             f"Available presets: {available}"
         )
 
-    with open(preset_path, "r", encoding="utf-8") as f:
+    with open(preset_path, encoding="utf-8") as f:
         data = yaml.safe_load(f)
 
     # Remove the description field (metadata only, not config)

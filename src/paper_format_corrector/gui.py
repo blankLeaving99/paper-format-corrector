@@ -1,4 +1,4 @@
-"""论文格式矫正工具 - Web GUI
+"""论文格式矫正工具 - Web GUI v2
 
 基于 Gradio 的可视化界面，提供：
 - 上传论文文件
@@ -7,6 +7,7 @@
 - 实时质量评分
 - 对比报告预览
 - 下载矫正结果
+- AI文档生成（对话式，流式输出）
 
 启动方式：
     python -m paper_format_corrector.gui
@@ -18,6 +19,7 @@ import atexit
 import shutil
 import tempfile
 from pathlib import Path
+from typing import Any
 
 try:
     import gradio as gr
@@ -27,10 +29,12 @@ except ImportError:
     exit(1)
 
 from .app import PaperFormatCorrector
+from .core.doc_generator import DocGenerator
 from .core.file_converter import FileConverter
 from .core.format_corrector import FormatCorrector
 from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
+from .infra.doc_template_loader import list_doc_templates
 from .infra.preset_loader import list_presets
 from .quality.diff_reporter import DiffReporter
 from .quality.quality_scorer import QualityScorer
@@ -41,6 +45,9 @@ config_path = "config/config.yaml"
 
 # 临时目录跟踪（退出时清理）
 _temp_dirs: list[str] = []
+
+# AI文档生成器实例（按会话管理）
+_ai_sessions: dict[str, dict] = {}
 
 
 def _cleanup_temp_dirs():
@@ -253,11 +260,268 @@ def find_free_port(start=7860, end=7900):
     return start
 
 
+# ---------- AI 文档生成（对话式） ----------
+
+def _get_or_create_ai_session(
+    session_id: str,
+    provider: str,
+    api_key: str,
+    model: str,
+) -> Any:
+    """获取或创建AI文档生成器会话"""
+    from .parsers.ai_doc_generator import AIDocGenerator
+
+    if session_id not in _ai_sessions:
+        _ai_sessions[session_id] = {
+            "generator": AIDocGenerator(
+                provider=provider,
+                api_key=api_key or None,
+                model=model or None,
+            ),
+            "structure": None,
+            "outline_confirmed": False,
+        }
+
+    session = _ai_sessions[session_id]
+    gen = session["generator"]
+
+    # 更新配置
+    gen.provider = provider
+    gen.api_key = api_key or gen._get_default_key()
+    if model:
+        gen.model = model
+
+    return gen
+
+
+def ai_chat_send(
+    message: str,
+    chat_history: list,
+    session_id: str,
+    provider: str,
+    api_key: str,
+    model: str,
+    doc_type: str,
+):
+    """处理用户发送的消息（非流式）
+
+    工作流程：
+    1. 如果是首次对话，生成大纲
+    2. 如果用户确认大纲，开始逐节生成
+    3. 如果用户要求修改，执行修改
+    """
+    if not message or not message.strip():
+        return chat_history, "", "请输入消息"
+
+    gen = _get_or_create_ai_session(session_id, provider, api_key, model)
+    chat_history = chat_history or []
+
+    user_msg = message.strip()
+    chat_history.append({"role": "user", "content": user_msg})
+
+    try:
+        # 检查是否需要生成大纲
+        if gen.session.outline is None:
+            # 首次对话，生成大纲
+            outline = gen.generate_outline(user_msg, doc_type or "通用文档")
+
+            # 格式化大纲显示
+            outline_text = f"**识别的文档类型**: {outline.get('doc_type', '未知')}\n\n"
+            outline_text += f"**文档标题**: {outline.get('title', '未知')}\n\n"
+            outline_text += f"**摘要**: {outline.get('abstract', '')}\n\n"
+            outline_text += "**大纲结构**:\n\n"
+
+            for _i, item in enumerate(outline.get("outline", [])):
+                item_type = item.get("type", "")
+                title = item.get("title", "")
+                desc = item.get("description", "")
+                indent = "  " if "2" in item_type or "3" in item_type else ""
+                outline_text += f"{indent}{title}\n"
+                if desc:
+                    outline_text += f"{indent}  _{desc}_\n"
+
+            outline_text += "\n请确认大纲是否满意，或告诉我需要修改的地方。\n"
+            outline_text += "回复 **确认** 开始生成内容，或告诉我需要调整的地方。"
+
+            chat_history.append({"role": "assistant", "content": outline_text})
+            status = "大纲已生成，请确认或修改"
+
+        elif not gen.session.outline.get("structure"):
+            # 大纲已生成但未确认，检查用户是否确认
+            if "确认" in user_msg or "ok" in user_msg.lower() or "开始" in user_msg:
+                gen.confirm_outline(True)
+                chat_history.append({"role": "assistant", "content": "大纲已确认，开始生成文档内容...\n\n请稍候，正在逐节生成..."})
+
+                # 生成完整文档
+                structure = gen.generate_structure(
+                    gen.session.outline.get("title", ""),
+                    gen.session.doc_type or "通用文档",
+                )
+                gen.session.outline["structure"] = structure
+
+                # 生成预览
+                doc_gen = DocGenerator()
+                preview = doc_gen.generate_preview(structure)
+
+                preview_msg = "**文档预览**:\n\n" + preview + "\n\n文档已生成完成！点击下方按钮导出。"
+                chat_history.append({"role": "assistant", "content": preview_msg})
+                status = "文档生成完成，可以导出"
+            else:
+                # 用户要求修改大纲
+                chat_history.append({"role": "assistant", "content": f"收到修改意见：{user_msg}\n\n请告诉我具体需要调整的内容，或者回复 **确认** 使用当前大纲。"})
+                status = "等待确认或修改"
+
+        else:
+            # 文档已生成，处理后续对话
+            chat_history.append({"role": "assistant", "content": "文档已生成完成。\n\n你可以：\n1. 点击 **导出docx** 按钮下载文档\n2. 告诉我需要修改的内容，我会帮你调整\n3. 回复 **重新开始** 生成新文档"})
+            status = "文档已就绪"
+
+    except Exception as e:
+        chat_history.append({"role": "assistant", "content": f"出错了: {str(e)}\n\n请检查API配置后重试。"})
+        status = f"错误: {str(e)}"
+
+    return chat_history, "", status
+
+
+def ai_chat_send_stream(
+    message: str,
+    chat_history: list,
+    session_id: str,
+    provider: str,
+    api_key: str,
+    model: str,
+    doc_type: str,
+):
+    """处理用户发送的消息（流式输出）"""
+    if not message or not message.strip():
+        yield chat_history, "", "请输入消息"
+        return
+
+    gen = _get_or_create_ai_session(session_id, provider, api_key, model)
+    chat_history = chat_history or []
+
+    user_msg = message.strip()
+    chat_history.append({"role": "user", "content": user_msg})
+
+    # 检查是否需要生成大纲
+    if gen.session.outline is None:
+        # 首次对话，流式生成大纲
+        chat_history.append({"role": "assistant", "content": ""})
+        current_content = ""
+
+        for chunk in gen.generate_outline_stream(user_msg, doc_type or "通用文档"):
+            current_content += chunk
+            chat_history[-1]["content"] = current_content
+            yield chat_history, "", "正在生成大纲..."
+
+        # 解析大纲并格式化
+        try:
+            outline = gen.session.outline
+            outline_text = f"**识别的文档类型**: {outline.get('doc_type', '未知')}\n\n"
+            outline_text += f"**文档标题**: {outline.get('title', '未知')}\n\n"
+            outline_text += f"**摘要**: {outline.get('abstract', '')}\n\n"
+            outline_text += "**大纲结构**:\n\n"
+
+            for item in outline.get("outline", []):
+                item_type = item.get("type", "")
+                title = item.get("title", "")
+                desc = item.get("description", "")
+                indent = "  " if "2" in item_type or "3" in item_type else ""
+                outline_text += f"{indent}{title}\n"
+                if desc:
+                    outline_text += f"{indent}  _{desc}_\n"
+
+            outline_text += "\n请确认大纲是否满意，或告诉我需要修改的地方。\n"
+            outline_text += "回复 **确认** 开始生成内容，或告诉我需要调整的地方。"
+
+            chat_history[-1]["content"] = outline_text
+        except Exception:
+            pass
+
+        yield chat_history, "", "大纲已生成，请确认"
+
+    elif not gen.session.outline.get("structure"):
+        # 大纲已生成但未确认
+        if "确认" in user_msg or "ok" in user_msg.lower() or "开始" in user_msg:
+            gen.confirm_outline(True)
+            chat_history.append({"role": "assistant", "content": "大纲已确认，开始生成文档内容..."})
+            yield chat_history, "", "正在生成文档..."
+
+            # 流式生成完整文档
+            structure = None
+            for event in gen.generate_all_sections_stream():
+                if event.get("type") == "start":
+                    section_title = event.get("section_title", "")
+                    chat_history[-1]["content"] = f"正在生成: {section_title}..."
+                    yield chat_history, "", f"生成中: {section_title}"
+                elif event.get("type") == "chunk":
+                    pass  # 流式内容在内部累积
+                elif event.get("type") == "all_done":
+                    structure = event.get("structure")
+
+            if structure:
+                gen.session.outline["structure"] = structure
+                doc_gen = DocGenerator()
+                preview = doc_gen.generate_preview(structure)
+                preview_msg = "**文档预览**:\n\n" + preview + "\n\n文档已生成完成！点击下方按钮导出。"
+                chat_history.append({"role": "assistant", "content": preview_msg})
+                yield chat_history, "", "文档生成完成"
+            else:
+                chat_history.append({"role": "assistant", "content": "文档生成失败，请重试。"})
+                yield chat_history, "", "生成失败"
+        else:
+            # 用户要求修改大纲
+            chat_history.append({"role": "assistant", "content": f"收到修改意见：{user_msg}\n\n请告诉我具体需要调整的内容，或者回复 **确认** 使用当前大纲。"})
+            yield chat_history, "", "等待确认或修改"
+
+    else:
+        # 文档已生成，处理后续对话
+        chat_history.append({"role": "assistant", "content": "文档已生成完成。\n\n你可以：\n1. 点击 **导出docx** 按钮下载文档\n2. 告诉我需要修改的内容\n3. 回复 **重新开始** 生成新文档"})
+        yield chat_history, "", "文档已就绪"
+
+
+def ai_export_docx(session_id: str):
+    """导出文档为docx"""
+    if session_id not in _ai_sessions:
+        return None, "没有进行中的文档生成会话"
+
+    session = _ai_sessions[session_id]
+    structure = session.get("structure") or (
+        session["generator"].session.outline.get("structure")
+        if session["generator"].session.outline
+        else None
+    )
+
+    if not structure:
+        return None, "文档尚未生成完成"
+
+    output_dir = Path(tempfile.mkdtemp())
+    _temp_dirs.append(str(output_dir))
+    output_path = output_dir / "generated_document.docx"
+
+    doc_gen = DocGenerator()
+    doc_gen.generate(structure, str(output_path))
+
+    return str(output_path), f"导出成功！文件大小: {output_path.stat().st_size / 1024:.1f} KB"
+
+
+def ai_reset_session(session_id: str):
+    """重置AI会话"""
+    if session_id in _ai_sessions:
+        _ai_sessions[session_id]["generator"].reset_session()
+        _ai_sessions[session_id]["structure"] = None
+        _ai_sessions[session_id]["outline_confirmed"] = False
+    return [], "", "会话已重置，可以开始新的文档生成"
+
+
 def build_ui():
     """构建界面"""
-    with gr.Blocks(title="论文格式矫正工具") as app:
+    with gr.Blocks(title="论文格式矫正工具", theme=gr.themes.Soft()) as app:
         gr.Markdown("# 论文格式自动矫正工具 v3.0")
         gr.Markdown("上传论文和格式要求，一键矫正论文格式")
+
+        # 存储当前会话ID
+        session_state = gr.State(value="default_session")
 
         with gr.Tabs():
             # Tab 1: 论文矫正
@@ -332,7 +596,87 @@ def build_ui():
                     outputs=[cover_output, cover_status],
                 )
 
-            # Tab 3: 规则检查
+            # Tab 3: AI文档生成（对话式）
+            with gr.Tab("AI文档生成"):
+                gr.Markdown("### AI文档生成 - 对话式")
+                gr.Markdown("输入文档描述，AI自动生成格式化的Word文档。支持多轮对话修改。")
+
+                with gr.Row():
+                    with gr.Column(scale=2):
+                        # 聊天区域
+                        chatbot = gr.Chatbot(
+                            label="对话历史",
+                            height=500,
+                            type="messages",
+                            show_copy_button=True,
+                        )
+
+                        with gr.Row():
+                            chat_input = gr.Textbox(
+                                label="输入消息",
+                                placeholder="例如：写一个关于智慧城市建设的项目可行性报告...",
+                                lines=2,
+                                scale=4,
+                            )
+                            send_btn = gr.Button("发送", variant="primary", scale=1)
+
+                        with gr.Row():
+                            reset_btn = gr.Button("重新开始", size="sm")
+                            export_btn = gr.Button("导出docx", variant="primary", size="sm")
+
+                    with gr.Column(scale=1):
+                        status_output = gr.Textbox(label="状态", lines=2)
+
+                        # LLM配置
+                        with gr.Accordion("LLM配置", open=True):
+                            gen_provider = gr.Dropdown(
+                                choices=["openai", "anthropic", "ollama"],
+                                value="openai",
+                                label="LLM提供商",
+                            )
+                            gen_key = gr.Textbox(label="API Key", type="password", placeholder="留空使用环境变量")
+                            gen_model = gr.Textbox(label="模型名称", placeholder="留空使用默认模型")
+                            gen_doc_type = gr.Textbox(label="文档类型", value="通用文档", placeholder="报告/公文/论文/合同等")
+
+                        # 文档模板选择
+                        doc_template_options = ["无"]
+                        for t in list_doc_templates():
+                            doc_template_options.append(f"{t['name']} - {t['description']}")
+                        # gen_template = gr.Dropdown(
+                        #     choices=doc_template_options,
+                        #     value="无",
+                        #     label="文档模板 (可选)",
+                        # )
+
+                        # 导出文件
+                        export_file = gr.File(label="导出结果")
+
+                # 绑定事件
+                send_btn.click(
+                    fn=ai_chat_send,
+                    inputs=[chat_input, chatbot, session_state, gen_provider, gen_key, gen_model, gen_doc_type],
+                    outputs=[chatbot, chat_input, status_output],
+                )
+
+                chat_input.submit(
+                    fn=ai_chat_send,
+                    inputs=[chat_input, chatbot, session_state, gen_provider, gen_key, gen_model, gen_doc_type],
+                    outputs=[chatbot, chat_input, status_output],
+                )
+
+                export_btn.click(
+                    fn=ai_export_docx,
+                    inputs=[session_state],
+                    outputs=[export_file, status_output],
+                )
+
+                reset_btn.click(
+                    fn=ai_reset_session,
+                    inputs=[session_state],
+                    outputs=[chatbot, chat_input, status_output],
+                )
+
+            # Tab 4: 规则检查
             with gr.Tab("规则检查"):
                 gr.Markdown("上传论文和自定义规则文件 (YAML)，检查是否符合要求")
                 with gr.Row():
@@ -349,7 +693,7 @@ def build_ui():
                     outputs=[rule_output],
                 )
 
-            # Tab 4: 使用说明
+            # Tab 5: 使用说明
             with gr.Tab("使用说明"):
                 gr.Markdown("""
 ## 功能说明
@@ -365,6 +709,15 @@ def build_ui():
 
 ### 封面生成
 填写论文题目、作者、学院等信息，自动生成标准封面页。
+
+### AI文档生成（对话式）
+1. 输入文档描述（如"写一个项目可行性报告"）
+2. AI自动识别文档类型并生成大纲
+3. 确认大纲后，AI逐节生成内容
+4. 支持多轮对话修改
+5. 满意后点击"导出docx"下载
+
+支持的文档类型：报告、公文、合同、方案、论文、会议纪要等。
 
 ### 规则检查
 上传 YAML 格式的自定义规则文件，检查论文是否符合要求。
@@ -390,6 +743,7 @@ rules:
 python -m paper_format_corrector -f paper.docx --score --diff
 python -m paper_format_corrector -r requirement.txt -f paper.docx
 python -m paper_format_corrector --cover title="论文题目" author="张三"
+python -m paper_format_corrector --generate "写一个项目可行性报告"  # AI生成文档
 python -m paper_format_corrector --gui          # 启动 Web GUI
 python -m paper_format_corrector --desktop-gui   # 启动桌面 GUI
 ```

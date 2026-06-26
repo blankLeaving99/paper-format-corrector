@@ -4,6 +4,8 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
+from ..utils.docx_utils import set_east_asian_font
+
 
 class FigureTableHandler:
     """图表编号与格式处理"""
@@ -55,6 +57,7 @@ class FigureTableHandler:
         separator = config.get("separator", "-")
         font_size = config.get("font_size", 10.5)
         align = config.get("align", "center")
+        caption_position = config.get("caption_position", "below" if kind == "figure" else "above")
 
         if kind == "figure":
             self.fig_count += 1
@@ -97,7 +100,7 @@ class FigureTableHandler:
         # 应用格式
         for run in paragraph.runs:
             run.font.name = self.font_rules.get("english", "Times New Roman")
-            self._set_east_asian_font(run, self.font_rules.get("chinese", "宋体"))
+            set_east_asian_font(run, self.font_rules.get("chinese", "宋体"))
             run.font.size = Pt(font_size)
             run.font.bold = False
 
@@ -110,13 +113,47 @@ class FigureTableHandler:
         paragraph.paragraph_format.space_before = Pt(6)
         paragraph.paragraph_format.space_after = Pt(6)
 
+        # 验证标题位置
+        self._validate_caption_position(paragraph, kind, caption_position)
+
+    def _validate_caption_position(self, paragraph, kind, expected_position):
+        """验证图表标题是否在正确位置（图下表上）
+
+        Args:
+            paragraph: 标题段落
+            kind: "figure" 或 "table"
+            expected_position: "above" 或 "below"
+        """
+        body = paragraph._element.getparent()
+        if body is None:
+            return
+
+        para_elem = paragraph._element
+        siblings = list(body)
+
+        try:
+            idx = siblings.index(para_elem)
+        except ValueError:
+            return
+
+        if kind == "figure":
+            # 图片标题应在图片下方：前一个兄弟元素应包含图片
+            if expected_position == "below" and idx > 0:
+                prev = siblings[idx - 1]
+                has_image = bool(prev.findall('.//' + qn('w:drawing'))) or \
+                            bool(prev.findall('.//' + qn('w:pict')))
+                if not has_image:
+                    self.issues.append(
+                        f"图片标题位置异常: '{paragraph.text[:30]}' 前方未找到图片"
+                    )
+        elif kind == "table":
+            # 表格标题应在表格上方：下一个兄弟元素应是表格
+            if expected_position == "above" and idx < len(siblings) - 1:
+                next_elem = siblings[idx + 1]
+                if next_elem.tag != qn('w:tbl'):
+                    self.issues.append(
+                        f"表格标题位置异常: '{paragraph.text[:30]}' 后方未找到表格"
+                    )
+
     def get_issues(self):
         return self.issues
-
-    def _set_east_asian_font(self, run, font_name):
-        rpr = run._element.get_or_add_rPr()
-        rFonts = rpr.find(qn("w:rFonts"))
-        if rFonts is None:
-            rFonts = run._element.makeelement(qn("w:rFonts"), {})
-            rpr.insert(0, rFonts)
-        rFonts.set(qn("w:eastAsia"), font_name)

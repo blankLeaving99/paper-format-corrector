@@ -105,12 +105,7 @@ def print_dependency_status() -> None:
         return
 
     for w in warnings:
-        if "[ERROR]" in w:
-            print(f"  {w}")
-        elif "[WARNING]" in w:
-            print(f"  {w}")
-        else:
-            print(f"  {w}")
+        print(f"  {w}")
 
 
 def require_compatible() -> None:

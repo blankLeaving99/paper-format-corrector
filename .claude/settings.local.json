@@ -61,7 +61,10 @@
       "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/ -v --tb=short)",
       "Bash(E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\pip.exe install *)",
       "Bash(E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\ruff.exe check *)",
-      "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/ --tb=short)"
+      "Bash(\"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\.venv\\\\Scripts\\\\python.exe\" -m pytest tests/ --tb=short)",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m pytest tests/ -v --tb=short 2>&1 | Select-Object -Last 10)",
+      "PowerShell(Select-String -Path \"E:\\\\Code\\\\TestALLCode\\\\paper-format-corrector\\\\src\\\\paper_format_corrector\\\\core\\\\format_corrector.py\" -Pattern \"_current_chapter|CHAPTER|chapter_count\" | ForEach-Object { \"$\\($_.LineNumber\\): $\\($_.Line.Trim\\(\\)\\)\" })",
+      "PowerShell(.\\\\.venv\\\\Scripts\\\\python.exe -m ruff check src/ tests/ --fix 2>&1 | Select-Object -Last 5)"
     ]
   }
 }

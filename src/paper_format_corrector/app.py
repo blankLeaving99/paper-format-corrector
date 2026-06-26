@@ -33,7 +33,7 @@ class PaperFormatCorrector:
     """论文格式矫正主程序"""
 
     def __init__(self, config_path: str = "config/config.yaml", log_level: str = "INFO") -> None:
-        with open(config_path, "r", encoding="utf-8") as f:
+        with open(config_path, encoding="utf-8") as f:
             self.config = yaml.safe_load(f) or {}
 
         self._validate_config()
@@ -167,8 +167,6 @@ class PaperFormatCorrector:
                 diff_path = output_path.with_suffix(".diff.html")
                 self.diff_reporter.generate_html_report(orig_path, str(output_path), str(diff_path))
                 print(f"\n  对比报告已生成: {diff_path}")
-                # 清理临时文件
-                Path(orig_path).unlink(missing_ok=True)
 
             return report
         except Exception as e:
@@ -176,6 +174,10 @@ class PaperFormatCorrector:
             import traceback
             traceback.print_exc()
             return None
+        finally:
+            # 确保清理临时文件
+            if orig_path:
+                Path(orig_path).unlink(missing_ok=True)
 
     def process_directory(
         self,

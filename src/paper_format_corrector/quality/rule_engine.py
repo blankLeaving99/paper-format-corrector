@@ -52,7 +52,7 @@ class RuleEngine:
 
     def load_rules(self, rules_path):
         """加载规则文件"""
-        with open(rules_path, "r", encoding="utf-8") as f:
+        with open(rules_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
         self.rules = data.get("rules", [])
 

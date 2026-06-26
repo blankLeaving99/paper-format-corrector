@@ -476,7 +476,7 @@ class RequirementParser:
             attrs["different_first_page"] = True
 
         # 三线表
-        if "三线表" in text or "三线表" in text:
+        if "三线表" in text or "三线" in text:
             attrs["table_style"] = "three_line"
 
         # 表格边框

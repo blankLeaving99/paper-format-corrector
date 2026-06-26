@@ -1,0 +1,52 @@
+# 合同协议模板
+# 适用于：劳动合同、服务合同、采购合同、合作协议等
+
+description: "合同协议 - 适用于各类合同、协议文档"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 16
+      bold: true
+      align: "center"
+      space_before: 18
+      space_after: 12
+    heading2:
+      font_size: 14
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+    heading3:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 6
+      space_after: 3
+
+  body_text:
+    font_size: 12
+    line_spacing: 1.5
+    first_line_indent: 2
+    align: "justify"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 3.17
+    right: 3.17
+
+doc_type_hints:
+  - "合同"
+  - "协议"
+  - "劳动合同"
+  - "服务合同"
+  - "采购合同"
+  - "合作协议"
+  - "租赁合同"
+  - "保密协议"

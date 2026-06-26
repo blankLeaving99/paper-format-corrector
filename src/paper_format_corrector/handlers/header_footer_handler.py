@@ -31,24 +31,63 @@ class HeaderFooterHandler:
         self.body_style = pn_config.get("body", {}).get("style", "arabic")
         self.body_start = pn_config.get("body", {}).get("start", 1)
 
-    def apply(self, doc):
-        """应用页眉页脚设置"""
+    def apply(self, doc, chapter_map=None):
+        """应用页眉页脚设置
+
+        Args:
+            doc: Document 对象
+            chapter_map: 章节映射 {section_index: chapter_name}，用于动态章名页眉
+        """
         if not self.enabled and not self.pn_enabled:
             return
 
-        for section in doc.sections:
+        for idx, section in enumerate(doc.sections):
             section.different_first_page_header_footer = self.different_first_page
 
+            # 奇偶页不同
+            if self.different_odd_even:
+                self._set_odd_even_pages(section)
+
             if self.enabled:
-                self._setup_header(section)
+                chapter_name = chapter_map.get(idx) if chapter_map else None
+                self._setup_header(section, chapter_name)
                 self._setup_footer(section)
 
             if self.pn_enabled:
-                self._setup_page_numbers(section)
+                is_front_matter = idx == 0  # 第一节视为前置部分
+                self._setup_page_numbers(section, is_front_matter)
 
-    def _setup_header(self, section):
+    def _set_odd_even_pages(self, section):
+        """启用奇偶页不同页眉页脚"""
+        sectPr = section._sectPr
+        # 设置 evenAndOddHeaders 属性
+        even_odd = sectPr.find(qn("w:evenAndOddHeaders"))
+        if even_odd is None:
+            even_odd = OxmlElement("w:evenAndOddHeaders")
+            sectPr.append(even_odd)
+
+    def _resolve_header_text(self, text, chapter_name=None):
+        """替换页眉文本中的占位符
+
+        Args:
+            text: 原始页眉文本
+            chapter_name: 当前章名称
+
+        Returns:
+            str: 替换后的文本
+        """
+        if not text:
+            return text
+        if chapter_name:
+            text = text.replace("{chapter}", chapter_name)
+        else:
+            text = text.replace("{chapter}", "")
+        return text
+
+    def _setup_header(self, section, chapter_name=None):
         header = section.header
         header_text = self.header_config.get("text", "")
+        header_text = self._resolve_header_text(header_text, chapter_name)
 
         if not header_text and not self.header_config.get("bottom_border", False):
             return
@@ -96,7 +135,13 @@ class HeaderFooterHandler:
         }
         para.alignment = align_map.get(align, WD_ALIGN_PARAGRAPH.CENTER)
 
-    def _setup_page_numbers(self, section):
+    def _setup_page_numbers(self, section, is_front_matter=False):
+        """设置页码
+
+        Args:
+            section: Section 对象
+            is_front_matter: 是否为前置部分（使用罗马数字）
+        """
         footer = section.footer
         if footer.paragraphs:
             para = footer.paragraphs[0]
@@ -111,6 +156,46 @@ class HeaderFooterHandler:
 
         for run in para.runs:
             run.font.size = Pt(self.footer_config.get("font_size", 10.5))
+
+        # 设置页码格式
+        if is_front_matter:
+            self._set_section_page_number_type(section, "roman_lower")
+        else:
+            self._set_section_page_number_type(section, self.body_style, self.body_start)
+
+    def _set_section_page_number_type(self, section, style, start=None):
+        """设置节的页码格式
+
+        Args:
+            section: Section 对象
+            style: 页码格式 (roman_lower, arabic, etc.)
+            start: 起始页码（仅对正文部分有效）
+        """
+        sectPr = section._sectPr
+
+        # 移除已有的 pgNumType
+        existing = sectPr.find(qn("w:pgNumType"))
+        if existing is not None:
+            sectPr.remove(existing)
+
+        pgNumType = OxmlElement("w:pgNumType")
+
+        # 设置格式
+        fmt_map = {
+            "roman_lower": "lowerRoman",
+            "roman_upper": "upperRoman",
+            "arabic": "decimal",
+            "alpha_lower": "lowerLetter",
+            "alpha_upper": "upperLetter",
+        }
+        fmt = fmt_map.get(style, "decimal")
+        pgNumType.set(qn("w:fmt"), fmt)
+
+        # 设置起始页码
+        if start is not None:
+            pgNumType.set(qn("w:start"), str(start))
+
+        sectPr.append(pgNumType)
 
     def _add_page_number_field(self, paragraph):
         run = paragraph.add_run()

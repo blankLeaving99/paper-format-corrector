@@ -1,8 +1,9 @@
 import re
 
 from docx.enum.text import WD_ALIGN_PARAGRAPH
-from docx.oxml.ns import qn
 from docx.shared import Pt
+
+from ..utils.docx_utils import set_east_asian_font
 
 
 class ReferenceFormatter:
@@ -29,6 +30,7 @@ class ReferenceFormatter:
         self.hanging_indent = ref_config.get("hanging_indent", True)
         self.numbering = ref_config.get("numbering", "sequential")
         self.font_rules = config.get("format_rules", {}).get("font", {})
+        self.templates = ref_config.get("templates", {})
 
     # 引用风格常量
     CITATION_BRACKET = "bracket"        # [1], [2], [1-3]
@@ -98,10 +100,20 @@ class ReferenceFormatter:
         return names.get(style, "未知")
 
     def format_references(self, doc, ref_start_idx, ref_end_idx=None):
-        """格式化参考文献区域"""
+        """格式化参考文献区域
+
+        Args:
+            doc: python-docx Document 对象
+            ref_start_idx: 参考文献标题段落索引
+            ref_end_idx: 参考文献区域结束索引（不含），None 表示自动检测
+        """
         paragraphs = doc.paragraphs
         if ref_start_idx >= len(paragraphs):
             return
+
+        # 确定上界
+        end_bound = ref_end_idx if ref_end_idx is not None else len(paragraphs)
+        end_bound = min(end_bound, len(paragraphs))
 
         # 格式化参考文献标题
         title_para = paragraphs[ref_start_idx]
@@ -109,17 +121,18 @@ class ReferenceFormatter:
 
         # 格式化每条参考文献
         ref_num = 1
-        for i in range(ref_start_idx + 1, len(paragraphs)):
+        for i in range(ref_start_idx + 1, end_bound):
             para = paragraphs[i]
             text = para.text.strip()
             if not text:
                 continue
 
-            # 如果遇到新的顶级标题，停止
-            if self._is_new_section(text) and i > ref_start_idx + 1:
+            # 如果遇到新的顶级标题，停止（仅在自动检测模式下）
+            if ref_end_idx is None and self._is_new_section(text) and i > ref_start_idx + 1:
                 break
 
             self._format_ref_item(para, ref_num)
+            self._reformat_reference(para, ref_num)
             ref_num += 1
 
     def _format_ref_title(self, paragraph):
@@ -127,7 +140,7 @@ class ReferenceFormatter:
         rules = self.font_rules
         for run in paragraph.runs:
             run.font.name = rules.get("english", "Times New Roman")
-            self._set_east_asian_font(run, rules.get("chinese", "宋体"))
+            set_east_asian_font(run, rules.get("chinese", "宋体"))
             run.font.size = Pt(self.font_size)
             run.font.bold = True
 
@@ -140,7 +153,7 @@ class ReferenceFormatter:
         rules = self.font_rules
         for run in paragraph.runs:
             run.font.name = rules.get("english", "Times New Roman")
-            self._set_east_asian_font(run, rules.get("chinese", "宋体"))
+            set_east_asian_font(run, rules.get("chinese", "宋体"))
             run.font.size = Pt(self.font_size)
             run.font.bold = False
 
@@ -151,6 +164,132 @@ class ReferenceFormatter:
         if self.hanging_indent:
             paragraph.paragraph_format.first_line_indent = Pt(-24)  # 悬挂缩进
             paragraph.paragraph_format.left_indent = Pt(24)
+
+    def _parse_reference_fields(self, text):
+        """解析参考文献条目的结构化字段
+
+        Args:
+            text: 单条参考文献文本
+
+        Returns:
+            dict: 包含 num, type, authors, title, journal, year, volume, pages 等字段
+        """
+        fields = {"raw": text}
+
+        # 提取编号 [N]
+        m = re.match(r"^\[(\d+)\]", text)
+        if m:
+            fields["num"] = int(m.group(1))
+            text_after_num = text[m.end():].strip()
+        else:
+            text_after_num = text.strip()
+
+        # 提取文献类型标识 [J], [M], [EB/OL] 等
+        type_match = re.search(r"\[([A-Z](?:/[A-Z]+)?)\]", text_after_num)
+        if type_match:
+            fields["type"] = type_match.group(1)
+            fields["type_name"] = self.TYPE_MAP.get(fields["type"], "unknown")
+
+        # 提取作者（类型标识之前的文本）
+        if type_match:
+            before_type = text_after_num[:type_match.start()].strip()
+            # 去掉末尾的句号
+            before_type = before_type.rstrip(".")
+            if before_type:
+                fields["authors"] = before_type
+
+        # 提取标题（类型标识之后到下一个句号或逗号之间的文本）
+        if type_match:
+            after_type = text_after_num[type_match.end():].strip()
+            # 标题通常是第一个句号之前的内容
+            title_end = after_type.find(".")
+            if title_end > 0:
+                fields["title"] = after_type[:title_end].strip()
+                rest = after_type[title_end + 1:].strip()
+            else:
+                fields["title"] = after_type
+                rest = ""
+
+            # 从剩余文本中提取期刊/年份/卷/页
+            if rest:
+                # 提取期刊名（逗号之前）
+                journal_match = re.match(r"([^,]+)", rest)
+                if journal_match:
+                    fields["journal"] = journal_match.group(1).strip()
+
+                # 提取年份
+                year_match = re.search(r"(\d{4})", rest)
+                if year_match:
+                    fields["year"] = year_match.group(1)
+
+                # 提取卷(期): 页码
+                vol_match = re.search(r"(\d+)\((\d+)\):\s*(\d+(?:-\d+)?)", rest)
+                if vol_match:
+                    fields["volume"] = vol_match.group(1)
+                    fields["number"] = vol_match.group(2)
+                    fields["pages"] = vol_match.group(3)
+
+        return fields
+
+    def _format_ref_by_template(self, ref_type, fields, num):
+        """使用模板渲染参考文献
+
+        Args:
+            ref_type: 文献类型 (journal, book, conference, etc.)
+            fields: 解析出的字段字典
+            num: 编号
+
+        Returns:
+            str: 渲染后的参考文献文本，无模板时返回 None
+        """
+        template = self.templates.get(ref_type)
+        if not template:
+            return None
+
+        # 填充模板
+        result = template
+        result = result.replace("{num}", str(num))
+        for key, value in fields.items():
+            if key not in ("raw", "type", "type_name", "num"):
+                result = result.replace(f"{{{key}}}", str(value))
+
+        # 清理未填充的占位符
+        result = re.sub(r"\{[a-z_]+\}", "", result)
+        # 清理多余的空格和标点
+        result = re.sub(r"\s+", " ", result)
+        result = re.sub(r"\.\.", ".", result)
+        result = re.sub(r"\.\s*\.", ".", result)
+        result = result.strip()
+
+        return result
+
+    def _reformat_reference(self, paragraph, num):
+        """解析并重排单条参考文献
+
+        如果有模板，使用模板重排；否则只做格式化。
+
+        Args:
+            paragraph: 参考文献段落
+            num: 编号
+        """
+        if not self.templates:
+            return  # 无模板，跳过重排
+
+        text = paragraph.text.strip()
+        fields = self._parse_reference_fields(text)
+
+        # 确定文献类型
+        ref_type = fields.get("type_name", "unknown")
+        formatted = self._format_ref_by_template(ref_type, fields, num)
+
+        if formatted and formatted != text:
+            # 重写段落内容
+            for run in paragraph.runs:
+                run.text = ""
+            if paragraph.runs:
+                paragraph.runs[0].text = formatted
+            else:
+                paragraph.add_run(formatted)
 
     def validate_references(self, doc, ref_start_idx):
         """验证参考文献格式，返回问题列表"""
@@ -258,11 +397,3 @@ class ReferenceFormatter:
                 issues.append({"type": "missing", "message": f"参考文献 [{num}] 未在正文中被引用"})
 
         return issues
-
-    def _set_east_asian_font(self, run, font_name):
-        rpr = run._element.get_or_add_rPr()
-        rFonts = rpr.find(qn("w:rFonts"))
-        if rFonts is None:
-            rFonts = run._element.makeelement(qn("w:rFonts"), {})
-            rpr.insert(0, rFonts)
-        rFonts.set(qn("w:eastAsia"), font_name)

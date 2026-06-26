@@ -1,0 +1,81 @@
+# 通用报告模板
+# 适用于：可行性报告、调研报告、工作总结、项目报告等
+
+description: "通用报告 - 适用于各类报告文档"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 22
+      bold: true
+      align: "center"
+      space_before: 24
+      space_after: 18
+    heading2:
+      font_size: 16
+      bold: true
+      align: "left"
+      space_before: 18
+      space_after: 12
+    heading3:
+      font_size: 14
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+
+  body_text:
+    font_size: 12
+    line_spacing: 1.5
+    first_line_indent: 2
+    align: "justify"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 3.17
+    right: 3.17
+
+doc_type_hints:
+  - "报告"
+  - "调研报告"
+  - "可行性报告"
+  - "工作总结"
+  - "项目报告"
+  - "分析报告"
+
+default_structure:
+  sections:
+    - type: "heading1"
+      title: "一、报告概述"
+    - type: "body"
+      content: "本报告旨在..."
+    - type: "heading1"
+      title: "二、背景分析"
+    - type: "body"
+      content: "..."
+    - type: "heading1"
+      title: "三、现状分析"
+    - type: "body"
+      content: "..."
+    - type: "heading1"
+      title: "四、方案设计"
+    - type: "body"
+      content: "..."
+    - type: "heading1"
+      title: "五、实施计划"
+    - type: "body"
+      content: "..."
+    - type: "heading1"
+      title: "六、风险评估"
+    - type: "body"
+      content: "..."
+    - type: "heading1"
+      title: "七、总结与建议"
+    - type: "body"
+      content: "..."

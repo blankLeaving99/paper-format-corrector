@@ -15,6 +15,7 @@ import subprocess
 import tempfile
 from pathlib import Path
 
+from ..infra.external_tools import find_libreoffice
 from ..infra.path_security import ALLOWED_INPUT_EXTENSIONS, validate_input_path
 
 
@@ -27,7 +28,7 @@ class FileConverter:
     )
 
     def __init__(self):
-        self._libreoffice_path = None
+        pass
 
     @staticmethod
     def is_supported(file_path: str) -> bool:
@@ -93,7 +94,7 @@ class FileConverter:
     def _convert_doc(self, input_path: Path, output_path: Path) -> str:
         """转换 .doc 为 .docx"""
         # 方法1: LibreOffice
-        lo = self._find_libreoffice()
+        lo = find_libreoffice()
         if lo:
             return self._libreoffice_convert(input_path, output_path, lo)
 
@@ -116,7 +117,7 @@ class FileConverter:
 
     def _convert_odt(self, input_path: Path, output_path: Path) -> str:
         """转换 .odt 为 .docx"""
-        lo = self._find_libreoffice()
+        lo = find_libreoffice()
         if lo:
             return self._libreoffice_convert(input_path, output_path, lo)
 
@@ -135,7 +136,7 @@ class FileConverter:
 
     def _convert_rtf(self, input_path: Path, output_path: Path) -> str:
         """转换 .rtf 为 .docx"""
-        lo = self._find_libreoffice()
+        lo = find_libreoffice()
         if lo:
             return self._libreoffice_convert(input_path, output_path, lo)
 
@@ -216,7 +217,7 @@ class FileConverter:
         # 检测编码
         encoding = self._detect_encoding(input_path)
 
-        with open(input_path, "r", encoding=encoding) as f:
+        with open(input_path, encoding=encoding) as f:
             content = f.read()
 
         if is_markdown:
@@ -431,38 +432,6 @@ class FileConverter:
 
         return "utf-8"  # 默认回退
 
-    # ── LibreOffice 集成 ────────────────────────────────────────
-
-    def _find_libreoffice(self) -> str:
-        """查找 LibreOffice 安装路径"""
-        if self._libreoffice_path is not None:
-            return self._libreoffice_path
-
-        # 只检查绝对路径，避免 PATH 污染风险
-        candidates = [
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-            r"D:\Program Files\LibreOffice\program\soffice.exe",
-            r"D:\Program Files (x86)\LibreOffice\program\soffice.exe",
-            "/usr/bin/libreoffice",
-            "/usr/bin/soffice",
-            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-        ]
-
-        for candidate in candidates:
-            if Path(candidate).exists():
-                self._libreoffice_path = candidate
-                return candidate
-
-        # PATH 搜索仅作最后回退
-        for name in ("soffice", "libreoffice"):
-            found = shutil.which(name)
-            if found:
-                self._libreoffice_path = found
-                return found
-
-        return None
-
     def _libreoffice_convert(self, input_path: Path, output_path: Path, lo_path: str) -> str:
         """使用 LibreOffice 转换文件"""
         output_dir = output_path.parent
@@ -512,7 +481,7 @@ class FileConverter:
 
     def _rtf_to_docx(self, input_path: Path, output_path: Path) -> str:
         """将 RTF 转换为 DOCX（基本实现）"""
-        with open(input_path, "r", encoding="latin-1") as f:
+        with open(input_path, encoding="latin-1") as f:
             rtf_content = f.read()
 
         # 简单的 RTF 文本提取
@@ -551,7 +520,7 @@ class FileConverter:
 
         # 方法2: 手动解析 LaTeX 提取文本
         encoding = self._detect_encoding(input_path)
-        with open(input_path, "r", encoding=encoding) as f:
+        with open(input_path, encoding=encoding) as f:
             tex_content = f.read()
 
         text = self._extract_text_from_latex(tex_content)

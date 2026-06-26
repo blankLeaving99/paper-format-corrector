@@ -105,11 +105,11 @@ format_rules:
     numbering: "sequential"  # sequential | bracket
     # GB/T 7714 格式模板
     templates:
-      journal: "[N] {authors}. {title}[J]. {journal}, {year}, {volume}({number}): {pages}."
-      book: "[N] {authors}. {title}[M]. {city}: {publisher}, {year}: {pages}."
-      conference: "[N] {authors}. {title}[C]//{proceedings}. {city}: {publisher}, {year}: {pages}."
-      thesis: "[N] {author}. {title}[D]. {city}: {university}, {year}."
-      online: "[N] {authors}. {title}[EB/OL]. ({year}-{month}-{day})[{access_date}]. {url}."
+      journal: "[{num}] {authors}. {title}[J]. {journal}, {year}, {volume}({number}): {pages}."
+      book: "[{num}] {authors}. {title}[M]. {city}: {publisher}, {year}: {pages}."
+      conference: "[{num}] {authors}. {title}[C]//{proceedings}. {city}: {publisher}, {year}: {pages}."
+      thesis: "[{num}] {author}. {title}[D]. {city}: {university}, {year}."
+      online: "[{num}] {authors}. {title}[EB/OL]. ({year}-{month}-{day})[{access_date}]. {url}."
 
   # 图表格式
   figures:

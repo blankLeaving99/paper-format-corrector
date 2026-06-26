@@ -25,7 +25,7 @@ def project_root():
 def config(project_root):
     """Load the default config.yaml."""
     config_path = project_root / "config" / "config.yaml"
-    with open(config_path, "r", encoding="utf-8") as f:
+    with open(config_path, encoding="utf-8") as f:
         return yaml.safe_load(f)
 
 

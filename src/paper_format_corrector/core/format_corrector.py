@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 
 from docx import Document
+from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
-from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
 from ..handlers.figure_table_handler import FigureTableHandler
@@ -14,8 +14,10 @@ from ..handlers.header_footer_handler import HeaderFooterHandler
 from ..handlers.image_handler import ImageHandler
 from ..handlers.table_handler import TableHandler
 from ..handlers.toc_handler import TOCHandler
+from ..parsers.cross_reference import CrossReferenceUpdater
 from ..parsers.reference_formatter import ReferenceFormatter
 from ..parsers.section_detector import SectionDetector, SectionType, detect_document_language
+from ..utils.docx_utils import set_east_asian_font
 
 logger = logging.getLogger(__name__)
 
@@ -26,11 +28,25 @@ class FormatCorrector:
     def __init__(self, template_path, config):
         if template_path and Path(template_path).is_file():
             self.template = Document(template_path)
+            self.template_path = template_path
         else:
             logger.warning(f"模板文件不存在 ({template_path})，使用默认空白模板")
             self.template = Document()
+            self.template_path = None
         self.config = config
         self.style_mapping = {}
+
+        # 从模板提取样式（作为配置的回退）
+        self.template_styles = {}
+        self.template_margins = {}
+        if self.template_path:
+            try:
+                from .style_extractor import StyleExtractor
+                extractor = StyleExtractor(self.template_path)
+                self.template_styles = extractor.extract_all_styles()
+                self.template_margins = extractor.extract_page_margins()
+            except Exception as e:
+                logger.warning(f"模板样式提取失败: {e}")
 
         # 子模块
         self.section_detector = SectionDetector(config)
@@ -40,9 +56,11 @@ class FormatCorrector:
         self.image_handler = ImageHandler(config)
         self.hf_handler = HeaderFooterHandler(config)
         self.toc_handler = TOCHandler(config)
+        self.cross_ref_updater = CrossReferenceUpdater()
 
         # 处理报告
         self.report = self._empty_report()
+        self._current_chapter = 0
 
     def _empty_report(self):
         return {
@@ -56,11 +74,13 @@ class FormatCorrector:
             "ref_issues": [],
             "fig_table_issues": [],
             "warnings": [],
+            "cross_refs_updated": 0,
         }
 
     def load_template_styles(self):
+        """加载模板样式映射"""
         for style in self.template.styles:
-            if style.type == 1:
+            if style.type == WD_STYLE_TYPE.PARAGRAPH:
                 self.style_mapping[style.name.lower()] = style
 
     def correct_document(self, input_path, output_path, backup=True):
@@ -121,7 +141,15 @@ class FormatCorrector:
         self.hf_handler.apply(doc)
 
         # 8. 公式编号
-        self._correct_formulas(doc)
+        eq_renumber_map = self._renumber_formulas(doc)
+
+        # 9. 脚注格式矫正
+        self._correct_footnotes(doc)
+
+        # 10. 交叉引用更新
+        fig_map = getattr(self.fig_table_handler, 'fig_renumber_map', {})
+        tab_map = getattr(self.fig_table_handler, 'tab_renumber_map', {})
+        self._update_cross_references(doc, fig_map, tab_map, eq_renumber_map)
 
         doc.save(output_path)
         logger.info(f"已保存: {output_path}")
@@ -153,6 +181,9 @@ class FormatCorrector:
 
     def _apply_page_setup(self, doc):
         margins = self.config.get("format_rules", {}).get("margins", {})
+        # 回退到模板边距
+        if not margins and self.template_margins:
+            margins = self.template_margins
         if not margins:
             return
         for section in doc.sections:
@@ -186,6 +217,7 @@ class FormatCorrector:
                 self._apply_heading_style(paragraph, "heading1")
                 chapter_num = extra.get("chapter_num", 0)
                 self.fig_table_handler.update_chapter(chapter_num)
+                self._current_chapter = chapter_num
                 self.report["headings_fixed"] += 1
             elif section_type == SectionType.SECTION:
                 self._apply_heading_style(paragraph, "heading2")
@@ -239,17 +271,133 @@ class FormatCorrector:
             for issue in consistency_issues:
                 self.report["ref_issues"].append(issue["message"])
 
-    def _correct_formulas(self, doc):
+    def _renumber_formulas(self, doc):
+        """重编号公式并返回编号映射
+
+        Returns:
+            dict: {old_num: new_num} 映射，用于交叉引用更新
+        """
         formula_config = self.config.get("format_rules", {}).get("formulas", {})
         if not formula_config.get("numbering", True):
-            return
+            return {}
+
         formula_pattern = re.compile(
             self.config.get("auto_detect", {}).get("formula_pattern", r"^\(?\d+[-\.]\d+\)?$")
         )
+
+        numbering = formula_config.get("numbering_style", "chapter")  # chapter | sequential
+        separator = formula_config.get("separator", "-")
+
+        renumber_map = {}
+        chapter_counter = {}  # {chapter_num: formula_count}
+        global_counter = 0
+        current_chapter = 0
+
+        # 先检测当前章节（从 section_detector 的状态获取）
+        if hasattr(self, '_current_chapter'):
+            current_chapter = self._current_chapter
+
         for para in doc.paragraphs:
             text = para.text.strip()
-            if formula_pattern.match(text):
-                self._apply_formula_style(para, formula_config)
+            if not formula_pattern.match(text):
+                continue
+
+            # 提取旧编号
+            old_num_match = re.search(r"\d+(?:[-\.]\d+)?", text)
+            if not old_num_match:
+                continue
+            old_num = old_num_match.group(0)
+
+            # 生成新编号
+            if numbering == "chapter":
+                if current_chapter not in chapter_counter:
+                    chapter_counter[current_chapter] = 0
+                chapter_counter[current_chapter] += 1
+                new_num = f"{current_chapter}{separator}{chapter_counter[current_chapter]}"
+            else:
+                global_counter += 1
+                new_num = str(global_counter)
+
+            # 应用样式
+            self._apply_formula_style(para, formula_config)
+
+            # 如果编号需要修正，重写文本
+            clean_old = old_num.strip("()")
+            if clean_old != new_num:
+                # 保留原始格式（括号等）
+                if text.startswith("(") and text.endswith(")"):
+                    new_text = f"({new_num})"
+                else:
+                    new_text = new_num
+
+                for run in para.runs:
+                    run.text = ""
+                if para.runs:
+                    para.runs[0].text = new_text
+                else:
+                    para.add_run(new_text)
+
+                renumber_map[clean_old] = new_num
+
+        return renumber_map
+
+    def _correct_footnotes(self, doc):
+        """矫正脚注格式"""
+        from docx.oxml.ns import qn as _qn
+
+        # 查找文档中的脚注部分
+        footnotes_part = None
+        try:
+            footnotes_part = doc.part.notes_part
+        except Exception:
+            pass
+
+        if footnotes_part is None:
+            # 尝试通过 XML 查找
+            footnotes_elements = doc.element.findall(_qn('w:footnotes'))
+            if not footnotes_elements:
+                return
+
+            for footnotes_elem in footnotes_elements:
+                for footnote in footnotes_elem.findall(_qn('w:footnote')):
+                    # 跳过分隔符等特殊脚注
+                    if footnote.get(_qn('w:type')) in ('separator', 'continuationSeparator'):
+                        continue
+                    for p_elem in footnote.findall(_qn('w:p')):
+                        for r_elem in p_elem.findall(_qn('w:r')):
+                            rpr = r_elem.find(_qn('w:rPr'))
+                            if rpr is None:
+                                rpr = OxmlElement('w:rPr')
+                                r_elem.insert(0, rpr)
+                            # 设置脚注字号（小五号 = 9pt）
+                            sz = rpr.find(_qn('w:sz'))
+                            if sz is None:
+                                sz = OxmlElement('w:sz')
+                                rpr.append(sz)
+                            sz.set(_qn('w:val'), '18')  # 9pt = 18 half-points
+        else:
+            # 通过 notes_part 处理
+            for footnote in footnotes_part.footnotes:
+                for para in footnote.paragraphs:
+                    for run in para.runs:
+                        run.font.size = Pt(9)  # 小五号
+
+    def _update_cross_references(self, doc, fig_map, tab_map, eq_map):
+        """更新交叉引用
+
+        Args:
+            doc: Document 对象
+            fig_map: 图编号映射 {old: new}
+            tab_map: 表编号映射 {old: new}
+            eq_map: 公式编号映射 {old: new}
+        """
+        if not fig_map and not tab_map and not eq_map:
+            return
+
+        updated = self.cross_ref_updater.update(doc, fig_map, tab_map, eq_map)
+        if updated > 0:
+            self.report["cross_refs_updated"] = updated
+            logger.info(f"  交叉引用更新: {updated} 个段落")
 
     def _apply_formula_style(self, paragraph, config):
         style_rules = {"font_size": config.get("font_size", 12)}
@@ -284,7 +432,7 @@ class FormatCorrector:
         font_rules = rules.get("font", {})
         for run in paragraph.runs:
             run.font.name = font_rules.get("english", "Times New Roman")
-            self._set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
+            set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
             run.font.size = Pt(tp.get("title_font_size", 22))
             run.font.bold = tp.get("title_bold", True)
         align_map = {
@@ -303,7 +451,7 @@ class FormatCorrector:
         font_rules = rules.get("font", {})
         for run in paragraph.runs:
             run.font.name = font_rules.get("english", "Times New Roman")
-            self._set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+            set_east_asian_font(run, font_rules.get("chinese", "宋体"))
             run.font.size = Pt(tp.get("author_font_size", 12))
             run.font.bold = False
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -316,7 +464,7 @@ class FormatCorrector:
         font_rules = rules.get("font", {})
         for run in paragraph.runs:
             run.font.name = font_rules.get("english", "Times New Roman")
-            self._set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+            set_east_asian_font(run, font_rules.get("chinese", "宋体"))
             run.font.size = Pt(tp.get("affiliation_font_size", 10.5))
             run.font.bold = False
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -335,14 +483,14 @@ class FormatCorrector:
         if is_title_line:
             for run in paragraph.runs:
                 run.font.name = font_rules.get("english", "Times New Roman")
-                self._set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
+                set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
                 run.font.size = Pt(abs_config.get("title_font_size", 16))
                 run.font.bold = abs_config.get("title_bold", True)
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         else:
             for run in paragraph.runs:
                 run.font.name = font_rules.get("english", "Times New Roman")
-                self._set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+                set_east_asian_font(run, font_rules.get("chinese", "宋体"))
                 run.font.size = Pt(abs_config.get("content_font_size", 12))
                 run.font.bold = False
             self._apply_line_spacing(paragraph, abs_config.get("content_line_spacing", 1.5))
@@ -372,17 +520,17 @@ class FormatCorrector:
             paragraph.runs[0].font.bold = kw_config.get("bold_label", True)
             paragraph.runs[0].font.size = Pt(kw_config.get("font_size", 12))
             paragraph.runs[0].font.name = font_rules.get("english", "Times New Roman")
-            self._set_east_asian_font(paragraph.runs[0], font_rules.get("chinese", "宋体"))
+            set_east_asian_font(paragraph.runs[0], font_rules.get("chinese", "宋体"))
             if content_part:
                 content_run = paragraph.add_run(content_part)
                 content_run.font.bold = False
                 content_run.font.size = Pt(kw_config.get("font_size", 12))
                 content_run.font.name = font_rules.get("english", "Times New Roman")
-                self._set_east_asian_font(content_run, font_rules.get("chinese", "宋体"))
+                set_east_asian_font(content_run, font_rules.get("chinese", "宋体"))
         else:
             for run in paragraph.runs:
                 run.font.name = font_rules.get("english", "Times New Roman")
-                self._set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+                set_east_asian_font(run, font_rules.get("chinese", "宋体"))
                 run.font.size = Pt(kw_config.get("font_size", 12))
 
         paragraph.paragraph_format.space_before = Pt(6)
@@ -395,7 +543,7 @@ class FormatCorrector:
 
         for run in paragraph.runs:
             self._set_run_font(run, font_rules, heading_rules)
-            self._set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
+            set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
 
         align_map = {
             "center": WD_ALIGN_PARAGRAPH.CENTER,
@@ -466,10 +614,10 @@ class FormatCorrector:
 
             if has_chinese and has_english:
                 run.font.name = en_font
-                self._set_east_asian_font(run, cn_font)
+                set_east_asian_font(run, cn_font)
             elif has_chinese:
                 run.font.name = cn_font
-                self._set_east_asian_font(run, cn_font)
+                set_east_asian_font(run, cn_font)
             else:
                 run.font.name = en_font
 
@@ -481,19 +629,11 @@ class FormatCorrector:
 
     def _set_run_font(self, run, font_rules, style_rules):
         run.font.name = font_rules.get("english", "Times New Roman")
-        self._set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+        set_east_asian_font(run, font_rules.get("chinese", "宋体"))
         if style_rules.get("bold"):
             run.font.bold = True
         if style_rules.get("font_size"):
             run.font.size = Pt(style_rules["font_size"])
-
-    def _set_east_asian_font(self, run, font_name):
-        rpr = run._element.get_or_add_rPr()
-        rFonts = rpr.find(qn("w:rFonts"))
-        if rFonts is None:
-            rFonts = run._element.makeelement(qn("w:rFonts"), {})
-            rpr.insert(0, rFonts)
-        rFonts.set(qn("w:eastAsia"), font_name)
 
     def get_report(self):
         return self.report

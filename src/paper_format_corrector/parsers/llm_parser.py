@@ -119,15 +119,15 @@ class LLMParser:
         # 阻止内网/环回/链路本地 IP 地址
         try:
             ip = ipaddress.ip_address(host)
+        except ValueError:
+            ip = None  # 不是 IP 地址，是域名
+
+        if ip is not None:
             if ip.is_private or ip.is_loopback or ip.is_link_local:
                 if self.provider != "ollama":
                     raise ValueError(f"不允许访问内网地址: {host}")
             if str(ip) == "169.254.169.254":
                 raise ValueError("不允许访问云服务商元数据地址")
-        except ValueError:
-            raise  # 重新抛出我们自己抛出的 ValueError
-        except ipaddress.AddressValueError:
-            pass  # 不是 IP 地址，是域名，继续检查
 
         # Ollama 只允许 localhost
         if self.provider == "ollama":

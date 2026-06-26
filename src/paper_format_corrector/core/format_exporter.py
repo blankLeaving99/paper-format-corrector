@@ -8,8 +8,8 @@
 """
 
 import re
-from pathlib import Path
 
+from ..infra.external_tools import find_libreoffice
 from ..infra.path_security import (
     ALLOWED_INPUT_EXTENSIONS,
     ALLOWED_OUTPUT_EXTENSIONS,
@@ -77,7 +77,7 @@ class FormatExporter:
         # 回退：使用 LibreOffice
         import subprocess
 
-        lo_path = self._find_libreoffice()
+        lo_path = find_libreoffice()
         if lo_path:
             out_dir = output_path.parent
             subprocess.run(
@@ -272,26 +272,3 @@ class FormatExporter:
 
     def _is_table_caption(self, text):
         return bool(self._tab_re.match(text))
-
-    def _find_libreoffice(self):
-        """查找 LibreOffice 安装路径"""
-        import shutil
-
-        # 只检查绝对路径，避免 PATH 污染风险
-        candidates = [
-            r"C:\Program Files\LibreOffice\program\soffice.exe",
-            r"C:\Program Files (x86)\LibreOffice\program\soffice.exe",
-            "/usr/bin/libreoffice",
-            "/usr/bin/soffice",
-            "/Applications/LibreOffice.app/Contents/MacOS/soffice",
-        ]
-        for candidate in candidates:
-            if Path(candidate).exists():
-                return candidate
-
-        # PATH 搜索仅作最后回退
-        for name in ("soffice", "libreoffice"):
-            found = shutil.which(name)
-            if found:
-                return found
-        return None

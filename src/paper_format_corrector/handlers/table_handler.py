@@ -15,6 +15,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
 
+from ..utils.docx_utils import set_east_asian_font
+
 
 class TableHandler:
     """表格格式处理器"""
@@ -45,6 +47,11 @@ class TableHandler:
         # 表格居中
         table.alignment = WD_TABLE_ALIGNMENT.CENTER
 
+        # 设置表格宽度
+        table_width = self.table_config.get("width")
+        if table_width:
+            self._set_table_width(table, table_width)
+
         # 应用表格样式（三线表/全边框）
         if self.table_style == "three_line":
             self.remove_table_borders(table)
@@ -73,7 +80,7 @@ class TableHandler:
         # 设置字体
         for run in paragraph.runs:
             run.font.name = self.en_font
-            self._set_east_asian_font(run, self.cn_font)
+            set_east_asian_font(run, self.cn_font)
             run.font.size = Pt(font_size)
             run.font.bold = bold
 
@@ -85,10 +92,18 @@ class TableHandler:
         paragraph.paragraph_format.space_before = Pt(2)
         paragraph.paragraph_format.space_after = Pt(2)
 
+    def _get_or_create_tblPr(self, table):
+        """获取表格属性元素，不存在时创建并挂载"""
+        tbl = table._tbl
+        tblPr = tbl.tblPr
+        if tblPr is None:
+            tblPr = OxmlElement("w:tblPr")
+            tbl.insert(0, tblPr)
+        return tblPr
+
     def set_table_borders(self, table):
         """设置表格边框"""
-        tbl = table._tbl
-        tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+        tblPr = self._get_or_create_tblPr(table)
 
         borders = OxmlElement("w:tblBorders")
         for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
@@ -107,8 +122,7 @@ class TableHandler:
 
     def remove_table_borders(self, table):
         """移除表格边框（用于三线表）"""
-        tbl = table._tbl
-        tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+        tblPr = self._get_or_create_tblPr(table)
 
         borders = OxmlElement("w:tblBorders")
         # 只保留顶线和底线（三线表）
@@ -134,8 +148,7 @@ class TableHandler:
 
     def _set_table_width(self, table, width):
         """设置表格宽度"""
-        tbl = table._tbl
-        tblPr = tbl.tblPr if tbl.tblPr is not None else OxmlElement("w:tblPr")
+        tblPr = self._get_or_create_tblPr(table)
         tblW = OxmlElement("w:tblW")
         tblW.set(qn("w:w"), str(int(width)))
         tblW.set(qn("w:type"), "dxa")
@@ -143,11 +156,3 @@ class TableHandler:
         if old_w is not None:
             tblPr.remove(old_w)
         tblPr.append(tblW)
-
-    def _set_east_asian_font(self, run, font_name):
-        rpr = run._element.get_or_add_rPr()
-        rFonts = rpr.find(qn("w:rFonts"))
-        if rFonts is None:
-            rFonts = run._element.makeelement(qn("w:rFonts"), {})
-            rpr.insert(0, rFonts)
-        rFonts.set(qn("w:eastAsia"), font_name)

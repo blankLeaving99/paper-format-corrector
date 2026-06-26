@@ -14,7 +14,7 @@ ALLOWED_INPUT_EXTENSIONS = {
 
 ALLOWED_OUTPUT_EXTENSIONS = {
     ".docx", ".doc", ".pdf", ".html", ".txt", ".md", ".markdown",
-    ".diff.html",
+    # 注意：.diff.html 文件的 suffix 为 .html，已被上面覆盖
 }
 
 

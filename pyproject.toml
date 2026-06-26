@@ -1,6 +1,6 @@
 [build-system]
 requires = ["setuptools>=68.0", "wheel"]
-build-backend = "setuptools.backends._legacy:_Backend"
+build-backend = "setuptools.build_meta"
 
 [project]
 name = "paper-format-corrector"
@@ -15,6 +15,23 @@ dependencies = [
     "lxml>=5.0,<7.0",
     "Pillow>=9.0",
 ]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Education",
+    "Intended Audience :: Science/Research",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.9",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Topic :: Text Processing :: General",
+]
+
+[project.urls]
+Homepage = "https://github.com/paper-format-corrector/paper-format-corrector"
+Repository = "https://github.com/paper-format-corrector/paper-format-corrector"
+Issues = "https://github.com/paper-format-corrector/paper-format-corrector/issues"
 
 [project.optional-dependencies]
 pdf = ["docx2pdf>=0.1.8"]
@@ -23,7 +40,7 @@ pdf-import = ["pdfplumber>=0.10.0"]
 doc-convert = ["docx2docx>=0.1.0"]
 gui = ["gradio>=4.0.0"]
 drag-drop = ["tkinterdnd2>=0.4.0"]
-all = ["docx2pdf>=0.1.8", "mammoth>=1.6.0", "pdfplumber>=0.10.0", "docx2docx>=0.1.0", "gradio>=4.0.0"]
+all = ["docx2pdf>=0.1.8", "mammoth>=1.6.0", "pdfplumber>=0.10.0", "docx2docx>=0.1.0", "gradio>=4.0.0", "tkinterdnd2>=0.4.0"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.4.0"]
 
 [project.scripts]
@@ -36,11 +53,22 @@ where = ["src"]
 [tool.pytest.ini_options]
 testpaths = ["tests"]
 python_files = "test_*.py"
+addopts = "-v --tb=short"
+
+[tool.coverage.run]
+source = ["src/paper_format_corrector"]
+omit = ["*/gui.py", "*/desktop_gui.py"]
+
+[tool.coverage.report]
+show_missing = true
 
 [tool.ruff]
 line-length = 120
 target-version = "py39"
 
 [tool.ruff.lint]
-select = ["E", "F", "W", "I"]
+select = ["E", "F", "W", "I", "UP", "B"]
 ignore = ["E501"]
+
+[tool.ruff.format]
+quote-style = "double"

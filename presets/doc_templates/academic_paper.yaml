@@ -1,0 +1,51 @@
+# 学术论文模板
+# 适用于：期刊论文、会议论文、学位论文等
+
+description: "学术论文 - 适用于期刊论文、会议论文、学位论文"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 16
+      bold: true
+      align: "center"
+      space_before: 24
+      space_after: 18
+    heading2:
+      font_size: 14
+      bold: true
+      align: "left"
+      space_before: 18
+      space_after: 12
+    heading3:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+
+  body_text:
+    font_size: 10.5
+    line_spacing: 1.5
+    first_line_indent: 2
+    align: "justify"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 3.17
+    right: 3.17
+
+doc_type_hints:
+  - "论文"
+  - "学术论文"
+  - "期刊论文"
+  - "会议论文"
+  - "学位论文"
+  - "毕业论文"
+  - "研究报告"

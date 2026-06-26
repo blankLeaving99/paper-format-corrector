@@ -14,6 +14,8 @@ import difflib
 
 from docx import Document
 
+from ..utils.docx_utils import escape_html
+
 
 class DiffReporter:
     """矫正前后对比报告器"""
@@ -162,15 +164,15 @@ class DiffReporter:
                 diff = self._inline_diff(change["original"], change["corrected"])
                 rows.append(f'<tr class="modify"><td>{change["line"]}</td><td>内容修改</td><td>{diff}</td></tr>')
             elif change["type"] == "insert":
-                rows.append(f'<tr class="insert"><td>{change["line"]}</td><td>新增</td><td>{self._esc(change["corrected"])}</td></tr>')
+                rows.append(f'<tr class="insert"><td>{change["line"]}</td><td>新增</td><td>{escape_html(change["corrected"])}</td></tr>')
             elif change["type"] == "delete":
-                rows.append(f'<tr class="delete"><td>{change["line"]}</td><td>删除</td><td><del>{self._esc(change["original"])}</del></td></tr>')
+                rows.append(f'<tr class="delete"><td>{change["line"]}</td><td>删除</td><td><del>{escape_html(change["original"])}</del></td></tr>')
 
         for change in format_changes[:100]:
             rows.append(
                 f'<tr class="format"><td>{change["line"]}</td>'
                 f'<td>{change["type"]}</td>'
-                f'<td>{self._esc(change["text"])}: {change["from"]} → {change["to"]}</td></tr>'
+                f'<td>{escape_html(change["text"])}: {change["from"]} → {change["to"]}</td></tr>'
             )
 
         table_rows = "\n".join(rows)
@@ -213,11 +215,6 @@ ins {{ color: #28a745; }}
 
     def _inline_diff(self, old, new):
         """生成行内diff HTML"""
-        old_escaped = self._esc(old)
-        new_escaped = self._esc(new)
+        old_escaped = escape_html(old)
+        new_escaped = escape_html(new)
         return f'<del>{old_escaped}</del> → <ins>{new_escaped}</ins>'
-
-    def _esc(self, text):
-        if not text:
-            return ""
-        return text.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")

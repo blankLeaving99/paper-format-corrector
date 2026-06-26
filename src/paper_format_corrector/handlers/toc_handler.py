@@ -18,12 +18,15 @@ class TOCHandler:
         self.font_rules = config.get("format_rules", {}).get("font", {})
 
     def insert_toc(self, doc, position=0):
-        """在指定位置插入目录"""
+        """在指定位置插入目录
+
+        Args:
+            doc: python-docx Document 对象
+            position: 插入位置索引（0 = 文档开头）
+        """
         if not self.enabled:
             return
 
-        # 在文档开头插入目录标题和 TOC 字段
-        # python-docx 不直接支持在指定位置插入，需要通过 XML 操作
         body = doc.element.body
 
         # 创建目录标题段落
@@ -32,11 +35,11 @@ class TOCHandler:
         # 创建 TOC 字段
         toc_elem = self._create_toc_field()
 
-        # 插入到文档开头（在第一个子元素之前）
-        first_child = body[0] if len(body) > 0 else None
-        if first_child is not None:
-            first_child.addprevious(title_elem)
-            first_child.addprevious(toc_elem)
+        # 在指定位置插入（TOC 字段在标题之后）
+        if position < len(body):
+            ref_child = body[position]
+            ref_child.addprevious(title_elem)
+            ref_child.addprevious(toc_elem)
         else:
             body.append(title_elem)
             body.append(toc_elem)

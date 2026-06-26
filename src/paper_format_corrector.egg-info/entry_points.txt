@@ -1,0 +1,3 @@
+[console_scripts]
+paper-correct = paper_format_corrector.cli:main
+paper-fmt = paper_format_corrector.cli:main

@@ -54,11 +54,13 @@ class ImageHandler:
 
     def _get_page_content_width(self, doc):
         """获取页面内容区宽度（EMU）"""
+        if not doc.sections:
+            return Cm(15)  # 默认约15cm
         section = doc.sections[0]
         page_width = section.page_width
-        left_margin = section.left_margin or 0
-        right_margin = section.right_margin or 0
-        if page_width and left_margin and right_margin:
+        left_margin = section.left_margin
+        right_margin = section.right_margin
+        if page_width is not None and left_margin is not None and right_margin is not None:
             return page_width - left_margin - right_margin
         return Cm(15)  # 默认约15cm
 

@@ -18,6 +18,8 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
+from ..utils.docx_utils import set_east_asian_font
+
 
 class CoverPageGenerator:
     """封面页生成器"""
@@ -144,7 +146,7 @@ class CoverPageGenerator:
         run.font.size = Pt(font_size)
         run.font.bold = bold
         run.font.name = "宋体"
-        self._set_east_asian_font(run, "黑体" if bold else "宋体")
+        set_east_asian_font(run, "黑体" if bold else "宋体")
         p.alignment = {
             "center": WD_ALIGN_PARAGRAPH.CENTER,
             "left": WD_ALIGN_PARAGRAPH.LEFT,
@@ -161,14 +163,14 @@ class CoverPageGenerator:
         label_run.font.size = Pt(font_size)
         label_run.font.bold = True
         label_run.font.name = "宋体"
-        self._set_east_asian_font(label_run, "宋体")
+        set_east_asian_font(label_run, "宋体")
 
         # 下划线 + 值
         value_run = p.add_run(f"  {value}  ")
         value_run.font.size = Pt(font_size)
         value_run.font.bold = False
         value_run.font.name = "宋体"
-        self._set_east_asian_font(value_run, "宋体")
+        set_east_asian_font(value_run, "宋体")
 
         # 添加下划线
         rpr = value_run._element.get_or_add_rPr()
@@ -178,14 +180,6 @@ class CoverPageGenerator:
 
         p.paragraph_format.space_after = Pt(12)
         return p
-
-    def _set_east_asian_font(self, run, font_name):
-        rpr = run._element.get_or_add_rPr()
-        rFonts = rpr.find(qn("w:rFonts"))
-        if rFonts is None:
-            rFonts = run._element.makeelement(qn("w:rFonts"), {})
-            rpr.insert(0, rFonts)
-        rFonts.set(qn("w:eastAsia"), font_name)
 
 
 def generate_cover_from_config(config, output_path):
