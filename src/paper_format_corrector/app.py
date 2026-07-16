@@ -181,11 +181,21 @@ class PaperFormatCorrector:
         self,
         requirement_path: str,
         use_llm: bool = False,
+        use_offline_parser: bool = False,
         llm_provider: str = "openai",
         llm_api_key: str | None = None,
         llm_model: str | None = None,
     ) -> None:
-        """解析需求文档并应用到配置"""
+        """解析需求文档并应用到配置
+
+        Args:
+            requirement_path: 需求文档路径
+            use_llm: 是否使用 LLM 解析
+            use_offline_parser: 是否使用离线规则解析器（无需 LLM API）
+            llm_provider: LLM 提供商
+            llm_api_key: LLM API 密钥
+            llm_model: LLM 模型名
+        """
         # 校验需求文档路径
         validate_input_path(requirement_path, ALLOWED_INPUT_EXTENSIONS)
         req_config = None
@@ -202,6 +212,15 @@ class PaperFormatCorrector:
                     self.logger.info("LLM解析成功")
             except Exception as e:
                 self.logger.warning(f"LLM解析失败，回退到正则解析: {e}")
+
+        # 使用离线规则解析器（推荐的离线方案）
+        if req_config is None and use_offline_parser:
+            try:
+                from .parsers.rule_parser import parse_requirement_file
+                req_config = parse_requirement_file(requirement_path)
+                self.logger.info("离线规则解析成功")
+            except Exception as e:
+                self.logger.warning(f"离线规则解析失败，回退到基础解析: {e}")
 
         # 正则解析（默认或LLM失败时）
         if req_config is None:

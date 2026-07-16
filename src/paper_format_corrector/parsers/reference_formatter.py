@@ -36,7 +36,22 @@ class ReferenceFormatter:
     CITATION_BRACKET = "bracket"        # [1], [2], [1-3]
     CITATION_SUPERSCRIPT = "superscript"  # ¹, ², ³
     CITATION_AUTHOR_YEAR = "author_year"  # (Smith, 2020), (Smith and Jones, 2020)
+    CITATION_VANCOUVER = "vancouver"    # 1., 2., 3. (数字后跟句点)
     CITATION_UNKNOWN = "unknown"
+
+    # 额外的引用风格模板
+    EXTRA_STYLE_TEMPLATES = {
+        "vancouver": {
+            "journal": "{num}. {authors}. {title}. {journal}. {year};{volume}({number}):{pages}.",
+            "book": "{num}. {authors}. {title}. {city}: {publisher}; {year}.",
+            "conference": "{num}. {authors}. {title}. In: {proceedings}. {city}: {publisher}; {year}. p. {pages}.",
+        },
+        "turabian": {
+            "journal": "{num}. {authors}. \"{title}.\" {journal} {volume}, no. {number} ({year}): {pages}.",
+            "book": "{num}. {authors}. {title}. {city}: {publisher}, {year}.",
+            "conference": "{num}. {authors}. \"{title}.\" In {proceedings}. {city}: {publisher}, {year}.",
+        },
+    }
 
     # 上标数字 Unicode 映射
     _SUPERSCRIPT_DIGITS = set("⁰¹²³⁴⁵⁶⁷⁸⁹")
@@ -54,6 +69,7 @@ class ReferenceFormatter:
         bracket_count = 0
         superscript_count = 0
         author_year_count = 0
+        vancouver_count = 0
 
         # 只扫描正文部分（参考文献之前）
         for i in range(min(ref_start_idx, len(doc.paragraphs))):
@@ -77,8 +93,14 @@ class ReferenceFormatter:
             )
             author_year_count += len(ay_matches)
 
+            # 温哥华格式引用: 1., 2., 3. (数字后跟句点，在参考文献列表中)
+            vancouver_matches = re.findall(r"(?<!\[)\b(\d+)\.(?!\d)", text)
+            # 只在参考文献区域内计数
+            if i >= ref_start_idx:
+                vancouver_count += len(vancouver_matches)
+
         # 判断主要引用风格
-        max_count = max(bracket_count, superscript_count, author_year_count)
+        max_count = max(bracket_count, superscript_count, author_year_count, vancouver_count)
         if max_count == 0:
             return self.CITATION_UNKNOWN
 
@@ -86,6 +108,8 @@ class ReferenceFormatter:
             return self.CITATION_BRACKET
         elif superscript_count == max_count:
             return self.CITATION_SUPERSCRIPT
+        elif vancouver_count == max_count:
+            return self.CITATION_VANCOUVER
         else:
             return self.CITATION_AUTHOR_YEAR
 
@@ -95,6 +119,7 @@ class ReferenceFormatter:
             self.CITATION_BRACKET: "方括号编号 [1]",
             self.CITATION_SUPERSCRIPT: "上标数字 ¹",
             self.CITATION_AUTHOR_YEAR: "作者-年份 (Smith, 2020)",
+            self.CITATION_VANCOUVER: "温哥华格式 1.",
             self.CITATION_UNKNOWN: "未知",
         }
         return names.get(style, "未知")
@@ -397,3 +422,74 @@ class ReferenceFormatter:
                 issues.append({"type": "missing", "message": f"参考文献 [{num}] 未在正文中被引用"})
 
         return issues
+
+    def deduplicate_references(self, doc, ref_start_idx):
+        """去重参考文献列表
+
+        检测并移除重复的参考文献条目，保留第一个出现的条目。
+
+        Args:
+            doc: Document 对象
+            ref_start_idx: 参考文献标题段落索引
+
+        Returns:
+            list of dict: 去重报告 [{"removed": int, "kept": int, "details": list}]
+        """
+        paragraphs = doc.paragraphs
+        seen_refs: dict[str, int] = {}  # normalized_text -> first_index
+        duplicates: list[int] = []  # 需要删除的段落索引
+
+        for i in range(ref_start_idx + 1, len(paragraphs)):
+            text = paragraphs[i].text.strip()
+            if not text:
+                continue
+            if self._is_new_section(text):
+                break
+
+            # 标准化文本用于比较（去除编号、空白、标点差异）
+            normalized = self._normalize_reference_text(text)
+
+            if normalized in seen_refs:
+                duplicates.append(i)
+            else:
+                seen_refs[normalized] = i
+
+        # 从后往前删除重复条目（避免索引偏移）
+        removed_count = 0
+        details = []
+        for idx in reversed(duplicates):
+            para = paragraphs[idx]
+            ref_text = para.text.strip()[:80]
+            # 清空段落内容
+            for run in para.runs:
+                run.text = ""
+            # 标记为已删除（保留空行，后续可清理）
+            if para.runs:
+                para.runs[0].text = f"[已删除-重复] {ref_text}"
+            removed_count += 1
+            details.append(f"删除重复条目: {ref_text}")
+
+        return {
+            "removed": removed_count,
+            "kept": len(seen_refs),
+            "details": details,
+        }
+
+    def _normalize_reference_text(self, text: str) -> str:
+        """标准化参考文献文本用于去重比较
+
+        Args:
+            text: 原始参考文献文本
+
+        Returns:
+            str: 标准化后的文本
+        """
+        # 去除编号 [N]
+        text = re.sub(r"^\[\d+\]\s*", "", text)
+        # 去除多余空白
+        text = re.sub(r"\s+", " ", text)
+        # 统一标点
+        text = text.replace("，", ",").replace("。", ".").replace("：", ":")
+        # 转小写
+        text = text.lower()
+        return text.strip()

@@ -1,7 +1,7 @@
 """路径安全校验工具
 
 防止路径穿越攻击和非法路径访问。
-禁止路径中包含中文字符。
+支持中文等非ASCII字符路径。
 """
 
 import os
@@ -19,19 +19,34 @@ ALLOWED_OUTPUT_EXTENSIONS = {
     # 注意：.diff.html 文件的 suffix 为 .html，已被上面覆盖
 }
 
-# 中文字符正则 — CJK统一表意文字主区块（覆盖常用中文）
-_CJK_RE = re.compile('[\u4e00-\u9fff]')
+# 危险字符正则：控制字符和 Windows 保留字符
+# 注意：不含冒号(:)，因为 Windows 路径需要（如 C:\）
+# 不含反斜杠(\)，因为它是 Windows 路径分隔符
+_DANGEROUS_CHARS_RE = re.compile(r'[\x00-\x1f\x7f<>\"|?*]')
+
+# Windows 路径最大长度（考虑长路径前缀）
+_MAX_PATH_LENGTH = 260
 
 
-def _contains_chinese(text: str) -> bool:
-    """检查字符串是否包含中文字符"""
-    return bool(_CJK_RE.search(text))
+def _is_safe_path(path_str: str) -> bool:
+    """检查路径是否安全（不含危险字符）"""
+    # 检查危险字符
+    if _DANGEROUS_CHARS_RE.search(path_str):
+        return False
+    # 冒号只允许在 Windows 驱动器字母后（如 C:）
+    # 移除驱动器字母前缀后再检查冒号
+    path_without_drive = re.sub(r'^[a-zA-Z]:', '', path_str)
+    if ':' in path_without_drive:
+        return False
+    return True
 
 
-def _validate_no_chinese(path_str: str, label: str = "路径") -> None:
-    """校验路径不包含中文字符"""
-    if _contains_chinese(path_str):
-        raise ValueError(f"{label}不允许包含中文字符: {path_str}")
+def _validate_path_safety(path_str: str, label: str = "路径") -> None:
+    """校验路径安全性"""
+    if not _is_safe_path(path_str):
+        raise ValueError(f"{label}包含不允许的字符: {path_str}")
+    if len(path_str) > _MAX_PATH_LENGTH:
+        raise ValueError(f"{label}过长（超过{_MAX_PATH_LENGTH}字符）: {path_str[:50]}...")
 
 
 def validate_input_path(path: str, allowed_extensions: set = None) -> Path:
@@ -48,7 +63,7 @@ def validate_input_path(path: str, allowed_extensions: set = None) -> Path:
         ValueError: 路径不安全或扩展名不允许
         FileNotFoundError: 文件不存在
     """
-    _validate_no_chinese(path, "输入文件路径")
+    _validate_path_safety(path, "输入文件路径")
 
     p = Path(path).resolve()
 
@@ -77,7 +92,7 @@ def validate_output_path(path: str, allowed_extensions: set = None) -> Path:
     Returns:
         校验后的 Path 对象
     """
-    _validate_no_chinese(path, "输出文件路径")
+    _validate_path_safety(path, "输出文件路径")
 
     p = Path(path).resolve()
 
@@ -101,7 +116,7 @@ def safe_join(base_dir: str, filename: str) -> Path:
     Returns:
         安全的完整路径
     """
-    _validate_no_chinese(filename, "文件名")
+    _validate_path_safety(filename, "文件名")
 
     base = Path(base_dir).resolve()
 

@@ -111,6 +111,72 @@ def _handle_generate(args) -> None:  # noqa: C901
         sys.exit(1)
 
 
+def _handle_list_models(args) -> None:
+    """列出当前provider下所有可用模型"""
+    from .parsers.model_discovery import list_models
+
+    provider = args.llm_provider
+    api_key = args.llm_key
+    base_url = args.llm_base_url
+
+    print(f"\n正在查询 {provider} 的可用模型...")
+    if base_url:
+        print(f"  端点: {base_url}")
+    print()
+
+    models = list_models(provider, api_key, base_url)
+
+    if not models:
+        print("  未找到可用模型。请检查：")
+        if provider != "ollama":
+            print("  - API Key 是否已配置（环境变量或 --llm-key）")
+        else:
+            print("  - Ollama 服务是否在运行（ollama serve）")
+            print("  - 是否已下载模型（ollama pull <model>）")
+        return
+
+    print(f"  找到 {len(models)} 个可用模型:")
+    print("  " + "-" * 56)
+    for m in models:
+        print(f"  {m}")
+    print("  " + "-" * 56)
+    print("\n  提示: 使用 --probe-model <model_name> 探测指定模型的延迟和可用性")
+    print(f"  用法: python -m paper_format_corrector --list-models --llm-provider {provider}")
+
+
+def _handle_probe_model(args) -> None:
+    """探测指定模型是否可用"""
+    from .parsers.model_discovery import probe_model
+
+    provider = args.llm_provider
+    api_key = args.llm_key
+    base_url = args.llm_base_url
+    model_names = args.probe_model
+
+    print(f"\n探测模型可用性 ({provider})...")
+    if base_url:
+        print(f"  端点: {base_url}")
+    print()
+
+    for model_name in model_names:
+        model_name = model_name.strip()
+        if not model_name:
+            continue
+        print(f"  测试: {model_name} ...", end=" ", flush=True)
+        result = probe_model(provider, model_name, api_key, base_url)
+
+        if result["available"]:
+            latency = f'{result["latency_ms"]}ms' if result["latency_ms"] else "N/A"
+            print(f"✓ 可用  (延迟: {latency})")
+        else:
+            error = result.get("error", "未知错误")
+            print(f"✗ 不可用 - {error}")
+
+    print()
+    print("  提示: 可以使用任意模型名（不限于官方列表）")
+    print("  用法: python -m paper_format_corrector --probe-model deepseek-chat qwen-plus --llm-provider openai")
+
+
 def _handle_interactive_chat(args) -> None:  # noqa: C901
     """处理交互式AI对话（新增功能）"""
     from .parsers.ai_doc_generator import AIDocGenerator
@@ -253,6 +319,14 @@ def main() -> None:  # noqa: C901
   LLM智能解析:
     python -m paper_format_corrector -r requirement.txt -f paper.docx --llm
 
+  模型发现（支持任意API端点和模型名）:
+    python -m paper_format_corrector --list-models                           # 列出可用模型
+    python -m paper_format_corrector --list-models --llm-provider ollama     # Ollama本地模型
+    python -m paper_format_corrector --probe-model gpt-4o gpt-4o-mini       # 探测指定模型
+    python -m paper_format_corrector --probe-model deepseek-chat            # 探测第三方模型
+    python -m paper_format_corrector --probe-model deepseek-chat \\
+        --llm-base-url https://api.deepseek.com/v1 --llm-provider openai   # 自定义端点
+
   模板/导出:
     python -m paper_format_corrector --extract
     python -m paper_format_corrector -f paper.docx --format pdf html
@@ -285,9 +359,15 @@ def main() -> None:  # noqa: C901
 
     # LLM
     parser.add_argument("--llm", action="store_true", help="使用LLM智能解析需求文档")
+    parser.add_argument("--offline-parser", action="store_true", help="使用离线规则解析器（无需LLM API，推荐）")
     parser.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic", "ollama"], help="LLM提供商")
     parser.add_argument("--llm-key", help="LLM API Key (也可用环境变量)")
     parser.add_argument("--llm-model", help="LLM模型名称")
+
+    # 模型发现
+    parser.add_argument("--list-models", action="store_true", help="列出当前provider可用的所有模型")
+    parser.add_argument("--probe-model", nargs="+", metavar="MODEL", help="探测指定模型是否可用（支持任意名称）")
+    parser.add_argument("--llm-base-url", help="自定义API端点（用于第三方API或模型探测）")
 
     # 导出
     parser.add_argument("--format", nargs="+", help="额外导出格式: pdf html txt md")
@@ -352,6 +432,16 @@ def main() -> None:  # noqa: C901
         print("-" * 60)
         return
 
+    # 模型发现：列出可用模型
+    if args.list_models:
+        _handle_list_models(args)
+        return
+
+    # 模型发现：探测指定模型
+    if args.probe_model:
+        _handle_probe_model(args)
+        return
+
     # 应用格式预设
     if args.preset:
         print(f"\n应用格式预设: {args.preset}")
@@ -364,6 +454,7 @@ def main() -> None:  # noqa: C901
         corrector.apply_requirement(
             args.requirement,
             use_llm=args.llm,
+            use_offline_parser=args.offline_parser,
             llm_provider=args.llm_provider,
             llm_api_key=args.llm_key,
             llm_model=args.llm_model,

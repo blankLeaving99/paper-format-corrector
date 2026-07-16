@@ -200,15 +200,104 @@ class AIDocGenerator:
         api_key: str | None = None,
         base_url: str | None = None,
         model: str | None = None,
+        allow_custom_base_url: bool = False,
     ):
         self.provider = provider
         self.api_key = api_key or self._get_default_key()
-        self.base_url = self._validate_url(base_url) if base_url else None
+        self.base_url = self._validate_url(base_url, strict=not allow_custom_base_url) if base_url else None
         self.model = model or self._get_default_model()
         self.session = ChatSession()
 
-    def _validate_url(self, url):  # noqa: C901
-        """校验 URL 安全性（防止 SSRF）"""
+    # ---------- 模型发现 API ----------
+
+    @classmethod
+    def discover_models(cls, provider: str, api_key: str | None = None,
+                        base_url: str | None = None) -> list[str]:
+        """类方法：发现指定provider下所有可用模型
+
+        Args:
+            provider: "openai" | "anthropic" | "ollama"
+            api_key: API密钥（ollama不需要）
+            base_url: 自定义API端点（如 https://api.deepseek.com/v1）
+
+        Returns:
+            可用模型ID列表
+        """
+        from .model_discovery import list_models as _discover
+        if api_key is None:
+            if provider == "openai":
+                api_key = os.environ.get("OPENAI_API_KEY", "")
+            elif provider == "anthropic":
+                api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        return _discover(provider, api_key, base_url)
+
+    @classmethod
+    def probe_model(cls, provider: str, model: str,
+                    api_key: str | None = None,
+                    base_url: str | None = None) -> dict:
+        """类方法：探测指定模型是否可用（支持任意用户输入的模型名）
+
+        Args:
+            provider: "openai" | "anthropic" | "ollama"
+            model: 模型ID，可以是官方名也可以是自定义名
+            api_key: API密钥
+            base_url: 自定义API端点
+
+        Returns:
+            {
+                "available": bool,
+                "model": str,
+                "provider": str,
+                "latency_ms": float | None,
+                "error": str | None,
+                "details": dict
+            }
+        """
+        from .model_discovery import probe_model as _probe
+        if api_key is None:
+            if provider == "openai":
+                api_key = os.environ.get("OPENAI_API_KEY", "")
+            elif provider == "anthropic":
+                api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        return _probe(provider, model, api_key, base_url)
+
+    @classmethod
+    def probe_custom_models(cls, provider: str, model_names: list[str],
+                            api_key: str | None = None,
+                            base_url: str | None = None) -> list[dict]:
+        """类方法：批量探测多个模型（支持非官方名称）
+
+        Args:
+            provider: "openai" | "anthropic" | "ollama"
+            model_names: 要探测的模型名列表（任意用户输入）
+            api_key: API密钥
+            base_url: 自定义API端点
+
+        Returns:
+            探测结果列表
+        """
+        from .model_discovery import probe_model as _probe
+        if api_key is None:
+            if provider == "openai":
+                api_key = os.environ.get("OPENAI_API_KEY", "")
+            elif provider == "anthropic":
+                api_key = os.environ.get("ANTHROPIC_API_KEY", "")
+        results = []
+        for name in model_names:
+            name = name.strip()
+            if not name:
+                continue
+            results.append(_probe(provider, name, api_key, base_url))
+        return results
+
+    def _validate_url(self, url, strict=True):  # noqa: C901
+        """校验 URL 安全性（防止 SSRF）
+
+        Args:
+            url: 要验证的URL
+            strict: True=仅允许白名单域名（用于LLM调用），
+                    False=仅要求HTTPS+非内网（用于模型发现）
+        """
         import ipaddress
         from urllib.parse import urlparse
 
@@ -227,7 +316,10 @@ class AIDocGenerator:
         if ip is not None:
             if ip.is_private or ip.is_loopback or ip.is_link_local:
                 if self.provider != "ollama":
-                    raise ValueError(f"不允许访问内网地址: {host}")
+                    if strict:
+                        raise ValueError(f"不允许访问内网地址: {host}")
+                    if host not in ("localhost", "127.0.0.1"):
+                        raise ValueError(f"不允许访问内网地址: {host}")
             if str(ip) == "169.254.169.254":
                 raise ValueError("不允许访问云服务商元数据地址")
 
@@ -237,13 +329,20 @@ class AIDocGenerator:
                 raise ValueError(f"Ollama 仅支持 localhost，不允许远程地址: {host}")
             return url
 
-        # 外部 API 必须使用 HTTPS（localhost 除外）
+        # 非严格模式：只要求HTTPS
+        if not strict:
+            if parsed.scheme == "http" and host in ("localhost", "127.0.0.1"):
+                return url
+            if parsed.scheme != "https":
+                raise ValueError(f"必须使用 HTTPS，不允许: {parsed.scheme}://")
+            return url
+
+        # 严格模式：外部 API 必须使用 HTTPS + 白名单域名
         if parsed.scheme not in ("https",):
             if parsed.scheme == "http" and host in ("localhost", "127.0.0.1"):
                 return url
             raise ValueError(f"不允许的 URL 协议: {parsed.scheme}")
 
-        # 检查域名白名单
         if host not in self.ALLOWED_DOMAINS:
             raise ValueError(f"不允许的 API 域名: {host}，允许: {self.ALLOWED_DOMAINS}")
 

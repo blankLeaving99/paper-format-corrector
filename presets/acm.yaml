@@ -1,0 +1,129 @@
+# ACM Conference Paper Format
+# Based on ACM acmart.cls template
+# Suitable for: ACM conferences, ACM journals (TOIS, TOSEM, etc.)
+
+description: "ACM - 会议/期刊论文格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:   # Section: 1. INTRODUCTION
+      font_size: 10
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.0
+    heading2:   # Subsection: 1.1 Methodology
+      font_size: 10
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 8
+      space_after: 4
+      line_spacing: 1.0
+    heading3:   # Sub-subsection: 1.1.1 Details
+      font_size: 9
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 6
+      space_after: 3
+      line_spacing: 1.0
+
+  body_text:
+    font_size: 9
+    line_spacing: 1.0
+    first_line_indent: 0
+    align: "justify"
+
+  margins:
+    top: 1.905      # 0.75 inches
+    bottom: 1.905
+    left: 1.905
+    right: 1.905
+
+  abstract:
+    title_font_size: 9
+    title_bold: true
+    title_align: "left"
+    content_font_size: 9
+    content_line_spacing: 1.0
+    content_first_line_indent: 0
+
+  keywords:
+    label: "Keywords: "
+    font_size: 9
+    bold_label: false
+    separator: ", "
+
+  title_page:
+    title_font_size: 14
+    title_bold: true
+    title_align: "center"
+    author_font_size: 11
+    author_align: "center"
+    affiliation_font_size: 9
+    affiliation_align: "center"
+
+  references:
+    style: "ACM"
+    font_size: 8
+    line_spacing: 1.0
+    hanging_indent: true
+    numbering: "sequential"
+    templates:
+      journal: "[{num}] {authors}. {year}. {title}. {journal} {volume}, {number} ({year}), {pages}."
+      book: "[{num}] {authors}. {year}. {title}. {publisher}, {city}."
+      conference: "[{num}] {authors}. {year}. {title}. In {proceedings}, {publisher}, {city}, {pages}."
+
+  figures:
+    label: "Figure"
+    numbering: "sequential"
+    separator: "."
+    caption_position: "below"
+    font_size: 8
+    align: "center"
+
+  tables:
+    label: "Table"
+    numbering: "sequential"
+    separator: "."
+    caption_position: "above"
+    font_size: 8
+    header_bold: true
+    align: "center"
+
+  formulas:
+    numbering: true
+    numbering_style: "paren"
+    numbering_position: "right"
+    font_size: 9
+
+  header_footer:
+    enabled: false
+
+  toc:
+    enabled: false
+
+auto_detect:
+  title_pattern: '^(?!.*^\d+[\.\s]).{10,}$'
+  chapter_pattern: '^\d+[\.\s]'
+  section_pattern: '^\d+\.\d+'
+  subsection_pattern: '^\d+\.\d+\.\d+'
+  abstract_pattern: "^Abstract$|^ABSTRACT$|^摘\\s*要$"
+  abstract_en_pattern: "^Abstract$|^ABSTRACT$"
+  keywords_pattern: "^Keywords[:：]?|^关键词[:：]"
+  reference_keywords:
+    - "References"
+    - "REFERENCES"
+    - "Bibliography"
+  acknowledgment_pattern: "^Acknowledge?ments?$|^致\\s*谢$"
+  appendix_pattern: "^Appendix\\s*[A-Z]?"
+  figure_caption_pattern: "^Figure\\s+\\d"
+  table_caption_pattern: "^Table\\s+\\d"
+  formula_pattern: "^\\(?\\d+\\)?$"
