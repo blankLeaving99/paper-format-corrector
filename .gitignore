@@ -9,3 +9,15 @@ template/*.doc
 .venv/
 .venv_location
 setup_config.json
+
+# 环境变量和敏感文件
+.env
+.env.*
+*.env
+.env.local
+.env.development
+.env.production
+secrets.json
+credentials.json
+*.key
+*.pem
