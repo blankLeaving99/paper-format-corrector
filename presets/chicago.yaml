@@ -122,7 +122,7 @@ format_rules:
 
 auto_detect:
   title_pattern: "^.*$"
-  chapter_pattern: "^第[一二三四五六七八九十百零\\d]+[章部分篇]|^Introduction$|^Conclusion$"
+  chapter_pattern: "^Introduction$|^Conclusion$"
   section_pattern: "^\\d+\\.\\d+"
   subsection_pattern: "^\\d+\\.\\d+\\.\\d+"
   abstract_pattern: "^Abstract$|^ABSTRACT$|^摘\\s*要$"
@@ -137,4 +137,4 @@ auto_detect:
   appendix_pattern: "^Appendix\\s*[A-Z]?"
   figure_caption_pattern: "^Figure\\s+\\d|^Fig\\.?\\s*\\d|^图\\s*\\d"
   table_caption_pattern: "^Table\\s+\\d|^表\\s*\\d"
-  formula_pattern: "^\\(?\\d+[-\\.\\)]\\d+\\)?$"
+  formula_pattern: "^\\(?\\d+[-\\.]\\d+\\)?$"

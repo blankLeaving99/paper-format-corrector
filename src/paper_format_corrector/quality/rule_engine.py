@@ -50,15 +50,42 @@ class RuleEngine:
             "font_consistency": self._check_font_consistency,
         }
 
+    VALID_CHECKS = frozenset({
+        "reference_count", "body_font_size", "heading_exists",
+        "abstract_exists", "keywords_exists", "figure_caption_format",
+        "table_caption_format", "page_margins", "line_spacing",
+        "first_line_indent", "no_empty_paragraphs", "font_consistency",
+    })
+
+    VALID_SEVERITIES = frozenset({"error", "warning", "info"})
+
     def load_rules(self, rules_path):
         """加载规则文件"""
         with open(rules_path, encoding="utf-8") as f:
             data = yaml.safe_load(f)
-        self.rules = data.get("rules", [])
+        rules = data.get("rules", [])
+        self.rules = self._validate_rules(rules)
 
     def load_rules_dict(self, rules_list):
         """直接加载规则列表"""
-        self.rules = rules_list
+        self.rules = self._validate_rules(rules_list)
+
+    def _validate_rules(self, rules):
+        """校验规则列表，过滤无效规则"""
+        validated = []
+        for rule in rules:
+            if not isinstance(rule, dict):
+                continue
+            check = rule.get("check")
+            if check not in self.VALID_CHECKS:
+                continue
+            severity = rule.get("severity", "info")
+            if severity not in self.VALID_SEVERITIES:
+                rule["severity"] = "info"
+            if "params" not in rule:
+                rule["params"] = {}
+            validated.append(rule)
+        return validated
 
     def check(self, doc, config):
         """执行所有规则检查"""

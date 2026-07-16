@@ -50,6 +50,9 @@ _temp_dirs: list[str] = []
 # AI文档生成器实例（按会话管理）
 _ai_sessions: dict[str, dict] = {}
 
+# session 最大数量限制
+_MAX_SESSIONS = 50
+
 
 def _cleanup_temp_dirs():
     for d in _temp_dirs:
@@ -74,10 +77,16 @@ def init_corrector(config_file=None):
     return corrector
 
 
-def process_paper(paper_file, requirement_file, config_file, template_file, preset_name, export_formats, do_score, do_diff):
+def process_paper(paper_file, requirement_file, config_file, template_file, preset_name, export_formats, do_score, do_diff):  # noqa: C901
     """处理论文主函数"""
     if paper_file is None:
         return None, None, "请上传论文文件", None
+
+    # 校验论文文件扩展名
+    from .infra.path_security import ALLOWED_INPUT_EXTENSIONS
+    paper_ext = Path(paper_file.name).suffix.lower()
+    if paper_ext not in ALLOWED_INPUT_EXTENSIONS:
+        return None, None, f"不支持的文件类型: {paper_ext}", None
 
     # 初始化
     try:
@@ -272,6 +281,11 @@ def _get_or_create_ai_session(
     """获取或创建AI文档生成器会话"""
     from .parsers.ai_doc_generator import AIDocGenerator
 
+    # 限制 session 数量，防止内存泄漏
+    if len(_ai_sessions) >= _MAX_SESSIONS:
+        oldest_key = next(iter(_ai_sessions))
+        del _ai_sessions[oldest_key]
+
     if session_id not in _ai_sessions:
         _ai_sessions[session_id] = {
             "generator": AIDocGenerator(
@@ -385,7 +399,7 @@ def ai_chat_send(
     return chat_history, "", status
 
 
-def ai_chat_send_stream(
+def ai_chat_send_stream(  # noqa: C901
     message: str,
     chat_history: list,
     session_id: str,

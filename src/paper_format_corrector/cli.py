@@ -13,7 +13,7 @@ from .infra.doc_template_loader import list_doc_templates, load_doc_template
 from .infra.preset_loader import format_preset_list, get_preset_choices
 
 
-def _handle_generate(args) -> None:
+def _handle_generate(args) -> None:  # noqa: C901
     """处理AI文档生成"""
     user_input = args.generate
     if not user_input:
@@ -111,7 +111,7 @@ def _handle_generate(args) -> None:
         sys.exit(1)
 
 
-def _handle_interactive_chat(args) -> None:
+def _handle_interactive_chat(args) -> None:  # noqa: C901
     """处理交互式AI对话（新增功能）"""
     from .parsers.ai_doc_generator import AIDocGenerator
 
@@ -210,7 +210,7 @@ def _handle_interactive_chat(args) -> None:
             print("[提示] 请检查API配置后重试")
 
 
-def main() -> None:
+def main() -> None:  # noqa: C901
     """CLI 主入口"""
     preset_choices = get_preset_choices()
 
@@ -304,7 +304,9 @@ def main() -> None:
     parser.add_argument("--generate", nargs="?", const="", help="AI生成文档: '描述文字' 或留空进入交互模式")
     parser.add_argument("--stream", action="store_true", help="流式输出AI生成内容")
     parser.add_argument("--chat", action="store_true", help="进入交互式AI对话模式")
-    parser.add_argument("--doc-type", default="通用文档", help="文档类型（报告/公文/论文/合同等）")
+    parser.add_argument("--doc-type", default="通用文档",
+                        choices=["通用文档", "报告", "公文", "合同", "论文", "方案", "会议纪要", "可行性报告", "项目立项", "工作总结", "调研报告"],
+                        help="文档类型（报告/公文/论文/合同等）")
     parser.add_argument("--doc-template", help="文档模板名称")
     parser.add_argument("--list-doc-templates", action="store_true", help="列出所有可用的文档模板")
     parser.add_argument("--gen-provider", default="openai", choices=["openai", "anthropic", "ollama"], help="AI生成使用的LLM提供商")

@@ -112,7 +112,7 @@ format_rules:
 
 auto_detect:
   title_pattern: "^.*$"
-  chapter_pattern: "^(Introduction|Results|Discussion|Materials and Methods|Conclusion|Summary|Acknowledgments)[s]?$"
+  chapter_pattern: "^(Introduction|Results|Discussion|Materials and Methods|Conclusion|Summary)[s]?$"
   section_pattern: "^(Introduction|Results|Discussion|Materials and Methods|Conclusion|Summary)[s]?$"
   subsection_pattern: "^[A-Z][a-z]+(?:\\s+[a-z]+)*$"
   abstract_pattern: "^Abstract$|^ABSTRACT$|^摘\\s*要$"

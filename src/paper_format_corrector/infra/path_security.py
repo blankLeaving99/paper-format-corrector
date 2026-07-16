@@ -1,9 +1,11 @@
 """路径安全校验工具
 
 防止路径穿越攻击和非法路径访问。
+禁止路径中包含中文字符。
 """
 
 import os
+import re
 from pathlib import Path
 
 # 允许的文件扩展名
@@ -16,6 +18,20 @@ ALLOWED_OUTPUT_EXTENSIONS = {
     ".docx", ".doc", ".pdf", ".html", ".txt", ".md", ".markdown",
     # 注意：.diff.html 文件的 suffix 为 .html，已被上面覆盖
 }
+
+# 中文字符正则 — CJK统一表意文字主区块（覆盖常用中文）
+_CJK_RE = re.compile('[\u4e00-\u9fff]')
+
+
+def _contains_chinese(text: str) -> bool:
+    """检查字符串是否包含中文字符"""
+    return bool(_CJK_RE.search(text))
+
+
+def _validate_no_chinese(path_str: str, label: str = "路径") -> None:
+    """校验路径不包含中文字符"""
+    if _contains_chinese(path_str):
+        raise ValueError(f"{label}不允许包含中文字符: {path_str}")
 
 
 def validate_input_path(path: str, allowed_extensions: set = None) -> Path:
@@ -32,6 +48,8 @@ def validate_input_path(path: str, allowed_extensions: set = None) -> Path:
         ValueError: 路径不安全或扩展名不允许
         FileNotFoundError: 文件不存在
     """
+    _validate_no_chinese(path, "输入文件路径")
+
     p = Path(path).resolve()
 
     # 检查文件是否存在
@@ -59,6 +77,8 @@ def validate_output_path(path: str, allowed_extensions: set = None) -> Path:
     Returns:
         校验后的 Path 对象
     """
+    _validate_no_chinese(path, "输出文件路径")
+
     p = Path(path).resolve()
 
     # 检查扩展名
@@ -81,6 +101,8 @@ def safe_join(base_dir: str, filename: str) -> Path:
     Returns:
         安全的完整路径
     """
+    _validate_no_chinese(filename, "文件名")
+
     base = Path(base_dir).resolve()
 
     # 文件名不允许包含路径分隔符

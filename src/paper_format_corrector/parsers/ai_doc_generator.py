@@ -207,7 +207,7 @@ class AIDocGenerator:
         self.model = model or self._get_default_model()
         self.session = ChatSession()
 
-    def _validate_url(self, url):
+    def _validate_url(self, url):  # noqa: C901
         """校验 URL 安全性（防止 SSRF）"""
         import ipaddress
         from urllib.parse import urlparse

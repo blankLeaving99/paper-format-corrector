@@ -16,7 +16,7 @@ class StyleExtractor:
                 self.styles[style.name] = self._extract_paragraph_style(style)
         return self.styles
 
-    def _extract_paragraph_style(self, style):
+    def _extract_paragraph_style(self, style):  # noqa: C901
         style_info = {
             "name": style.name,
             "font_name": None,

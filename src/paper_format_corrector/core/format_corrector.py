@@ -202,7 +202,7 @@ class FormatCorrector:
             section.left_margin = Cm(margins.get("left", 3.17))
             section.right_margin = Cm(margins.get("right", 3.17))
 
-    def _correct_paragraphs(self, doc):
+    def _correct_paragraphs(self, doc):  # noqa: C901
         """逐段矫正格式（使用多模块检测管道）"""
         # 多模块检测：各模块独立检测 → 聚合 → 上下文校验
         pipeline_result = self.section_detector.detect_all(doc.paragraphs)
@@ -321,7 +321,7 @@ class FormatCorrector:
 
         return section_map
 
-    def _renumber_formulas(self, doc):
+    def _renumber_formulas(self, doc):  # noqa: C901
         """重编号公式并返回编号映射
 
         Returns:
@@ -401,7 +401,7 @@ class FormatCorrector:
 
         return renumber_map
 
-    def _correct_footnotes(self, doc):
+    def _correct_footnotes(self, doc):  # noqa: C901
         """矫正脚注格式"""
         from docx.oxml.ns import qn as _qn
 

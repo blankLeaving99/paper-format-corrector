@@ -223,6 +223,76 @@ class PaperFormatCorrector:
         self.corrector = FormatCorrector(self.template_path, self.config)
         self.scorer = QualityScorer(self.config)
 
+    def _convert_input_file(self, input_path: Path) -> Path | None:
+        """尝试转换文件格式，失败返回 None。"""
+        converter = FileConverter()
+        if converter.needs_conversion(str(input_path)):
+            self.logger.info(f"正在转换文件格式: {input_path.suffix} → .docx")
+            try:
+                converted_path = converter.convert(str(input_path), str(input_path.parent))
+                input_path = Path(converted_path)
+                self.logger.info(f"格式转换完成: {input_path.name}")
+            except Exception as e:
+                self.logger.error(f"文件格式转换失败: {e}")
+                return None
+        return input_path
+
+    def _resolve_output_path(self, input_path: Path, output_file: str | None) -> Path:
+        """根据输入和输出参数确定最终输出路径。"""
+        if output_file is None:
+            output_path = Path("output") / f"formatted_{input_path.name}"
+        else:
+            output_path = Path(output_file)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        return output_path
+
+    def _backup_for_diff(self, input_path: Path, output_path: Path) -> str | None:
+        """为 diff 保留原始副本，返回副本路径。"""
+        import shutil
+        orig_path = str(output_path) + ".orig.docx"
+        shutil.copy2(str(input_path), orig_path)
+        return orig_path
+
+    def _run_post_processing(
+        self,
+        report: dict,
+        output_path: Path,
+        export_formats: list[str] | None,
+        score: bool,
+        diff: bool,
+        orig_path: str | None,
+    ) -> None:
+        """并行执行后处理：评分、导出、对比。"""
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {}
+
+            if export_formats:
+                futures["export"] = pool.submit(
+                    self._export_formats, output_path, export_formats
+                )
+
+            if score:
+                futures["score"] = pool.submit(
+                    self.scorer.score, str(output_path)
+                )
+
+            if diff and orig_path:
+                futures["diff"] = pool.submit(
+                    self._generate_diff_report, orig_path, str(output_path)
+                )
+
+            for name, future in futures.items():
+                try:
+                    result = future.result()
+                    if name == "score":
+                        total, scores, issues = result
+                        print(self.scorer.format_report(total, scores, issues))
+                        report["quality_score"] = total
+                    elif name == "diff":
+                        print(f"\n  对比报告已生成: {result}")
+                except Exception as e:
+                    self.logger.warning(f"后处理 {name} 失败: {e}")
+
     def process_single(
         self,
         input_file: str,
@@ -238,66 +308,23 @@ class PaperFormatCorrector:
             self.logger.error(str(e))
             return None
 
-        # 格式转换（如果需要）
-        converter = FileConverter()
-        if converter.needs_conversion(str(input_path)):
-            self.logger.info(f"正在转换文件格式: {input_path.suffix} → .docx")
-            try:
-                converted_path = converter.convert(str(input_path), str(input_path.parent))
-                input_path = Path(converted_path)
-                self.logger.info(f"格式转换完成: {input_path.name}")
-            except Exception as e:
-                self.logger.error(f"文件格式转换失败: {e}")
-                return None
+        converted = self._convert_input_file(input_path)
+        if converted is None:
+            return None
+        input_path = converted
 
-        if output_file is None:
-            output_path = Path("output") / f"formatted_{input_path.name}"
-        else:
-            output_path = Path(output_file)
-
-        output_path.parent.mkdir(parents=True, exist_ok=True)
+        output_path = self._resolve_output_path(input_path, output_file)
 
         # 保留原始副本用于diff
         orig_path = None
         if diff:
-            import shutil
-            orig_path = str(output_path) + ".orig.docx"
-            shutil.copy2(str(input_path), orig_path)
+            orig_path = self._backup_for_diff(input_path, output_path)
 
         try:
             report = self.corrector.correct_document(str(input_path), str(output_path))
             self._print_report(input_path.name, report)
 
-            # 后处理并行化：评分、导出、对比互不依赖
-            with ThreadPoolExecutor(max_workers=3) as pool:
-                futures = {}
-
-                if export_formats:
-                    futures["export"] = pool.submit(
-                        self._export_formats, output_path, export_formats
-                    )
-
-                if score:
-                    futures["score"] = pool.submit(
-                        self.scorer.score, str(output_path)
-                    )
-
-                if diff and orig_path:
-                    futures["diff"] = pool.submit(
-                        self._generate_diff_report, orig_path, str(output_path)
-                    )
-
-                for name, future in futures.items():
-                    try:
-                        result = future.result()
-                        if name == "score":
-                            total, scores, issues = result
-                            print(self.scorer.format_report(total, scores, issues))
-                            report["quality_score"] = total
-                        elif name == "diff":
-                            print(f"\n  对比报告已生成: {result}")
-                    except Exception as e:
-                        self.logger.warning(f"后处理 {name} 失败: {e}")
+            self._run_post_processing(report, output_path, export_formats, score, diff, orig_path)
 
             return report
         except Exception as e:
@@ -314,6 +341,72 @@ class PaperFormatCorrector:
         diff_path = Path(output_path).with_suffix(".diff.html")
         self.diff_reporter.generate_html_report(orig_path, output_path, str(diff_path))
         return str(diff_path)
+
+    def _collect_doc_files(self, input_dir: str) -> list[Path]:
+        """收集目录下所有支持格式的文档文件。"""
+        input_path = Path(input_dir)
+        doc_files = []
+        for ext in FileConverter.SUPPORTED_INPUT_FORMATS:
+            doc_files.extend(input_path.glob(f"*{ext}"))
+        return sorted(doc_files, key=lambda f: f.name)
+
+    def _build_task_list(
+        self,
+        doc_files: list[Path],
+        output_dir: str,
+        score: bool,
+        export_formats: list[str] | None,
+    ) -> list[tuple]:
+        """构建多进程处理任务列表。"""
+        tasks = []
+        converter = FileConverter()
+        for doc_file in doc_files:
+            processing_file = doc_file
+            if converter.needs_conversion(str(doc_file)):
+                try:
+                    converted_path = converter.convert(str(doc_file), output_dir)
+                    processing_file = Path(converted_path)
+                except Exception as e:
+                    self.logger.error(f"格式转换失败 {doc_file.name}: {e}")
+                    continue
+
+            output_file = str(Path(output_dir) / f"formatted_{processing_file.name}")
+            tasks.append((
+                str(processing_file), output_file, self.template_path,
+                self.config, score, False, export_formats,
+            ))
+        return tasks
+
+    def _process_results(
+        self,
+        future_to_input: dict,
+        total_report: dict,
+        score: bool,
+        progress: ProgressBar,
+    ) -> None:
+        """收集并汇总多进程处理结果。"""
+        for future in as_completed(future_to_input):
+            input_file = future_to_input[future]
+            try:
+                report = future.result()
+                if "error" in report:
+                    total_report["files_failed"] += 1
+                    self.logger.error(f"处理失败 {Path(input_file).name}: {report['error']}")
+                else:
+                    total_report["files_processed"] += 1
+                    total_report["total_paragraphs"] += report.get("paragraphs_corrected", 0)
+                    total_report["total_headings"] += report.get("headings_fixed", 0)
+                    total_report["total_body"] += report.get("body_fixed", 0)
+                    total_report["all_ref_issues"].extend(report.get("ref_issues", []))
+                    total_report["all_fig_table_issues"].extend(report.get("fig_table_issues", []))
+
+                    if score and "quality_score" in report:
+                        self.logger.info(f"  {Path(input_file).name}: 质量评分 {report['quality_score']}/100")
+            except Exception as e:
+                total_report["files_failed"] += 1
+                self.logger.error(f"处理失败 {Path(input_file).name}: {e}")
+
+            progress.update()
 
     def process_directory(
         self,
@@ -334,13 +427,7 @@ class PaperFormatCorrector:
         """
         Path(output_dir).mkdir(parents=True, exist_ok=True)
 
-        input_path = Path(input_dir)
-
-        # 支持所有支持的格式
-        doc_files = []
-        for ext in FileConverter.SUPPORTED_INPUT_FORMATS:
-            doc_files.extend(input_path.glob(f"*{ext}"))
-        doc_files = sorted(doc_files, key=lambda f: f.name)
+        doc_files = self._collect_doc_files(input_dir)
 
         if not doc_files:
             self.logger.warning(f"在 {input_dir} 目录下未找到支持的文档文件")
@@ -357,26 +444,7 @@ class PaperFormatCorrector:
             "all_ref_issues": [], "all_fig_table_issues": [],
         }
 
-        # 构建任务参数列表
-        tasks = []
-        converter = FileConverter()
-        for doc_file in doc_files:
-            # 预处理格式转换
-            processing_file = doc_file
-            if converter.needs_conversion(str(doc_file)):
-                try:
-                    converted_path = converter.convert(str(doc_file), output_dir)
-                    processing_file = Path(converted_path)
-                except Exception as e:
-                    total_report["files_failed"] += 1
-                    self.logger.error(f"格式转换失败 {doc_file.name}: {e}")
-                    continue
-
-            output_file = str(Path(output_dir) / f"formatted_{processing_file.name}")
-            tasks.append((
-                str(processing_file), output_file, self.template_path,
-                self.config, score, False, export_formats,
-            ))
+        tasks = self._build_task_list(doc_files, output_dir, score, export_formats)
 
         if not tasks:
             self.logger.warning("所有文件格式转换失败")
@@ -391,28 +459,7 @@ class PaperFormatCorrector:
                 for task in tasks
             }
 
-            for future in as_completed(future_to_input):
-                input_file = future_to_input[future]
-                try:
-                    report = future.result()
-                    if "error" in report:
-                        total_report["files_failed"] += 1
-                        self.logger.error(f"处理失败 {Path(input_file).name}: {report['error']}")
-                    else:
-                        total_report["files_processed"] += 1
-                        total_report["total_paragraphs"] += report.get("paragraphs_corrected", 0)
-                        total_report["total_headings"] += report.get("headings_fixed", 0)
-                        total_report["total_body"] += report.get("body_fixed", 0)
-                        total_report["all_ref_issues"].extend(report.get("ref_issues", []))
-                        total_report["all_fig_table_issues"].extend(report.get("fig_table_issues", []))
-
-                        if score and "quality_score" in report:
-                            self.logger.info(f"  {Path(input_file).name}: 质量评分 {report['quality_score']}/100")
-                except Exception as e:
-                    total_report["files_failed"] += 1
-                    self.logger.error(f"处理失败 {Path(input_file).name}: {e}")
-
-                progress.update()
+            self._process_results(future_to_input, total_report, score, progress)
 
         progress.finish()
         self._print_summary(total_report)
@@ -457,15 +504,50 @@ class PaperFormatCorrector:
             except Exception as e:
                 self.logger.warning(f"  导出 {fmt} 失败: {e}")
 
+    def _validate_margins(self, margins: dict) -> None:
+        """验证边距配置"""
+        for key in ("top", "bottom", "left", "right"):
+            if key in margins and not isinstance(margins[key], (int, float)):
+                raise ValueError(f"margins.{key} 必须是数字，当前值: {margins[key]}")
+            if key in margins and not (0.1 <= margins[key] <= 15):
+                raise ValueError(f"margins.{key} 值不合理: {margins[key]}cm，应在 0.1~15 之间")
+
+    def _validate_body_text(self, body: dict) -> None:
+        """验证正文配置"""
+        fs = body.get("font_size")
+        if fs is not None and not isinstance(fs, (int, float)):
+            raise ValueError(f"body_text.font_size 必须是数字，当前值: {fs}")
+        if fs is not None and not (5 <= fs <= 72):
+            raise ValueError(f"body_text.font_size 值不合理: {fs}pt，应在 5~72 之间")
+
+    def _validate_headings(self, headings: dict) -> None:
+        """验证标题配置"""
+        for hk, hv in headings.items():
+            if not isinstance(hv, dict):
+                raise ValueError(f"headings.{hk} 必须是字典")
+            hfs = hv.get("font_size")
+            if hfs is not None and not isinstance(hfs, (int, float)):
+                raise ValueError(f"headings.{hk}.font_size 必须是数字")
+
     def _validate_config(self) -> None:
         """验证配置结构和值类型"""
         if not isinstance(self.config, dict):
             raise ValueError("配置文件格式错误：顶层必须是字典")
 
-        margins = self.config.get("format_rules", {}).get("margins", {})
-        for key in ("top", "bottom", "left", "right"):
-            if key in margins and not isinstance(margins[key], (int, float)):
-                raise ValueError(f"margins.{key} 必须是数字，当前值: {margins[key]}")
+        format_rules = self.config.get("format_rules", {})
+        if not isinstance(format_rules, dict):
+            raise ValueError("format_rules 必须是字典")
+
+        margins = format_rules.get("margins", {})
+        self._validate_margins(margins)
+
+        body = format_rules.get("body_text", {})
+        if body:
+            self._validate_body_text(body)
+
+        headings = format_rules.get("headings", {})
+        if isinstance(headings, dict):
+            self._validate_headings(headings)
 
     def _merge_config(self, base: dict, override: dict) -> dict:
         result = copy.deepcopy(base)

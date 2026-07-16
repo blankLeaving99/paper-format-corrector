@@ -138,10 +138,17 @@ def save_user_template(name: str, config: dict) -> str:
         保存的文件路径
 
     Raises:
-        ValueError: 模板名称无效
+        ValueError: 模板名称无效或配置结构不合法
     """
     if not re.match(r'^[a-zA-Z0-9_-]+$', name):
         raise ValueError(f"Invalid template name: {name}. Use only letters, numbers, underscore, hyphen.")
+
+    if not isinstance(config, dict):
+        raise ValueError("config 必须是字典类型")
+
+    # 验证必要结构
+    if "format_rules" in config and not isinstance(config["format_rules"], dict):
+        raise ValueError("format_rules 必须是字典类型")
 
     user_dir = _user_templates_dir()
     user_dir.mkdir(parents=True, exist_ok=True)

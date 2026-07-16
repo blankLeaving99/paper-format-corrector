@@ -29,6 +29,11 @@ class CoverPageGenerator:
 
     def generate(self, metadata, output_path, template="standard"):
         """生成封面页"""
+        if not isinstance(metadata, dict):
+            raise ValueError("metadata 必须是字典类型")
+        if not metadata.get("title"):
+            raise ValueError("metadata 中必须包含 'title' 字段")
+
         doc = Document()
 
         # 页面设置

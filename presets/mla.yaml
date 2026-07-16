@@ -131,11 +131,11 @@ auto_detect:
   keywords_pattern: "^Keywords[:：]?|^Key\\s*[Ww]ords[:：]?|^关键词[:：]"
   reference_keywords:
     - "Works Cited"
-    - "Works Cited"
     - "References"
+    - "REFERENCES"
     - "参考文献"
   acknowledgment_pattern: "^Acknowledge?ments?$|^致\\s*谢$"
   appendix_pattern: "^Appendix\\s*[A-Z]?"
   figure_caption_pattern: "^Fig\\.?\\s*\\d|^图\\s*\\d"
   table_caption_pattern: "^Table\\s+\\d|^表\\s*\\d"
-  formula_pattern: "^\\(?\\d+[-\\.\\)]\\d+\\)?$"
+  formula_pattern: "^\\(?\\d+[-\\.]\\d+\\)?$"

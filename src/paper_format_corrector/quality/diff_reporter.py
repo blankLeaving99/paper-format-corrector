@@ -11,6 +11,7 @@
 """
 
 import difflib
+from pathlib import Path
 
 from docx import Document
 
@@ -145,6 +146,11 @@ class DiffReporter:
 
     def generate_html_report(self, original_path, corrected_path, output_path):
         """生成HTML对比报告"""
+        output_path = Path(output_path)
+        if output_path.exists() and output_path.is_dir():
+            raise ValueError(f"输出路径是目录，不是文件: {output_path}")
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+
         result = self.compare(original_path, corrected_path)
 
         html = self._build_html(result)
@@ -159,6 +165,9 @@ class DiffReporter:
         format_changes = result["format_changes"]
 
         rows = []
+        truncated_text = max(0, len(text_changes) - 200)
+        truncated_format = max(0, len(format_changes) - 100)
+
         for change in text_changes[:200]:
             if change["type"] == "modify":
                 diff = self._inline_diff(change["original"], change["corrected"])
@@ -174,6 +183,11 @@ class DiffReporter:
                 f'<td>{change["type"]}</td>'
                 f'<td>{escape_html(change["text"])}: {change["from"]} → {change["to"]}</td></tr>'
             )
+
+        if truncated_text > 0:
+            rows.append(f'<tr class="format"><td>-</td><td>截断</td><td>还有 {truncated_text} 处内容变更未显示</td></tr>')
+        if truncated_format > 0:
+            rows.append(f'<tr class="format"><td>-</td><td>截断</td><td>还有 {truncated_format} 处格式变更未显示</td></tr>')
 
         table_rows = "\n".join(rows)
 

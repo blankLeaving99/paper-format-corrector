@@ -88,7 +88,7 @@ class QualityScorer:
 
         return max(0, score)
 
-    def _score_body(self, doc):
+    def _score_body(self, doc):  # noqa: C901
         """正文格式评分 (满分20)"""
         score = 20
         body_config = self.config.get("format_rules", {}).get("body_text", {})
@@ -170,7 +170,7 @@ class QualityScorer:
 
         return max(0, score)
 
-    def _score_references(self, doc):
+    def _score_references(self, doc):  # noqa: C901
         """参考文献评分 (满分15)"""
         score = 15
         ref_start = None

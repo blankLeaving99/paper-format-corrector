@@ -385,7 +385,7 @@ class PaperFormatDesktopApp:
         self.preview_score_text.pack(fill=tk.BOTH, expand=True)
         paned.add(right_frame, weight=1)
 
-    def _refresh_preview(self):
+    def _refresh_preview(self):  # noqa: C901
         """刷新矫正预览"""
         # 清空
         for item in self.preview_tree.get_children():
@@ -753,10 +753,22 @@ class PaperFormatDesktopApp:
 
         threading.Thread(target=do_work, daemon=True).start()
 
-    def _process_single(self, paper):
+    def _process_single(self, paper):  # noqa: C901
         """处理单个文件，返回结果文本"""
+        from .infra.path_security import ALLOWED_INPUT_EXTENSIONS
+        from .infra.path_security import validate_input_path as _vip
+
+        # 预校验论文路径
+        try:
+            _vip(paper, ALLOWED_INPUT_EXTENSIONS)
+        except (ValueError, FileNotFoundError) as e:
+            return f"输入文件校验失败: {e}"
+
         cfg = self.config_path.get().strip() or CONFIG_PATH
-        c = PaperFormatCorrector(cfg)
+        try:
+            c = PaperFormatCorrector(cfg)
+        except Exception as e:
+            return f"配置加载失败: {e}"
 
         # 覆盖模板文件
         tpl = self.template_path_var.get().strip()

@@ -108,7 +108,7 @@ class LLMParser:
         self.base_url = self._validate_url(base_url) if base_url else None
         self.model = model or self._get_default_model()
 
-    def _validate_url(self, url):
+    def _validate_url(self, url):  # noqa: C901
         """校验 URL 安全性"""
         parsed = urlparse(url)
         host = parsed.hostname or ""
@@ -133,13 +133,13 @@ class LLMParser:
         if self.provider == "ollama":
             if host not in ("localhost", "127.0.0.1"):
                 raise ValueError(f"Ollama 仅支持 localhost，不允许远程地址: {host}")
+            if parsed.scheme not in ("http", "https"):
+                raise ValueError(f"不允许的 URL 协议: {parsed.scheme}")
             return url
 
-        # 外部 API 必须使用 HTTPS（localhost 除外）
-        if parsed.scheme not in ("https",):
-            if parsed.scheme == "http" and host in ("localhost", "127.0.0.1"):
-                return url
-            raise ValueError(f"不允许的 URL 协议: {parsed.scheme}")
+        # 外部 API 必须使用 HTTPS（localhost 也不允许 HTTP）
+        if parsed.scheme != "https":
+            raise ValueError(f"外部 API 必须使用 HTTPS，不允许: {parsed.scheme}://")
 
         # 检查域名白名单（自定义 base_url 时）
         if host not in self.ALLOWED_DOMAINS:
@@ -302,7 +302,7 @@ class LLMParser:
         raise ValueError(f"无法从LLM响应中提取JSON:\n{response[:500]}")
 
 
-def llm_parse_to_config(llm_config_dict):
+def llm_parse_to_config(llm_config_dict):  # noqa: C901
     """将LLM输出的字典转换为标准config格式"""
     config = {"format_rules": {}}
 

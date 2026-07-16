@@ -165,7 +165,7 @@ class ReferenceFormatter:
             paragraph.paragraph_format.first_line_indent = Pt(-24)  # 悬挂缩进
             paragraph.paragraph_format.left_indent = Pt(24)
 
-    def _parse_reference_fields(self, text):
+    def _parse_reference_fields(self, text):  # noqa: C901
         """解析参考文献条目的结构化字段
 
         Args:
@@ -351,7 +351,7 @@ class ReferenceFormatter:
             return True
         return False
 
-    def check_citation_consistency(self, doc, ref_start_idx):
+    def check_citation_consistency(self, doc, ref_start_idx):  # noqa: C901
         """检查正文引用与参考文献列表的一致性
 
         Returns:

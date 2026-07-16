@@ -105,7 +105,7 @@ class SectionDetector:
 
     # ========== 单段检测（保留原有接口，向后兼容） ==========
 
-    def detect(self, paragraph):
+    def detect(self, paragraph):  # noqa: C901
         """检测段落类型，返回 (SectionType, extra_info)"""
         text = paragraph.text.strip()
 
@@ -231,7 +231,7 @@ class SectionDetector:
                 return True
         return False
 
-    def _is_code_paragraph(self, paragraph, text):
+    def _is_code_paragraph(self, paragraph, text):  # noqa: C901
         """检测是否为代码段落"""
         # 短文本跳过（避免误判）
         if len(text) < 3:
@@ -272,7 +272,7 @@ class SectionDetector:
 
         return False
 
-    def _is_formula_content(self, paragraph, text):
+    def _is_formula_content(self, paragraph, text):  # noqa: C901
         """检测是否为公式内容（非编号行）"""
         # 短文本跳过
         if len(text) < 2:

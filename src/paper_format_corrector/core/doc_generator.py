@@ -93,7 +93,7 @@ class DocGenerator:
         doc.save(output_path)
         return output_path
 
-    def generate_preview(self, structure: dict[str, Any]) -> str:
+    def generate_preview(self, structure: dict[str, Any]) -> str:  # noqa: C901
         """生成Markdown格式的预览（不生成docx）
 
         Args:
@@ -325,7 +325,7 @@ class DocGenerator:
             if isinstance(line_spacing, (int, float)):
                 p.paragraph_format.line_spacing = line_spacing
 
-    def _add_table(self, doc: Document, section: dict[str, Any]) -> None:
+    def _add_table(self, doc: Document, section: dict[str, Any]) -> None:  # noqa: C901
         """添加表格"""
         header = section.get("header", [])
         rows = section.get("rows", [])

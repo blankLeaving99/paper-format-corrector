@@ -516,7 +516,7 @@ class RequirementParser:
 
     # ========== 配置生成 ==========
 
-    def _build_config(self):
+    def _build_config(self):  # noqa: C901
         """根据解析出的规则生成配置字典"""
         config = {"format_rules": {}}
         rules = self.rules

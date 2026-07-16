@@ -5,9 +5,12 @@
 - 文件输出
 - 控制台彩色输出
 - 进度条显示
+- 线程安全写入
 """
 
+import atexit
 import sys
+import threading
 import time
 from datetime import datetime
 from pathlib import Path
@@ -23,10 +26,12 @@ class Logger:
         self.log_file = log_file
         self.color = color and sys.stdout.isatty()
         self._file_handle = None
+        self._lock = threading.Lock()
 
         if log_file:
             Path(log_file).parent.mkdir(parents=True, exist_ok=True)
             self._file_handle = open(log_file, "a", encoding="utf-8")
+            atexit.register(self.close)
 
     def debug(self, msg):
         if self.level <= 0:
@@ -54,13 +59,15 @@ class Logger:
             print(line)
 
         if self._file_handle:
-            self._file_handle.write(line + "\n")
-            self._file_handle.flush()
+            with self._lock:
+                self._file_handle.write(line + "\n")
+                self._file_handle.flush()
 
     def close(self):
-        if self._file_handle:
-            self._file_handle.close()
-            self._file_handle = None
+        with self._lock:
+            if self._file_handle:
+                self._file_handle.close()
+                self._file_handle = None
 
     def __del__(self):
         self.close()

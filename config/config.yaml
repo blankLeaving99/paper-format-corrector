@@ -35,7 +35,7 @@ format_rules:
   # 标题层级
   headings:
     heading1:  # 章标题 (第一章 xxx)
-      font_size: 16    # 三号 (16pt)
+      font_size: 16    # 二号 (16pt)
       bold: true
       align: "center"
       space_before: 24  # pt

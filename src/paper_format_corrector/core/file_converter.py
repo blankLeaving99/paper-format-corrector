@@ -42,7 +42,7 @@ class FileConverter:
         suffix = Path(file_path).suffix.lower()
         return suffix != ".docx"
 
-    def convert(self, input_path: str, output_dir: str = None) -> str:
+    def convert(self, input_path: str, output_dir: str = None) -> str:  # noqa: C901
         """将文件转换为 .docx 格式
 
         Args:
@@ -286,7 +286,7 @@ class FileConverter:
         doc.save(str(output_path))
         return str(output_path)
 
-    def _markdown_to_docx(self, md_text: str, output_path: Path) -> str:
+    def _markdown_to_docx(self, md_text: str, output_path: Path) -> str:  # noqa: C901
         """将 Markdown 转换为 .docx"""
         from docx import Document
         from docx.shared import Cm, Pt

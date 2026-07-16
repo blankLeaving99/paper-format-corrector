@@ -80,17 +80,26 @@ class FormatExporter:
         lo_path = find_libreoffice()
         if lo_path:
             out_dir = output_path.parent
-            subprocess.run(
-                [
-                    lo_path,
-                    "--headless",
-                    "--convert-to", "pdf",
-                    "--outdir", str(out_dir),
-                    str(docx_path),
-                ],
-                check=True,
-                capture_output=True,
-            )
+            try:
+                subprocess.run(
+                    [
+                        lo_path,
+                        "--headless",
+                        "--convert-to", "pdf",
+                        "--outdir", str(out_dir),
+                        str(docx_path),
+                    ],
+                    check=True,
+                    capture_output=True,
+                    text=True,
+                    timeout=120,
+                )
+            except subprocess.CalledProcessError as e:
+                raise RuntimeError(
+                    f"LibreOffice PDF 导出失败 (returncode={e.returncode}): {e.stderr}"
+                ) from e
+            except subprocess.TimeoutExpired as e:
+                raise RuntimeError("LibreOffice PDF 导出超时（120秒）") from e
             # LibreOffice 输出文件名基于输入文件名
             lo_output = out_dir / f"{docx_path.stem}.pdf"
             if lo_output != output_path and lo_output.exists():
@@ -136,7 +145,7 @@ class FormatExporter:
         output_path.write_text("\n".join(lines), encoding="utf-8")
         return str(output_path)
 
-    def _export_markdown(self, docx_path, output_path):
+    def _export_markdown(self, docx_path, output_path):  # noqa: C901
         """导出为 Markdown"""
 
         from docx import Document

@@ -21,6 +21,7 @@ def _presets_dir() -> Path:
         presets = parent / "presets"
         if presets.is_dir():
             return presets
+
     # Fallback: relative to cwd
     return Path("presets")
 
