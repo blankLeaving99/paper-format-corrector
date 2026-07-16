@@ -1,38 +1,49 @@
 import re
-from enum import Enum, auto
+from typing import Any
 
-
-class SectionType(Enum):
-    UNKNOWN = auto()
-    TITLE = auto()
-    AUTHORS = auto()
-    AFFILIATION = auto()
-    ABSTRACT_CN = auto()
-    ABSTRACT_EN = auto()
-    KEYWORDS_CN = auto()
-    KEYWORDS_EN = auto()
-    CHAPTER = auto()
-    SECTION = auto()
-    SUBSECTION = auto()
-    BODY = auto()
-    FIGURE_CAPTION = auto()
-    TABLE_CAPTION = auto()
-    FORMULA = auto()
-    FORMULA_CONTENT = auto()
-    CODE = auto()
-    REFERENCE_TITLE = auto()
-    REFERENCE_ITEM = auto()
-    ACKNOWLEDGMENT = auto()
-    ACKNOWLEDGMENT_TITLE = auto()
-    APPENDIX_TITLE = auto()
-    TOC_TITLE = auto()
-    BLANK = auto()
+from .modules.abstract_module import AbstractModule
+from .modules.base import DetectionContext, SectionModule
+from .modules.body_module import BodyModule
+from .modules.caption_module import CaptionModule
+from .modules.closing_module import ClosingModule
+from .modules.heading_module import HeadingModule
+from .modules.reference_module import ReferenceModule
+from .modules.special_module import SpecialModule
+from .modules.title_module import TitleModule
+from .section_types import (
+    DetectionPipelineResult,
+    LevelCorrection,
+    SectionType,
+)
 
 
 class SectionDetector:
-    """智能段落类型检测器"""
+    """智能段落类型检测器。
+
+    检测架构：
+      文档 → [标题模块, 摘要模块, 标题层级模块, 图表模块,
+              参考文献模块, 特殊内容模块, 结尾模块, 正文模块]
+           → 聚合（首个匹配的模块胜出）
+           → 跨模块上下文校验
+           → 最终结果
+    """
 
     def __init__(self, config):
+        self.config = config
+
+        # 初始化各检测模块（按检测优先级排列）
+        self._modules: list[SectionModule] = [
+            ReferenceModule(config),   # 参考文献（有状态，需在其他模块之前）
+            TitleModule(config),       # 标题页
+            AbstractModule(config),    # 摘要/关键词
+            ClosingModule(config),     # 致谢/附录
+            SpecialModule(config),     # 代码/公式（在标题之前，避免代码数字误判）
+            HeadingModule(config),     # 章/节/小节标题
+            CaptionModule(config),     # 图注/表注
+            BodyModule(config),        # 正文（兜底，最后）
+        ]
+
+        # 保留原有接口的兼容属性（detect() 方法仍使用）
         detect = config.get("auto_detect", {})
         self.title_pattern = re.compile(detect.get("title_pattern", r"^论文题目"))
         self.chapter_pattern = re.compile(
@@ -68,14 +79,14 @@ class SectionDetector:
             detect.get("formula_pattern", r"^\(?\d+[-\.]\d+\)?$")
         )
 
-        # 状态跟踪
+        # 状态跟踪（detect() 使用）
         self._seen_title = False
         self._seen_abstract_cn = False
         self._seen_abstract_en = False
         self._in_references = False
         self._chapter_count = 0
 
-        # 代码/公式检测配置
+        # 代码/公式检测配置（detect() 使用）
         self._mono_fonts = {"consolas", "courier new", "monospace", "fixedsys", "lucida console", "source code pro", "menlo", "monaco"}
         self._math_fonts = {"cambria math", "symbol", "mt extra", "math"}
         self._code_chars = set("{}();=<>[]|&!~^*/\\")
@@ -91,6 +102,8 @@ class SectionDetector:
         self._seen_abstract_en = False
         self._in_references = False
         self._chapter_count = 0
+
+    # ========== 单段检测（保留原有接口，向后兼容） ==========
 
     def detect(self, paragraph):
         """检测段落类型，返回 (SectionType, extra_info)"""
@@ -355,6 +368,87 @@ class SectionDetector:
         if m:
             return {"num": m.group(1)}
         return {}
+
+    # ========== 多模块检测管道 ==========
+
+    def detect_all(self, paragraphs):
+        """多模块检测管道入口。
+
+        架构：
+          文档 → 各模块独立检测 → 聚合（首个匹配胜出）→ 跨模块校验 → 最终结果
+
+        Returns:
+            DetectionPipelineResult
+        """
+        ctx = DetectionContext()
+        n = len(paragraphs)
+
+        # 初始化结果容器
+        module_labels: dict[str, list[SectionType]] = {
+            m.name: [SectionType.UNKNOWN] * n for m in self._modules
+        }
+        module_extras: dict[str, list[dict]] = {
+            m.name: [{}] * n for m in self._modules
+        }
+        final_labels = [SectionType.UNKNOWN] * n
+        final_extras: list[dict[str, Any]] = [{}] * n
+        all_corrections: list[LevelCorrection] = []
+
+        # 收集章节标题用于页眉页脚
+        self._chapter_map: dict[int, str] = {}
+
+        # ---- 第一轮：各模块独立检测，聚合首个匹配 ----
+        for i, para in enumerate(paragraphs):
+            text = para.text.strip()
+            if not text:
+                final_labels[i] = SectionType.BLANK
+                continue
+
+            for module in self._modules:
+                result = module.detect(para, text, ctx)
+                module_labels[module.name][i] = result.label if result else SectionType.UNKNOWN
+                if result and result.extras:
+                    module_extras[module.name][i] = result.extras
+
+                # 首个匹配的模块胜出
+                if result and final_labels[i] == SectionType.UNKNOWN:
+                    final_labels[i] = result.label
+                    final_extras[i] = result.extras
+
+            # 收集章标题文本
+            if final_labels[i] == SectionType.CHAPTER:
+                self._chapter_map[i] = text
+
+        # ---- 第二轮：各模块跨段落校验 ----
+        for module in self._modules:
+            corrections = module.validate(paragraphs, final_labels, ctx)
+            for corr in corrections:
+                idx = corr["index"]
+                old_label = final_labels[idx]
+                new_label = corr["to"]
+                if old_label != new_label:
+                    final_labels[idx] = new_label
+                    all_corrections.append(LevelCorrection(
+                        index=idx,
+                        from_label=old_label,
+                        to_label=new_label,
+                        reason=corr["reason"],
+                        module=module.name,
+                    ))
+
+        return DetectionPipelineResult(
+            final_labels=final_labels,
+            final_extras=final_extras,
+            module_results=module_labels,
+            all_corrections=all_corrections,
+        )
+
+    def get_chapter_map(self):
+        """返回 {paragraph_index: chapter_name} 映射，用于页眉页脚。
+
+        在 detect_all() 调用后才有效。
+        """
+        return getattr(self, "_chapter_map", {})
 
 
 def detect_language(text):

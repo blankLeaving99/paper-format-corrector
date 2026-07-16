@@ -145,7 +145,6 @@ class TestCodeFormatPreservation:
         doc.save(input_path)
 
         corrector = FormatCorrector(str(tmp_path / "missing.docx"), config)
-        corrector.load_template_styles()
         output_path = str(tmp_path / "output.docx")
         corrector.correct_document(input_path, output_path)
 
@@ -174,7 +173,6 @@ class TestCodeFormatPreservation:
         doc.save(input_path)
 
         corrector = FormatCorrector(str(tmp_path / "missing.docx"), config)
-        corrector.load_template_styles()
         output_path = str(tmp_path / "output.docx")
         corrector.correct_document(input_path, output_path)
 
@@ -201,7 +199,6 @@ class TestCodeFormatPreservation:
         doc.save(input_path)
 
         corrector = FormatCorrector(str(tmp_path / "missing.docx"), config)
-        corrector.load_template_styles()
         output_path = str(tmp_path / "output.docx")
         report = corrector.correct_document(input_path, output_path)
 
@@ -223,7 +220,6 @@ class TestFormulaContentPreservation:
         doc.save(input_path)
 
         corrector = FormatCorrector(str(tmp_path / "missing.docx"), config)
-        corrector.load_template_styles()
         output_path = str(tmp_path / "output.docx")
         corrector.correct_document(input_path, output_path)
 

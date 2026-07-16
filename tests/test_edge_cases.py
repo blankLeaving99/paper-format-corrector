@@ -20,7 +20,6 @@ def _correct(doc, template_path, config, tmp_path, name="edge"):
     doc.save(input_path)
 
     corrector = FormatCorrector(template_path, config)
-    corrector.load_template_styles()
     return corrector.correct_document(input_path, output_path), output_path
 
 

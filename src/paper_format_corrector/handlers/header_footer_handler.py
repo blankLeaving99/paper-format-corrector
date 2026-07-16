@@ -8,10 +8,18 @@
 - 页眉下划线
 """
 
+import re
+
 from docx.enum.text import WD_ALIGN_PARAGRAPH
 from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Pt
+
+# 前置部分关键词（用于智能判断前置/正文分界）
+_FRONT_MATTER_KEYWORDS = [
+    "摘要", "abstract", "目录", "contents", "目 录",
+    "符号说明", "术语表", "引言", "introduction",
+]
 
 
 class HeaderFooterHandler:
@@ -54,8 +62,31 @@ class HeaderFooterHandler:
                 self._setup_footer(section)
 
             if self.pn_enabled:
-                is_front_matter = idx == 0  # 第一节视为前置部分
+                is_front_matter = self._is_front_matter(idx, doc)
                 self._setup_page_numbers(section, is_front_matter)
+
+    def _is_front_matter(self, section_idx, doc):
+        """智能判断当前 section 是否为前置部分（摘要、目录等）。
+
+        通过扫描文档前 20 段内容特征判断，而非简单依赖 section 索引。
+        """
+        # 扫描前 20 段，寻找前置部分关键词或正文起始标志
+        for para in doc.paragraphs[:20]:
+            text = para.text.strip().lower()
+            if not text:
+                continue
+
+            # 匹配前置部分关键词
+            for kw in _FRONT_MATTER_KEYWORDS:
+                if kw in text:
+                    return True
+
+            # 遇到章节标题（如"第一章"、"1 "），说明已进入正文
+            if re.match(r"^(第[一二三四五六七八九十\d]+章|\d+[\.\s])", para.text.strip()):
+                return False
+
+        # fallback：第一个 section 视为前置
+        return section_idx == 0
 
     def _set_odd_even_pages(self, section):
         """启用奇偶页不同页眉页脚"""

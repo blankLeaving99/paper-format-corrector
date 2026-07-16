@@ -84,20 +84,3 @@ class CrossReferenceUpdater:
         # 清空其他run
         for run in paragraph.runs[1:]:
             run.text = ""
-
-    def build_renumber_map(self, captions, numbering_style="chapter"):
-        """根据图表标题列表构建重编号映射
-
-        Args:
-            captions: [(old_num, chapter, seq), ...]
-            numbering_style: "chapter" -> "2-1", "sequential" -> "5"
-        """
-        result = {}
-        for old_num, chapter, seq in captions:
-            if numbering_style == "chapter":
-                new_num = f"{chapter}-{seq}"
-            else:
-                new_num = str(seq)
-            if old_num != new_num:
-                result[old_num] = new_num
-        return result

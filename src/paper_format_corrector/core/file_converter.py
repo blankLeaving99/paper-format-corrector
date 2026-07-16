@@ -27,8 +27,8 @@ class FileConverter:
         ".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md", ".markdown", ".tex",
     )
 
-    def __init__(self):
-        pass
+    def __init__(self, config=None):
+        self.config = config or {}
 
     @staticmethod
     def is_supported(file_path: str) -> bool:
@@ -214,6 +214,12 @@ class FileConverter:
 
     def _convert_text(self, input_path: Path, output_path: Path, is_markdown: bool = False) -> str:
         """将纯文本或 Markdown 转换为 .docx"""
+        # 文件大小限制（50MB）
+        max_size = 50 * 1024 * 1024
+        file_size = input_path.stat().st_size
+        if file_size > max_size:
+            raise ValueError(f"文件过大: {file_size / 1024 / 1024:.1f}MB（最大 50MB）")
+
         # 检测编码
         encoding = self._detect_encoding(input_path)
 
@@ -231,20 +237,25 @@ class FileConverter:
         from docx.enum.text import WD_ALIGN_PARAGRAPH
         from docx.shared import Cm, Pt
 
+        # 从 config 读取字体和边距（有默认值）
+        font_rules = self.config.get("format_rules", {}).get("font", {})
+        body_config = self.config.get("format_rules", {}).get("body_text", {})
+        margins = self.config.get("format_rules", {}).get("margins", {})
+
         doc = Document()
 
         # 设置默认字体
         style = doc.styles["Normal"]
         font = style.font
-        font.name = "宋体"
-        font.size = Pt(12)
+        font.name = font_rules.get("chinese", "宋体")
+        font.size = Pt(body_config.get("font_size", 12))
 
         # 设置页面边距
         for section in doc.sections:
-            section.top_margin = Cm(2.54)
-            section.bottom_margin = Cm(2.54)
-            section.left_margin = Cm(3.17)
-            section.right_margin = Cm(3.17)
+            section.top_margin = Cm(margins.get("top", 2.54))
+            section.bottom_margin = Cm(margins.get("bottom", 2.54))
+            section.left_margin = Cm(margins.get("left", 3.17))
+            section.right_margin = Cm(margins.get("right", 3.17))
 
         # 添加来源信息（如果有）
         if source_path:
@@ -280,20 +291,25 @@ class FileConverter:
         from docx import Document
         from docx.shared import Cm, Pt
 
+        # 从 config 读取字体和边距（有默认值）
+        font_rules = self.config.get("format_rules", {}).get("font", {})
+        body_config = self.config.get("format_rules", {}).get("body_text", {})
+        margins = self.config.get("format_rules", {}).get("margins", {})
+
         doc = Document()
 
         # 设置默认字体
         style = doc.styles["Normal"]
         font = style.font
-        font.name = "宋体"
-        font.size = Pt(12)
+        font.name = font_rules.get("chinese", "宋体")
+        font.size = Pt(body_config.get("font_size", 12))
 
         # 设置页面边距
         for section in doc.sections:
-            section.top_margin = Cm(2.54)
-            section.bottom_margin = Cm(2.54)
-            section.left_margin = Cm(3.17)
-            section.right_margin = Cm(3.17)
+            section.top_margin = Cm(margins.get("top", 2.54))
+            section.bottom_margin = Cm(margins.get("bottom", 2.54))
+            section.left_margin = Cm(margins.get("left", 3.17))
+            section.right_margin = Cm(margins.get("right", 3.17))
 
         lines = md_text.split("\n")
         in_code_block = False
@@ -464,8 +480,8 @@ class FileConverter:
 
             return str(output_path)
 
-        except subprocess.TimeoutExpired:
-            raise RuntimeError("LibreOffice 转换超时（120秒）")
+        except subprocess.TimeoutExpired as err:
+            raise RuntimeError("LibreOffice 转换超时（120秒）") from err
 
     def _odt_via_odfdo(self, input_path: Path, output_path: Path) -> str:
         """使用 odfdo 将 ODT 转换为 DOCX（备用方案）"""
@@ -499,14 +515,13 @@ class FileConverter:
 
     def _convert_tex(self, input_path: Path, output_path: Path) -> str:
         """将 LaTeX (.tex) 转换为 .docx"""
-        # 方法1: 使用 pandoc（优先硬编码路径）
-        pandoc = None
-        for p in (r"C:\Program Files\Pandoc\pandoc.exe", "/usr/bin/pandoc", "/usr/local/bin/pandoc"):
-            if Path(p).exists():
-                pandoc = p
-                break
+        # 方法1: 使用 pandoc（优先系统 PATH，再试常见路径）
+        pandoc = shutil.which("pandoc")
         if not pandoc:
-            pandoc = shutil.which("pandoc")
+            for p in (r"C:\Program Files\Pandoc\pandoc.exe", "/usr/bin/pandoc", "/usr/local/bin/pandoc"):
+                if Path(p).exists():
+                    pandoc = p
+                    break
         if pandoc:
             try:
                 result = subprocess.run(

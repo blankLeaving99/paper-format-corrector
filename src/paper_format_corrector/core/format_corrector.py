@@ -5,8 +5,8 @@ import shutil
 from pathlib import Path
 
 from docx import Document
-from docx.enum.style import WD_STYLE_TYPE
 from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
+from docx.oxml import OxmlElement
 from docx.shared import Cm, Pt
 
 from ..handlers.figure_table_handler import FigureTableHandler
@@ -34,7 +34,7 @@ class FormatCorrector:
             self.template = Document()
             self.template_path = None
         self.config = config
-        self.style_mapping = {}
+        self._runtime_font_overrides = None  # 语言检测的运行时字体覆盖
 
         # 从模板提取样式（作为配置的回退）
         self.template_styles = {}
@@ -77,11 +77,18 @@ class FormatCorrector:
             "cross_refs_updated": 0,
         }
 
-    def load_template_styles(self):
-        """加载模板样式映射"""
-        for style in self.template.styles:
-            if style.type == WD_STYLE_TYPE.PARAGRAPH:
-                self.style_mapping[style.name.lower()] = style
+    def _get_font_rules(self):
+        """获取字体规则，运行时覆盖优先于 config。
+
+        Returns:
+            dict: 合并后的字体规则字典
+        """
+        base = self.config.get("format_rules", {}).get("font", {})
+        if self._runtime_font_overrides:
+            merged = dict(base)
+            merged.update(self._runtime_font_overrides)
+            return merged
+        return base
 
     def correct_document(self, input_path, output_path, backup=True):
         """矫正文档格式
@@ -137,8 +144,9 @@ class FormatCorrector:
         if self.toc_handler.enabled and not self.toc_handler.has_toc(doc):
             self.toc_handler.insert_toc(doc)
 
-        # 7. 页眉页脚
-        self.hf_handler.apply(doc)
+        # 7. 页眉页脚（传入章名映射）
+        chapter_map = self._build_section_chapter_map(doc)
+        self.hf_handler.apply(doc, chapter_map=chapter_map)
 
         # 8. 公式编号
         eq_renumber_map = self._renumber_formulas(doc)
@@ -156,7 +164,7 @@ class FormatCorrector:
         return self.report
 
     def _detect_and_apply_language(self, doc):
-        """检测文档语言并调整字体配置"""
+        """检测文档语言并调整字体配置（不修改 self.config）"""
         lang_config = self.config.get("language", {})
         primary = lang_config.get("primary", "auto")
 
@@ -164,18 +172,20 @@ class FormatCorrector:
             primary = detect_document_language(doc)
             logger.info(f"  检测到文档语言: {primary}")
 
-        # 根据语言调整字体配置
+        # 根据语言设置运行时字体覆盖（不修改 config，避免污染后续文档）
         fonts = lang_config.get("fonts", {})
         lang_fonts = fonts.get(primary, {})
 
         if lang_fonts:
-            font_rules = self.config.setdefault("format_rules", {}).setdefault("font", {})
+            self._runtime_font_overrides = {}
             if "body" in lang_fonts:
-                font_rules["chinese"] = lang_fonts["body"]
+                self._runtime_font_overrides["chinese"] = lang_fonts["body"]
             if "heading" in lang_fonts:
-                font_rules["heading_chinese"] = lang_fonts["heading"]
+                self._runtime_font_overrides["heading_chinese"] = lang_fonts["heading"]
             if "english_in_chinese" in lang_fonts:
-                font_rules["english"] = lang_fonts["english_in_chinese"]
+                self._runtime_font_overrides["english"] = lang_fonts["english_in_chinese"]
+        else:
+            self._runtime_font_overrides = None
 
         self._detected_language = primary
 
@@ -193,14 +203,17 @@ class FormatCorrector:
             section.right_margin = Cm(margins.get("right", 3.17))
 
     def _correct_paragraphs(self, doc):
-        """逐段矫正格式"""
+        """逐段矫正格式（使用多模块检测管道）"""
+        # 多模块检测：各模块独立检测 → 聚合 → 上下文校验
+        pipeline_result = self.section_detector.detect_all(doc.paragraphs)
+
         for i, paragraph in enumerate(doc.paragraphs):
             text = paragraph.text.strip()
             if not text:
                 continue
 
-            # 检测段落类型
-            section_type, extra = self.section_detector.detect(paragraph)
+            section_type = pipeline_result.final_labels[i]
+            extra = pipeline_result.final_extras[i]
 
             # 根据类型应用不同格式
             if section_type == SectionType.TITLE:
@@ -243,9 +256,11 @@ class FormatCorrector:
                 self._apply_body_style(paragraph)
                 self.report["body_fixed"] += 1
             elif section_type == SectionType.REFERENCE_ITEM:
-                pass
+                pass  # 参考文献条目不计入矫正数
 
-            self.report["paragraphs_corrected"] += 1
+            # 统计实际处理的段落数（排除 REFERENCE_ITEM 和未识别类型）
+            if section_type not in (SectionType.REFERENCE_ITEM, SectionType.BLANK, SectionType.UNKNOWN):
+                self.report["paragraphs_corrected"] += 1
 
         self.report["fig_table_issues"] = self.fig_table_handler.get_issues()
 
@@ -256,7 +271,8 @@ class FormatCorrector:
         )
         for i, para in enumerate(doc.paragraphs):
             text = para.text.strip()
-            if text in ref_keywords or any(text.startswith(kw) for kw in ref_keywords):
+            # 模糊匹配：支持 "参考文献"、"参考文献[1]"、"参考文献：" 等变体
+            if any(text.startswith(kw) for kw in ref_keywords):
                 ref_start = i
                 break
         if ref_start is not None:
@@ -270,6 +286,40 @@ class FormatCorrector:
             consistency_issues = self.ref_formatter.check_citation_consistency(doc, ref_start)
             for issue in consistency_issues:
                 self.report["ref_issues"].append(issue["message"])
+
+    def _build_section_chapter_map(self, doc):
+        """将段落级章名映射转为 section 级映射。
+
+        通过遍历段落的 <w:sectPr>（节结束标记）精确确定每个 section 的边界。
+
+        Returns:
+            dict[int, str]: {section_index: chapter_name}
+        """
+        from docx.oxml.ns import qn as _qn
+
+        para_chapters = self.section_detector.get_chapter_map()
+        if not para_chapters:
+            return {}
+
+        section_map = {}
+        current_section = 0
+        last_chapter = None
+
+        for i, para in enumerate(doc.paragraphs):
+            # 更新当前章名
+            if i in para_chapters:
+                last_chapter = para_chapters[i]
+
+            # 检查此段落是否包含 sectPr（节结束标记）
+            pPr = para._element.find(_qn("w:pPr"))
+            if pPr is not None and pPr.find(_qn("w:sectPr")) is not None:
+                section_map[current_section] = last_chapter
+                current_section += 1
+
+        # 最后一个 section（body 级别的 sectPr）
+        section_map[current_section] = last_chapter
+
+        return section_map
 
     def _renumber_formulas(self, doc):
         """重编号公式并返回编号映射
@@ -321,7 +371,7 @@ class FormatCorrector:
             # 应用样式
             self._apply_formula_style(para, formula_config)
 
-            # 如果编号需要修正，重写文本
+            # 如果编号需要修正，重写文本（保留 run 级格式）
             clean_old = old_num.strip("()")
             if clean_old != new_num:
                 # 保留原始格式（括号等）
@@ -330,12 +380,22 @@ class FormatCorrector:
                 else:
                     new_text = new_num
 
+                # 优先：找到包含旧编号的 run，只替换那个 run（保留内联格式）
+                replaced = False
                 for run in para.runs:
-                    run.text = ""
-                if para.runs:
-                    para.runs[0].text = new_text
-                else:
-                    para.add_run(new_text)
+                    if clean_old in run.text or old_num in run.text:
+                        run.text = run.text.replace(old_num, new_text).replace(clean_old, new_text)
+                        replaced = True
+                        break
+
+                # fallback：如果没找到，清空所有 run，用第一个 run 写入
+                if not replaced:
+                    for run in para.runs:
+                        run.text = ""
+                    if para.runs:
+                        para.runs[0].text = new_text
+                    else:
+                        para.add_run(new_text)
 
                 renumber_map[clean_old] = new_num
 
@@ -401,7 +461,7 @@ class FormatCorrector:
 
     def _apply_formula_style(self, paragraph, config):
         style_rules = {"font_size": config.get("font_size", 12)}
-        font_rules = self.config.get("format_rules", {}).get("font", {})
+        font_rules = self._get_font_rules()
         for run in paragraph.runs:
             self._set_run_font(run, font_rules, style_rules)
         if config.get("numbering_position") == "right":

@@ -315,6 +315,7 @@ def main() -> None:
     parser.add_argument("--gui", action="store_true", help="启动Web GUI界面（浏览器）")
     parser.add_argument("--desktop-gui", action="store_true", help="启动桌面 GUI 界面")
     parser.add_argument("--extract", action="store_true", help="仅提取模板样式信息")
+    parser.add_argument("--workers", type=int, default=None, help="最大并行进程数（默认: CPU核心数）")
     parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
 
     args = parser.parse_args()
@@ -443,7 +444,7 @@ def main() -> None:
     else:
         if corrector.template_path and not Path(corrector.template_path).exists():
             corrector.logger.warning(f"模板文件不存在 ({corrector.template_path})")
-        corrector.process_directory(args.input_dir, args.output_dir, args.format, args.score)
+        corrector.process_directory(args.input_dir, args.output_dir, args.format, args.score, args.workers)
 
     print("\n处理完成！")
 

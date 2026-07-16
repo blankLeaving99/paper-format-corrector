@@ -46,8 +46,11 @@ class FigureTableHandler:
             self._handle_caption(paragraph, text, "table")
 
     def update_chapter(self, chapter_num):
-        """更新当前章节号"""
-        self.current_chapter = chapter_num
+        """更新当前章节号，并重置图表计数器"""
+        if chapter_num != self.current_chapter:
+            self.current_chapter = chapter_num
+            self.fig_count = 0
+            self.tab_count = 0
 
     def _handle_caption(self, paragraph, text, kind):
         """处理单个图表标题"""

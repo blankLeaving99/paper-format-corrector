@@ -203,9 +203,51 @@ class AIDocGenerator:
     ):
         self.provider = provider
         self.api_key = api_key or self._get_default_key()
-        self.base_url = base_url
+        self.base_url = self._validate_url(base_url) if base_url else None
         self.model = model or self._get_default_model()
         self.session = ChatSession()
+
+    def _validate_url(self, url):
+        """校验 URL 安全性（防止 SSRF）"""
+        import ipaddress
+        from urllib.parse import urlparse
+
+        parsed = urlparse(url)
+        host = parsed.hostname or ""
+
+        if not host:
+            raise ValueError(f"URL 缺少主机名: {url}")
+
+        # 阻止内网/环回/链路本地 IP 地址
+        try:
+            ip = ipaddress.ip_address(host)
+        except ValueError:
+            ip = None
+
+        if ip is not None:
+            if ip.is_private or ip.is_loopback or ip.is_link_local:
+                if self.provider != "ollama":
+                    raise ValueError(f"不允许访问内网地址: {host}")
+            if str(ip) == "169.254.169.254":
+                raise ValueError("不允许访问云服务商元数据地址")
+
+        # Ollama 只允许 localhost
+        if self.provider == "ollama":
+            if host not in ("localhost", "127.0.0.1"):
+                raise ValueError(f"Ollama 仅支持 localhost，不允许远程地址: {host}")
+            return url
+
+        # 外部 API 必须使用 HTTPS（localhost 除外）
+        if parsed.scheme not in ("https",):
+            if parsed.scheme == "http" and host in ("localhost", "127.0.0.1"):
+                return url
+            raise ValueError(f"不允许的 URL 协议: {parsed.scheme}")
+
+        # 检查域名白名单
+        if host not in self.ALLOWED_DOMAINS:
+            raise ValueError(f"不允许的 API 域名: {host}，允许: {self.ALLOWED_DOMAINS}")
+
+        return url
 
     def _get_default_key(self) -> str:
         if self.provider == "openai":

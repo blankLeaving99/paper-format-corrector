@@ -774,10 +774,14 @@ class PaperFormatDesktopApp:
         # 格式转换
         input_path = Path(paper)
         converter = FileConverter()
-        if converter.needs_conversion(str(input_path)):
-            tmp_dir = Path(tempfile.mkdtemp())
-            converted = converter.convert(str(input_path), str(tmp_dir))
-            input_path = Path(converted)
+        tmp_dir = None
+        try:
+            if converter.needs_conversion(str(input_path)):
+                tmp_dir = Path(tempfile.mkdtemp())
+                converted = converter.convert(str(input_path), str(tmp_dir))
+                input_path = Path(converted)
+        except Exception:
+            self._log.exception("格式转换失败")
 
         # 输出路径
         output_dir = Path("output")
@@ -859,6 +863,10 @@ class PaperFormatDesktopApp:
         self._last_diff_path = diff_path
         self._last_score_report = score_report
 
+        # 清理临时转换目录
+        if tmp_dir and tmp_dir.exists():
+            shutil.rmtree(tmp_dir, ignore_errors=True)
+
         return "\n".join(lines)
 
     def _run_cover(self):
@@ -912,6 +920,7 @@ class PaperFormatDesktopApp:
         self.root.update()
 
         def do_work():
+            tmp_dir = None
             try:
                 input_path = paper
                 converter = FileConverter()
@@ -926,6 +935,9 @@ class PaperFormatDesktopApp:
             except Exception:
                 logging.getLogger(__name__).exception("规则检查失败")
                 self.root.after(0, lambda: self._show_rule_result("检查失败，请检查输入文件是否正确。"))
+            finally:
+                if tmp_dir and tmp_dir.exists():
+                    shutil.rmtree(tmp_dir, ignore_errors=True)
 
         threading.Thread(target=do_work, daemon=True).start()
 
@@ -1039,11 +1051,10 @@ class PaperFormatDesktopApp:
                         '文档已生成完成。\n你可以：\n1. 点击"导出docx"下载\n2. 告诉我需要修改的内容\n3. 回复"重新开始"生成新文档'))
                     self.root.after(0, lambda: self.export_btn.config(state=tk.NORMAL))
 
-            except Exception as e:
+            except Exception:
                 logging.getLogger(__name__).exception("AI处理失败")
-                error_msg = str(e)
-                self.root.after(0, lambda msg=error_msg: self._append_chat("system", f"出错了: {msg}"))
-                self.root.after(0, lambda msg=error_msg: self._update_status(f"错误: {msg}"))
+                self.root.after(0, lambda: self._append_chat("system", "出错了: 请检查API配置后重试。"))
+                self.root.after(0, lambda: self._update_status("错误"))
             finally:
                 self.root.after(0, lambda: self.send_btn.config(state=tk.NORMAL))
 
@@ -1083,11 +1094,10 @@ class PaperFormatDesktopApp:
                 self.root.after(0, lambda: self._update_status("文档生成完成"))
                 self.root.after(0, lambda: self.export_btn.config(state=tk.NORMAL))
 
-            except Exception as e:
+            except Exception:
                 logging.getLogger(__name__).exception("AI文档生成失败")
-                error_msg = str(e)
-                self.root.after(0, lambda msg=error_msg: self._append_chat("system", f"生成失败: {msg}"))
-                self.root.after(0, lambda msg=error_msg: self._update_status(f"错误: {msg}"))
+                self.root.after(0, lambda: self._append_chat("system", "生成失败: 请检查API配置后重试。"))
+                self.root.after(0, lambda: self._update_status("错误"))
             finally:
                 self.root.after(0, lambda: self.send_btn.config(state=tk.NORMAL))
 

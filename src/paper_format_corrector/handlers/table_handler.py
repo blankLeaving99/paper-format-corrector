@@ -84,8 +84,20 @@ class TableHandler:
             run.font.size = Pt(font_size)
             run.font.bold = bold
 
-        # 单元格内文字居中
-        paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        # 从 config 读取对齐方式（表头默认居中，数据行默认居中）
+        align_config = self.table_config.get("alignment", {})
+        if is_header:
+            align = align_config.get("header", "center")
+        else:
+            align = align_config.get("body", "center")
+
+        align_map = {
+            "center": WD_ALIGN_PARAGRAPH.CENTER,
+            "left": WD_ALIGN_PARAGRAPH.LEFT,
+            "right": WD_ALIGN_PARAGRAPH.RIGHT,
+            "justify": WD_ALIGN_PARAGRAPH.JUSTIFY,
+        }
+        paragraph.alignment = align_map.get(align, WD_ALIGN_PARAGRAPH.CENTER)
 
         # 行距
         paragraph.paragraph_format.line_spacing = 1.0  # 表格内单倍行距
@@ -121,19 +133,15 @@ class TableHandler:
         tblPr.append(borders)
 
     def remove_table_borders(self, table):
-        """移除表格边框（用于三线表）"""
+        """三线表：清除所有边框，然后按行级设置三条线。
+
+        正确三线表 = 表头顶线(粗) + 表头底线(细) + 表尾底线(粗)
+        """
         tblPr = self._get_or_create_tblPr(table)
 
+        # 先清除表格级所有边框
         borders = OxmlElement("w:tblBorders")
-        # 只保留顶线和底线（三线表）
-        for border_name in ("top", "bottom"):
-            border = OxmlElement(f"w:{border_name}")
-            border.set(qn("w:val"), "single")
-            border.set(qn("w:sz"), "8")
-            border.set(qn("w:space"), "0")
-            border.set(qn("w:color"), "000000")
-            borders.append(border)
-        for border_name in ("left", "right", "insideH", "insideV"):
+        for border_name in ("top", "left", "bottom", "right", "insideH", "insideV"):
             border = OxmlElement(f"w:{border_name}")
             border.set(qn("w:val"), "none")
             border.set(qn("w:sz"), "0")
@@ -145,6 +153,42 @@ class TableHandler:
         if old_borders is not None:
             tblPr.remove(old_borders)
         tblPr.append(borders)
+
+        if not table.rows:
+            return
+
+        # 通过行级边框实现三线表
+        # 第一行：顶线（粗 sz=12）+ 表头底线（细 sz=6）
+        self._set_row_border(table.rows[0], "top", sz="12")
+        self._set_row_border(table.rows[0], "bottom", sz="6")
+
+        # 最后一行：底线（粗 sz=12）
+        if len(table.rows) > 1:
+            self._set_row_border(table.rows[-1], "bottom", sz="12")
+
+    def _set_row_border(self, row, position, sz="6"):
+        """为指定行设置单元格级边框（支持合并单元格）。"""
+        for tc in row._tr.findall(qn("w:tc")):
+            tcPr = tc.find(qn("w:tcPr"))
+            if tcPr is None:
+                tcPr = OxmlElement("w:tcPr")
+                tc.insert(0, tcPr)
+
+            tcBorders = tcPr.find(qn("w:tcBorders"))
+            if tcBorders is None:
+                tcBorders = OxmlElement("w:tcBorders")
+                tcPr.append(tcBorders)
+
+            border = OxmlElement(f"w:{position}")
+            border.set(qn("w:val"), "single")
+            border.set(qn("w:sz"), sz)
+            border.set(qn("w:space"), "0")
+            border.set(qn("w:color"), "000000")
+
+            old = tcBorders.find(qn(f"w:{position}"))
+            if old is not None:
+                tcBorders.remove(old)
+            tcBorders.append(border)
 
     def _set_table_width(self, table, width):
         """设置表格宽度"""

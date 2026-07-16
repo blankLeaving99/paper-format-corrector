@@ -39,7 +39,7 @@ class ImageHandler:
 
                 # 处理旧式图片 (pict/v:imagedata)
                 picts = run._element.findall(qn("w:pict"))
-                for pict in picts:
+                for _pict in picts:
                     has_image = True
 
             if has_image and self.center:

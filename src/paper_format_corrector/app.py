@@ -1,8 +1,25 @@
-"""论文格式矫正主程序"""
+"""论文格式矫正主程序
+
+并行处理架构说明:
+- 多文档并行: process_directory 使用 ProcessPoolExecutor，每个文档在独立进程中处理，
+  各进程拥有独立的 FormatCorrector 实例和 lxml 文档树，无共享状态。
+- 单文档内串行: 单个文档内的段落格式化、表格处理、图片处理等步骤必须串行执行，
+  因为 python-docx/lxml 的底层 C 库不支持并发写入同一文档树。
+- 后处理并行: correct_document 完成后的质量评分、对比报告、格式导出互不依赖，
+  使用 ThreadPoolExecutor 并行执行。
+
+GPU 加速说明:
+- 本工具的核心工作是 XML 文档树的解析与修改（正则匹配 + DOM 操作），
+  属于 CPU 密集型但非矩阵运算型任务，GPU 加速无显著收益。
+- LLM API 调用（需求文档解析）属于网络 I/O 密集型，瓶颈在网络延迟而非计算。
+- 若未来引入本地 ML 模型（如基于 Transformer 的段落分类器），可考虑 GPU 加速。
+"""
 
 from __future__ import annotations
 
 import copy
+import os
+from concurrent.futures import ProcessPoolExecutor, ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import Any
 
@@ -27,6 +44,106 @@ try:
     HAS_LLM = _find_spec("paper_format_corrector.parsers.llm_parser") is not None
 except ImportError:
     HAS_LLM = False
+
+
+# ---------------------------------------------------------------------------
+# 独立函数：可供 ProcessPoolExecutor 调用（可 pickle）
+# ---------------------------------------------------------------------------
+
+def _process_one_file(
+    args: tuple[str, str, str, dict, bool, bool, list[str] | None],
+) -> dict[str, Any]:
+    """在子进程中处理单个文档。
+
+    每个子进程创建独立的 FormatCorrector 实例，避免 lxml 并发写入问题。
+
+    Args:
+        args: (input_file, output_file, template_path, config,
+               score, diff, export_formats)
+
+    Returns:
+        处理报告字典，失败时返回包含 error 键的字典。
+    """
+    input_file, output_file, template_path, config, score, diff, export_formats = args
+
+    from .core.file_converter import FileConverter
+    from .core.format_corrector import FormatCorrector
+    from .core.format_exporter import FormatExporter
+
+    try:
+        input_path = Path(input_file)
+
+        # 格式转换
+        converter = FileConverter()
+        if converter.needs_conversion(str(input_path)):
+            converted_path = converter.convert(str(input_path), str(input_path.parent))
+            input_path = Path(converted_path)
+
+        corrector = FormatCorrector(template_path, config)
+        report = corrector.correct_document(str(input_path), output_file)
+
+        # 并行执行后处理（评分、导出、对比）
+        with ThreadPoolExecutor(max_workers=3) as pool:
+            futures = {}
+
+            if export_formats:
+                exporter = FormatExporter(config)
+                futures["export"] = pool.submit(
+                    _export_formats_parallel, exporter, Path(output_file), export_formats
+                )
+
+            if score:
+                from .quality.quality_scorer import QualityScorer
+                scorer = QualityScorer(config)
+                futures["score"] = pool.submit(scorer.score, output_file)
+
+            if diff:
+                futures["diff"] = pool.submit(
+                    _generate_diff, input_path, Path(output_file)
+                )
+
+            for name, future in futures.items():
+                try:
+                    result = future.result()
+                    if name == "score":
+                        total, _, _ = result
+                        report["quality_score"] = total
+                    elif name == "diff":
+                        report["diff_path"] = result
+                except Exception:
+                    pass  # 后处理失败不影响主报告
+
+        return report
+
+    except Exception as e:
+        return {"error": str(e), "file": input_file}
+
+
+def _export_formats_parallel(exporter: FormatExporter, docx_path: Path, formats: list[str]) -> list[str]:
+    """并行导出多种格式，返回成功导出的格式列表。"""
+    exported = []
+    for fmt in formats:
+        fmt = fmt.lower().strip(".")
+        if fmt in ("docx", "doc"):
+            continue
+        if fmt == "markdown":
+            fmt = "md"
+        out_path = docx_path.with_suffix(f".{fmt}")
+        try:
+            exporter.export(str(docx_path), str(out_path), fmt)
+            exported.append(fmt)
+        except Exception:
+            pass
+    return exported
+
+
+def _generate_diff(orig_path: Path, output_path: Path) -> str | None:
+    """生成对比报告，返回 diff 文件路径。"""
+    from .quality.diff_reporter import DiffReporter
+    diff_path = output_path.with_suffix(".diff.html")
+    reporter = DiffReporter()
+    reporter.generate_html_report(str(orig_path), str(output_path), str(diff_path))
+    return str(diff_path)
 
 
 class PaperFormatCorrector:
@@ -139,7 +256,6 @@ class PaperFormatCorrector:
             output_path = Path(output_file)
 
         output_path.parent.mkdir(parents=True, exist_ok=True)
-        self.corrector.load_template_styles()
 
         # 保留原始副本用于diff
         orig_path = None
@@ -152,32 +268,52 @@ class PaperFormatCorrector:
             report = self.corrector.correct_document(str(input_path), str(output_path))
             self._print_report(input_path.name, report)
 
-            # 导出其他格式
-            if export_formats:
-                self._export_formats(output_path, export_formats)
+            # 后处理并行化：评分、导出、对比互不依赖
+            with ThreadPoolExecutor(max_workers=3) as pool:
+                futures = {}
 
-            # 质量评分
-            if score:
-                total, scores, issues = self.scorer.score(str(output_path))
-                print(self.scorer.format_report(total, scores, issues))
-                report["quality_score"] = total
+                if export_formats:
+                    futures["export"] = pool.submit(
+                        self._export_formats, output_path, export_formats
+                    )
 
-            # 对比报告
-            if diff and orig_path:
-                diff_path = output_path.with_suffix(".diff.html")
-                self.diff_reporter.generate_html_report(orig_path, str(output_path), str(diff_path))
-                print(f"\n  对比报告已生成: {diff_path}")
+                if score:
+                    futures["score"] = pool.submit(
+                        self.scorer.score, str(output_path)
+                    )
+
+                if diff and orig_path:
+                    futures["diff"] = pool.submit(
+                        self._generate_diff_report, orig_path, str(output_path)
+                    )
+
+                for name, future in futures.items():
+                    try:
+                        result = future.result()
+                        if name == "score":
+                            total, scores, issues = result
+                            print(self.scorer.format_report(total, scores, issues))
+                            report["quality_score"] = total
+                        elif name == "diff":
+                            print(f"\n  对比报告已生成: {result}")
+                    except Exception as e:
+                        self.logger.warning(f"后处理 {name} 失败: {e}")
 
             return report
         except Exception as e:
             self.logger.error(f"处理失败 {input_path.name}: {e}")
-            import traceback
-            traceback.print_exc()
+            self.logger.debug("详细错误信息", exc_info=True)
             return None
         finally:
             # 确保清理临时文件
             if orig_path:
                 Path(orig_path).unlink(missing_ok=True)
+
+    def _generate_diff_report(self, orig_path: str, output_path: str) -> str:
+        """生成对比报告，返回 diff 文件路径。"""
+        diff_path = Path(output_path).with_suffix(".diff.html")
+        self.diff_reporter.generate_html_report(orig_path, output_path, str(diff_path))
+        return str(diff_path)
 
     def process_directory(
         self,
@@ -185,13 +321,20 @@ class PaperFormatCorrector:
         output_dir: str = "output",
         export_formats: list[str] | None = None,
         score: bool = False,
+        max_workers: int | None = None,
     ) -> None:
-        """批量处理目录"""
+        """批量处理目录，支持多进程并行。
+
+        Args:
+            input_dir: 输入目录
+            output_dir: 输出目录
+            export_formats: 导出格式列表
+            score: 是否进行质量评分
+            max_workers: 最大并行进程数，默认为 CPU 核心数
+        """
         Path(output_dir).mkdir(parents=True, exist_ok=True)
-        self.corrector.load_template_styles()
 
         input_path = Path(input_dir)
-        converter = FileConverter()
 
         # 支持所有支持的格式
         doc_files = []
@@ -203,7 +346,10 @@ class PaperFormatCorrector:
             self.logger.warning(f"在 {input_dir} 目录下未找到支持的文档文件")
             return
 
-        self.logger.info(f"找到 {len(doc_files)} 个文档需要处理")
+        if max_workers is None:
+            max_workers = min(len(doc_files), os.cpu_count() or 4)
+
+        self.logger.info(f"找到 {len(doc_files)} 个文档需要处理 (并行度: {max_workers})")
 
         total_report = {
             "files_processed": 0, "files_failed": 0,
@@ -211,44 +357,62 @@ class PaperFormatCorrector:
             "all_ref_issues": [], "all_fig_table_issues": [],
         }
 
-        progress = ProgressBar(len(doc_files), desc="Processing")
-
+        # 构建任务参数列表
+        tasks = []
+        converter = FileConverter()
         for doc_file in doc_files:
-            # 格式转换
+            # 预处理格式转换
             processing_file = doc_file
             if converter.needs_conversion(str(doc_file)):
-                self.logger.info(f"  转换格式: {doc_file.name} ({doc_file.suffix} → .docx)")
                 try:
                     converted_path = converter.convert(str(doc_file), output_dir)
                     processing_file = Path(converted_path)
                 except Exception as e:
                     total_report["files_failed"] += 1
                     self.logger.error(f"格式转换失败 {doc_file.name}: {e}")
-                    progress.update()
                     continue
 
-            output_file = Path(output_dir) / f"formatted_{processing_file.name}"
-            try:
-                report = self.corrector.correct_document(str(processing_file), str(output_file))
-                total_report["files_processed"] += 1
-                total_report["total_paragraphs"] += report.get("paragraphs_corrected", 0)
-                total_report["total_headings"] += report.get("headings_fixed", 0)
-                total_report["total_body"] += report.get("body_fixed", 0)
-                total_report["all_ref_issues"].extend(report.get("ref_issues", []))
-                total_report["all_fig_table_issues"].extend(report.get("fig_table_issues", []))
+            output_file = str(Path(output_dir) / f"formatted_{processing_file.name}")
+            tasks.append((
+                str(processing_file), output_file, self.template_path,
+                self.config, score, False, export_formats,
+            ))
 
-                if export_formats:
-                    self._export_formats(output_file, export_formats)
+        if not tasks:
+            self.logger.warning("所有文件格式转换失败")
+            return
 
-                if score:
-                    total, _, _ = self.scorer.score(str(output_file))
-                    self.logger.info(f"  {doc_file.name}: 质量评分 {total}/100")
+        # 多进程并行处理
+        progress = ProgressBar(len(tasks), desc="Processing")
 
-            except Exception as e:
-                total_report["files_failed"] += 1
-                self.logger.error(f"处理失败 {doc_file.name}: {e}")
+        with ProcessPoolExecutor(max_workers=max_workers) as executor:
+            future_to_input = {
+                executor.submit(_process_one_file, task): task[0]
+                for task in tasks
+            }
 
-            progress.update()
+            for future in as_completed(future_to_input):
+                input_file = future_to_input[future]
+                try:
+                    report = future.result()
+                    if "error" in report:
+                        total_report["files_failed"] += 1
+                        self.logger.error(f"处理失败 {Path(input_file).name}: {report['error']}")
+                    else:
+                        total_report["files_processed"] += 1
+                        total_report["total_paragraphs"] += report.get("paragraphs_corrected", 0)
+                        total_report["total_headings"] += report.get("headings_fixed", 0)
+                        total_report["total_body"] += report.get("body_fixed", 0)
+                        total_report["all_ref_issues"].extend(report.get("ref_issues", []))
+                        total_report["all_fig_table_issues"].extend(report.get("fig_table_issues", []))
+
+                        if score and "quality_score" in report:
+                            self.logger.info(f"  {Path(input_file).name}: 质量评分 {report['quality_score']}/100")
+                except Exception as e:
+                    total_report["files_failed"] += 1
+                    self.logger.error(f"处理失败 {Path(input_file).name}: {e}")
+
+                progress.update()
 
         progress.finish()
         self._print_summary(total_report)

@@ -16,6 +16,7 @@
 """
 
 import atexit
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -376,9 +377,10 @@ def ai_chat_send(
             chat_history.append({"role": "assistant", "content": "文档已生成完成。\n\n你可以：\n1. 点击 **导出docx** 按钮下载文档\n2. 告诉我需要修改的内容，我会帮你调整\n3. 回复 **重新开始** 生成新文档"})
             status = "文档已就绪"
 
-    except Exception as e:
-        chat_history.append({"role": "assistant", "content": f"出错了: {str(e)}\n\n请检查API配置后重试。"})
-        status = f"错误: {str(e)}"
+    except Exception:
+        logging.getLogger(__name__).exception("AI处理失败")
+        chat_history.append({"role": "assistant", "content": "出错了: 请检查API配置后重试。"})
+        status = "错误"
 
     return chat_history, "", status
 

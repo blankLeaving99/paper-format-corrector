@@ -94,7 +94,7 @@ class RequirementParser:
                 converted_path = converter.convert(str(file_path), tmp_dir)
                 self.raw_lines = self._read_docx(Path(converted_path))
             except Exception as e:
-                raise ValueError(f"无法转换 {ext} 格式的需求文档: {e}")
+                raise ValueError(f"无法转换 {ext} 格式的需求文档: {e}") from e
             finally:
                 shutil.rmtree(tmp_dir, ignore_errors=True)
         else:
@@ -539,7 +539,7 @@ class RequirementParser:
 
         # 标题
         headings = {}
-        for level, config_key in [(1, "heading1"), (2, "heading2"), (3, "heading3")]:
+        for _level, config_key in [(1, "heading1"), (2, "heading2"), (3, "heading3")]:
             if config_key in rules:
                 r = rules[config_key]
                 h = {}
@@ -633,7 +633,7 @@ class RequirementParser:
 
         # 页边距
         all_margins = {}
-        for stype, attrs in rules.items():
+        for _stype, attrs in rules.items():
             if "margins" in attrs:
                 all_margins.update(attrs["margins"])
         if all_margins:

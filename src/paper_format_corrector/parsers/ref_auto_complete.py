@@ -9,10 +9,13 @@
 """
 
 import json
+import logging
 import re
 import time
 import urllib.parse
 import urllib.request
+
+logger = logging.getLogger(__name__)
 
 
 class RefAutoComplete:
@@ -96,6 +99,9 @@ class RefAutoComplete:
         """查询 CrossRef API"""
         self._rate_limit()
 
+        # 截断标题防止 URL 过长
+        title = title[:200]
+
         params = {
             "query.title": title,
             "rows": 1,
@@ -126,7 +132,8 @@ class RefAutoComplete:
                 "pages": self._get_field(item, "page"),
                 "doi": self._get_field(item, "DOI"),
             }
-        except Exception:
+        except Exception as e:
+            logger.debug(f"CrossRef 查询失败: {type(e).__name__}: {e}")
             return None
 
     def _get_field(self, item, field):

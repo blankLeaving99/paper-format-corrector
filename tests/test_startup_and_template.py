@@ -88,7 +88,6 @@ class TestFormatCorrectorFallback:
 
         fake_template = str(tmp_path / "missing.docx")
         corrector = FormatCorrector(fake_template, config)
-        corrector.load_template_styles()
 
         output_path = str(tmp_path / "output.docx")
         report = corrector.correct_document(sample_paper_path, output_path)

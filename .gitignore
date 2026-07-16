@@ -8,3 +8,4 @@ template/*.docx
 template/*.doc
 .venv/
 .venv_location
+setup_config.json

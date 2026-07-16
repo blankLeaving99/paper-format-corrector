@@ -1,11 +1,16 @@
-"""插件架构管理器
+"""插件架构管理器（已废弃）
 
-将各功能模块注册为插件，支持：
-- 插件注册/注销
-- 按优先级顺序执行
-- 启用/禁用插件
-- 插件间数据传递
+.. deprecated:: 1.0
+   此模块从未被使用，将在下个版本移除。
 """
+
+import warnings
+
+warnings.warn(
+    "plugin_manager is deprecated and will be removed in the next version",
+    DeprecationWarning,
+    stacklevel=2,
+)
 
 
 
