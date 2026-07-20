@@ -390,4 +390,3 @@ paper-format-corrector/
 
 ## 许可证
 
-MIT
