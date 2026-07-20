@@ -16,6 +16,7 @@
 """
 
 import atexit
+import json
 import logging
 import shutil
 import tempfile
@@ -30,6 +31,13 @@ except ImportError:
     exit(1)
 
 from .app import PaperFormatCorrector
+from .application.services.style_workbench import (
+    build_application_report,
+    explain_style_profile,
+    learn_style_profile,
+    manual_style_config,
+    scan_document,
+)
 from .core.doc_generator import DocGenerator
 from .core.file_converter import FileConverter
 from .core.format_corrector import FormatCorrector
@@ -37,6 +45,7 @@ from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
 from .infra.doc_template_loader import list_doc_templates
 from .infra.preset_loader import list_presets
+from .infra.template_repository import TemplateRepository
 from .quality.diff_reporter import DiffReporter
 from .quality.quality_scorer import QualityScorer
 
@@ -66,6 +75,28 @@ atexit.register(_cleanup_temp_dirs)
 _PRESET_MAP = {}
 for _p in list_presets():
     _PRESET_MAP[f"{_p['name']} - {_p['description']}"] = _p['name']
+
+
+def _template_repository() -> TemplateRepository:
+    return TemplateRepository()
+
+
+def workbench_template_choices() -> list[str]:
+    """Build stable dropdown values while displaying source/category to users."""
+    choices = ["无（使用默认配置）"]
+    for template in _template_repository().list_templates():
+        choices.append(f"{template.slug} | [{template.category}] {template.name}")
+    return choices
+
+
+def _load_workbench_template(choice: str) -> dict:
+    if not choice or choice == "无（使用默认配置）":
+        return {}
+    slug = choice.split(" | ", 1)[0]
+    template = _template_repository().get(slug)
+    if template is None:
+        raise ValueError("所选模板不存在，请刷新模板库后重试")
+    return template.config
 
 
 
@@ -204,6 +235,84 @@ def format_report_text(report):
     return "\n".join(lines)
 
 
+def scan_workbench_document(paper_file):
+    """Scan a document before applying a workbench style."""
+    if paper_file is None:
+        return "请先上传 .docx 论文。"
+    try:
+        inventory = scan_document(paper_file.name)
+        return json.dumps(inventory, ensure_ascii=False, indent=2)
+    except Exception as exc:
+        return f"扫描失败：{exc}"
+
+
+def inspect_sample_style(sample_file):
+    if sample_file is None:
+        return "请上传一份已排好版的 .docx 样本文档。"
+    try:
+        return json.dumps(explain_style_profile(sample_file.name), ensure_ascii=False, indent=2, default=str)
+    except Exception as exc:
+        return f"样式学习失败：{exc}"
+
+
+def save_sample_template(sample_file, name, category):
+    """Save a learned sample profile as a reusable local database template."""
+    if sample_file is None:
+        return "请先上传已排好版的 .docx 样本文档。", gr.update()
+    try:
+        profile = learn_style_profile(sample_file.name)
+        record = _template_repository().save_personal_template(
+            name or Path(sample_file.name).stem, category, profile, "由样本文档自动学习",
+        )
+        return f"已保存个人模板：{record.name}", gr.update(choices=workbench_template_choices())
+    except Exception as exc:
+        return f"保存模板失败：{exc}", gr.update()
+
+
+def process_with_workbench(  # noqa: PLR0913
+    paper_file, sample_file, template_choice, body_font, body_size, body_spacing,
+    body_indent, heading_font, heading1_size, heading2_size, heading3_size,
+    table_style, table_font_size, image_max_width,
+):
+    """Apply a preset, an optional learned sample and explicit UI settings."""
+    if paper_file is None:
+        return None, "请上传论文文件", None
+    if Path(paper_file.name).suffix.lower() != ".docx":
+        return None, "格式工作台当前只处理 .docx 文件", None
+    if sample_file and Path(sample_file.name).suffix.lower() != ".docx":
+        return None, "样本文档必须是 .docx 文件", None
+
+    try:
+        c = PaperFormatCorrector(config_path)
+        c.config = c._merge_config(c.config, _load_workbench_template(template_choice))
+        if sample_file:
+            c.config = c._merge_config(c.config, learn_style_profile(sample_file.name))
+        c.config = c._merge_config(c.config, manual_style_config(
+            body_font, body_size, body_spacing, body_indent, heading1_size,
+            heading2_size, heading3_size, heading_font, table_style,
+            table_font_size, image_max_width,
+        ))
+        c.corrector = FormatCorrector(c.template_path, c.config)
+    except Exception as exc:
+        return None, f"无法生成格式方案：{exc}", None
+
+    output_dir = Path(tempfile.mkdtemp())
+    _temp_dirs.append(str(output_dir))
+    output_path = output_dir / f"workbench_{Path(paper_file.name).name}"
+    try:
+        report = c.corrector.correct_document(paper_file.name, str(output_path))
+        diff_path = output_path.with_suffix(".diff.html")
+        DiffReporter().generate_html_report(paper_file.name, str(output_path), str(diff_path))
+    except Exception as exc:
+        return None, f"应用格式失败：{exc}", None
+
+    source = "已学习样本文档；" if sample_file else ""
+    coverage = build_application_report(paper_file.name, report)
+    summary = source + format_report_text(report)
+    summary += "\n\n覆盖与待复核项：\n" + json.dumps(coverage, ensure_ascii=False, indent=2)
+    return str(output_path), summary, str(diff_path)
+
+
 def generate_cover(title, title_en, author, college, major, student_id, advisor, date, university, paper_type, template):
     """生成封面"""
     if not title:
@@ -230,6 +339,125 @@ def generate_cover(title, title_en, author, college, major, student_id, advisor,
     generator.generate(metadata, str(output_path), template)
 
     return str(output_path), "封面生成成功！"
+
+
+# ---------- 模板库管理 ----------
+
+_template_repo = None
+
+
+def _get_template_repo() -> TemplateRepository:
+    global _template_repo
+    if _template_repo is None:
+        _template_repo = TemplateRepository()
+    return _template_repo
+
+
+def template_list(category=None):
+    """列出模板库中的模板"""
+    repo = _get_template_repo()
+    templates = repo.list_templates(category=category if category and category != "全部" else None)
+    if not templates:
+        return "模板库为空"
+    lines = []
+    for t in templates:
+        tags_str = f" [{', '.join(t.tags)}]" if t.tags else ""
+        org_str = f" - {t.organization}" if t.organization else ""
+        status = "✓" if t.is_active else "✗"
+        lines.append(f"{status} **{t.name}** ({t.category}){org_str}{tags_str} v{t.version} [{t.source}]")
+    return "\n".join(lines)
+
+
+def template_search(keyword):
+    """搜索模板"""
+    if not keyword or not keyword.strip():
+        return "请输入搜索关键词"
+    repo = _get_template_repo()
+    templates = repo.search_templates(keyword.strip())
+    if not templates:
+        return f"未找到匹配 '{keyword}' 的模板"
+    lines = []
+    for t in templates:
+        lines.append(f"**{t.name}** ({t.category}) - {t.description[:50]}")
+    return "\n".join(lines)
+
+
+def template_detail(slug):
+    """查看模板详情"""
+    if not slug or not slug.strip():
+        return "请输入模板 slug"
+    repo = _get_template_repo()
+    record = repo.get(slug.strip())
+    if record is None:
+        return f"模板不存在: {slug}"
+    tags_str = ", ".join(record.tags) if record.tags else "无"
+    versions = repo.get_versions(record.slug)
+    version_info = "\n".join([f"  v{v['version']} ({v['created_at']}): {v['changelog']}" for v in versions[:5]])
+    return f"""模板详情:
+名称: {record.name}
+分类: {record.category}
+来源: {record.source}
+组织: {record.organization or '未指定'}
+学历层次: {record.degree_level or '未指定'}
+学科: {record.discipline or '未指定'}
+语言: {record.language}
+版本: {record.version}
+标签: {tags_str}
+说明: {record.description or '无'}
+创建时间: {record.created_at}
+更新时间: {record.updated_at}
+
+版本历史:
+{version_info or '  无版本记录'}"""
+
+
+def template_delete(slug):
+    """删除模板"""
+    if not slug or not slug.strip():
+        return "请输入模板 slug"
+    repo = _get_template_repo()
+    success = repo.delete_template(slug.strip())
+    if success:
+        return f"模板 {slug} 已删除"
+    return f"模板不存在: {slug}"
+
+
+def template_export(slug, fmt):
+    """导出模板"""
+    if not slug or not slug.strip():
+        return None, "请输入模板 slug"
+    repo = _get_template_repo()
+    output_dir = Path(tempfile.mkdtemp())
+    _temp_dirs.append(str(output_dir))
+    output_path = output_dir / f"template_{slug.strip()}.{fmt}"
+    try:
+        if fmt == "yaml":
+            repo.export_to_yaml(slug.strip(), str(output_path))
+        else:
+            repo.export_to_json(slug.strip(), str(output_path))
+        return str(output_path), f"导出成功: {output_path.name}"
+    except Exception as e:
+        return None, f"导出失败: {e}"
+
+
+def template_import(file, name, category):
+    """导入模板"""
+    if file is None:
+        return "请上传模板文件"
+    if not name or not name.strip():
+        return "请输入模板名称"
+    repo = _get_template_repo()
+    try:
+        path = file.name
+        if path.endswith((".yaml", ".yml")):
+            record = repo.import_from_yaml(path)
+        elif path.endswith(".json"):
+            record = repo.import_from_json(path)
+        else:
+            return "仅支持 YAML 和 JSON 格式"
+        return f"导入成功: {record.name} (slug: {record.slug})"
+    except Exception as e:
+        return f"导入失败: {e}"
 
 
 def check_rules(paper_file, rules_file):
@@ -582,6 +810,109 @@ def build_ui():
                     inputs=[paper_input, requirement_input, config_input, template_input, preset_dropdown, export_checkboxes, do_score, do_diff],
                     outputs=[output_file, score_output, report_output, diff_output],
                 )
+
+            with gr.Tab("格式工作台"):
+                gr.Markdown("上传论文后先扫描元素；可套用期刊/院校预设、学习一份已排好版的样本文档，再对正文、标题、表格和图片全局应用。")
+                with gr.Row():
+                    with gr.Column():
+                        wb_paper = gr.File(label="待处理论文 (.docx)", file_types=[".docx"])
+                        wb_sample = gr.File(label="样本文档（可选，已排好版 .docx）", file_types=[".docx"])
+                        wb_template = gr.Dropdown(choices=workbench_template_choices(), value="无（使用默认配置）", label="模板库（期刊 / 高校 / 我的模板）")
+                        scan_btn = gr.Button("扫描文档元素")
+                        sample_btn = gr.Button("查看样本文档学习结果")
+                        with gr.Row():
+                            wb_template_name = gr.Textbox(label="保存为我的模板", placeholder="例如：张同学硕士论文")
+                            wb_template_category = gr.Dropdown(["高校毕业论文", "国际期刊与会议", "引用与写作规范", "个人"], value="高校毕业论文", label="模板分类")
+                        save_template_btn = gr.Button("将样本文档保存到模板库")
+                        with gr.Accordion("正文与标题", open=True):
+                            wb_body_font = gr.Textbox(label="正文字体", value="宋体")
+                            wb_body_size = gr.Number(label="正文字号 (pt)", value=12, precision=1)
+                            wb_body_spacing = gr.Number(label="正文行距（倍数）", value=1.5, precision=2)
+                            wb_body_indent = gr.Number(label="正文首行缩进（字符）", value=2, precision=1)
+                            wb_heading_font = gr.Textbox(label="标题字体", value="黑体")
+                            with gr.Row():
+                                wb_heading1 = gr.Number(label="一级标题 (pt)", value=16, precision=1)
+                                wb_heading2 = gr.Number(label="二级标题 (pt)", value=14, precision=1)
+                                wb_heading3 = gr.Number(label="三级标题 (pt)", value=12, precision=1)
+                        with gr.Accordion("表格与图片", open=False):
+                            wb_table_style = gr.Radio(["three_line", "full_border", "keep"], value="three_line", label="表格样式")
+                            wb_table_size = gr.Number(label="表格字号 (pt)", value=10.5, precision=1)
+                            wb_image_width = gr.Dropdown(["full", "90%", "80%", "70%", "50%"], value="full", label="图片最大宽度")
+                        wb_apply = gr.Button("应用到全部同类元素", variant="primary", size="lg")
+                    with gr.Column():
+                        wb_inventory = gr.Code(label="扫描结果（元素数量、样例和风险）", language="json", lines=22)
+                        wb_output = gr.File(label="格式工作台输出")
+                        wb_report = gr.Textbox(label="应用报告", lines=12)
+                        wb_diff = gr.File(label="差异报告（HTML）")
+
+                scan_btn.click(fn=scan_workbench_document, inputs=[wb_paper], outputs=[wb_inventory])
+                sample_btn.click(fn=inspect_sample_style, inputs=[wb_sample], outputs=[wb_inventory])
+                save_template_btn.click(
+                    fn=save_sample_template,
+                    inputs=[wb_sample, wb_template_name, wb_template_category],
+                    outputs=[wb_report, wb_template],
+                )
+                wb_apply.click(
+                    fn=process_with_workbench,
+                    inputs=[wb_paper, wb_sample, wb_template, wb_body_font, wb_body_size, wb_body_spacing,
+                            wb_body_indent, wb_heading_font, wb_heading1, wb_heading2, wb_heading3,
+                            wb_table_style, wb_table_size, wb_image_width],
+                    outputs=[wb_output, wb_report, wb_diff],
+                )
+
+            # Tab: 模板库管理
+            with gr.Tab("模板库管理"):
+                gr.Markdown("### 模板库 - 搜索、查看、导入、导出模板")
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        gr.Markdown("#### 模板列表")
+                        tm_category = gr.Dropdown(
+                            choices=["全部", "高校毕业论文", "国际期刊与会议", "引用与写作规范", "个人"],
+                            value="全部", label="按分类筛选",
+                        )
+                        tm_list_btn = gr.Button("刷新列表")
+                        tm_list_output = gr.Textbox(label="模板列表", lines=15, max_lines=20)
+
+                        gr.Markdown("#### 搜索模板")
+                        tm_search_input = gr.Textbox(label="搜索关键词", placeholder="输入学校、期刊、关键词...")
+                        tm_search_btn = gr.Button("搜索")
+                        tm_search_output = gr.Textbox(label="搜索结果", lines=8)
+
+                    with gr.Column(scale=1):
+                        gr.Markdown("#### 模板详情")
+                        tm_slug_input = gr.Textbox(label="模板 Slug", placeholder="例如: builtin-ieee")
+                        tm_detail_btn = gr.Button("查看详情")
+                        tm_detail_output = gr.Textbox(label="详情", lines=15, max_lines=20)
+
+                        gr.Markdown("#### 导入/导出")
+                        with gr.Row():
+                            tm_import_file = gr.File(label="上传模板 (.yaml/.json)", file_types=[".yaml", ".yml", ".json"])
+                        tm_import_name = gr.Textbox(label="模板名称", placeholder="新模板名称")
+                        tm_import_category = gr.Dropdown(
+                            ["高校毕业论文", "国际期刊与会议", "引用与写作规范", "个人"],
+                            value="个人", label="分类",
+                        )
+                        tm_import_btn = gr.Button("导入模板")
+                        tm_import_output = gr.Textbox(label="导入结果", lines=2)
+
+                        with gr.Row():
+                            tm_export_slug = gr.Textbox(label="导出 Slug", placeholder="模板 slug")
+                            tm_export_fmt = gr.Dropdown(["yaml", "json"], value="yaml", label="格式")
+                        tm_export_btn = gr.Button("导出模板")
+                        tm_export_file = gr.File(label="导出文件")
+                        tm_export_output = gr.Textbox(label="导出结果", lines=2)
+
+                        gr.Markdown("#### 删除模板")
+                        tm_delete_slug = gr.Textbox(label="删除 Slug", placeholder="个人模板 slug")
+                        tm_delete_btn = gr.Button("删除", variant="stop")
+                        tm_delete_output = gr.Textbox(label="删除结果", lines=2)
+
+                tm_list_btn.click(fn=template_list, inputs=[tm_category], outputs=[tm_list_output])
+                tm_search_btn.click(fn=template_search, inputs=[tm_search_input], outputs=[tm_search_output])
+                tm_detail_btn.click(fn=template_detail, inputs=[tm_slug_input], outputs=[tm_detail_output])
+                tm_import_btn.click(fn=template_import, inputs=[tm_import_file, tm_import_name, tm_import_category], outputs=[tm_import_output])
+                tm_export_btn.click(fn=template_export, inputs=[tm_export_slug, tm_export_fmt], outputs=[tm_export_file, tm_export_output])
+                tm_delete_btn.click(fn=template_delete, inputs=[tm_delete_slug], outputs=[tm_delete_output])
 
             # Tab 2: 封面生成
             with gr.Tab("封面生成"):

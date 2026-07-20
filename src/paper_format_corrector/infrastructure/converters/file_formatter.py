@@ -132,10 +132,14 @@ class FormatCorrector:
         self._correct_paragraphs(doc)
 
         # 3. 表格格式矫正
-        self.report["tables_formatted"] = self.table_handler.format_all_tables(doc)
+        table_result = self.table_handler.format_all_tables(doc)
+        self.report["tables_formatted"] = table_result.tables_formatted if hasattr(table_result, 'tables_formatted') else table_result
 
         # 4. 图片处理（居中 + 调整大小 + DPI检查）
-        self.report["images_centered"] = self.image_handler.process_all_images(doc)
+        image_result = self.image_handler.process_all_images(doc)
+        self.report["images_centered"] = image_result.images_centered if hasattr(image_result, 'images_centered') else image_result
+        if hasattr(image_result, 'warnings') and image_result.warnings:
+            self.report["warnings"].extend(image_result.warnings)
 
         # 5. 参考文献格式化
         self._format_references(doc)

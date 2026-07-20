@@ -33,8 +33,8 @@ def test_image_handler_no_images(config, tmp_path):
 
     handler = ImageHandler(config)
     doc2 = Document(str(path))
-    count = handler.process_all_images(doc2)
-    assert count == 0
+    result = handler.process_all_images(doc2)
+    assert result.images_centered == 0
 
 
 def test_image_handler_page_width(config):
@@ -87,8 +87,8 @@ def test_table_handler_format_empty_doc(config):
     doc = Document()
     doc.add_paragraph("No tables here.")
     handler = TableHandler(config)
-    count = handler.format_all_tables(doc)
-    assert count == 0
+    result = handler.format_all_tables(doc)
+    assert result.tables_formatted == 0
 
 
 def test_table_handler_header_bold(config, tmp_path):

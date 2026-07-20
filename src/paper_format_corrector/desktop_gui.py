@@ -29,12 +29,20 @@ except ImportError:
     HAS_DND = False
 
 from .app import PaperFormatCorrector
+from .application.services.style_workbench import (
+    build_application_report,
+    explain_style_profile,
+    learn_style_profile,
+    manual_style_config,
+    scan_document,
+)
 from .core.doc_generator import DocGenerator
 from .core.file_converter import FileConverter
 from .core.format_corrector import FormatCorrector
 from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
 from .infra.doc_template_loader import list_doc_templates
+from .infra.template_repository import TemplateRepository
 from .quality.diff_reporter import DiffReporter
 from .quality.quality_scorer import QualityScorer
 
@@ -218,6 +226,23 @@ class PaperFormatDesktopApp:
         self.export_txt = tk.BooleanVar()
         self.export_md = tk.BooleanVar()
 
+        # 格式工作台变量
+        self.wb_paper_path = tk.StringVar()
+        self.wb_sample_path = tk.StringVar()
+        self.wb_body_font = tk.StringVar(value="宋体")
+        self.wb_heading_font = tk.StringVar(value="黑体")
+        self.wb_body_size = tk.DoubleVar(value=12)
+        self.wb_line_spacing = tk.DoubleVar(value=1.5)
+        self.wb_indent = tk.DoubleVar(value=2)
+        self.wb_heading1_size = tk.DoubleVar(value=16)
+        self.wb_heading2_size = tk.DoubleVar(value=14)
+        self.wb_heading3_size = tk.DoubleVar(value=12)
+        self.wb_table_style = tk.StringVar(value="three_line")
+        self.wb_table_size = tk.DoubleVar(value=10.5)
+        self.wb_image_width = tk.StringVar(value="full")
+        self.wb_template_choice = tk.StringVar(value="无（使用默认配置）")
+        self.wb_template_name = tk.StringVar()
+
         # 封面变量
         self.cover_title = tk.StringVar()
         self.cover_title_en = tk.StringVar()
@@ -273,6 +298,7 @@ class PaperFormatDesktopApp:
         notebook.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
 
         self._build_correct_tab(notebook)
+        self._build_workbench_tab(notebook)
         self._build_preview_tab(notebook)
         self._build_cover_tab(notebook)
         self._build_ai_gen_tab(notebook)
@@ -349,6 +375,140 @@ class PaperFormatDesktopApp:
 
         self.result_text = scrolledtext.ScrolledText(result_frame, height=15, font=("Consolas", 10))
         self.result_text.pack(fill=tk.BOTH, expand=True)
+
+    # ── Tab 2: 格式工作台 ──────────────────────────────────────
+
+    def _build_workbench_tab(self, notebook):
+        tab = ttk.Frame(notebook)
+        notebook.add(tab, text="格式工作台")
+
+        files = ttk.LabelFrame(tab, text="文档与样本", padding=10)
+        files.pack(fill=tk.X, padx=10, pady=5)
+        DropFileEntry(files, "待处理论文:", self.wb_paper_path, filetypes=[("Word文档", "*.docx")]).pack(fill=tk.X, pady=2)
+        DropFileEntry(files, "样本文档:", self.wb_sample_path, filetypes=[("Word文档", "*.docx")]).pack(fill=tk.X, pady=2)
+        template_row = ttk.Frame(files)
+        template_row.pack(fill=tk.X, pady=2)
+        ttk.Label(template_row, text="模板库:", width=12).pack(side=tk.LEFT)
+        self.wb_template_box = ttk.Combobox(template_row, textvariable=self.wb_template_choice, values=self._workbench_template_choices(), width=55, state="readonly")
+        self.wb_template_box.pack(side=tk.LEFT, padx=5, fill=tk.X, expand=True)
+
+        styles = ttk.LabelFrame(tab, text="全局样式（应用到全部同类元素）", padding=10)
+        styles.pack(fill=tk.X, padx=10, pady=5)
+        fields = [
+            ("正文字体", self.wb_body_font), ("正文字号(pt)", self.wb_body_size),
+            ("正文行距", self.wb_line_spacing), ("首行缩进(字符)", self.wb_indent),
+            ("标题字体", self.wb_heading_font), ("一级标题(pt)", self.wb_heading1_size),
+            ("二级标题(pt)", self.wb_heading2_size), ("三级标题(pt)", self.wb_heading3_size),
+            ("表格字号(pt)", self.wb_table_size),
+        ]
+        for index, (label, variable) in enumerate(fields):
+            row, col = divmod(index, 3)
+            ttk.Label(styles, text=label).grid(row=row, column=col * 2, sticky=tk.W, padx=4, pady=3)
+            ttk.Entry(styles, textvariable=variable, width=12).grid(row=row, column=col * 2 + 1, sticky=tk.W, padx=4, pady=3)
+        ttk.Label(styles, text="表格样式").grid(row=3, column=0, sticky=tk.W, padx=4, pady=3)
+        ttk.Combobox(styles, textvariable=self.wb_table_style, values=["three_line", "full_border", "keep"], width=12, state="readonly").grid(row=3, column=1, sticky=tk.W)
+        ttk.Label(styles, text="图片最大宽度").grid(row=3, column=2, sticky=tk.W, padx=4, pady=3)
+        ttk.Combobox(styles, textvariable=self.wb_image_width, values=["full", "90%", "80%", "70%", "50%"], width=12, state="readonly").grid(row=3, column=3, sticky=tk.W)
+
+        actions = ttk.Frame(tab)
+        actions.pack(fill=tk.X, padx=10, pady=5)
+        ttk.Button(actions, text="扫描论文", command=self._scan_workbench).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="查看样本学习结果", command=self._inspect_workbench_sample).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="保存样本为我的模板", command=self._save_workbench_template).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="应用到全部同类元素", command=self._run_workbench).pack(side=tk.LEFT, padx=5)
+
+        ttk.Entry(actions, textvariable=self.wb_template_name, width=22).pack(side=tk.RIGHT, padx=5)
+        ttk.Label(actions, text="个人模板名称:").pack(side=tk.RIGHT)
+
+        self.workbench_text = scrolledtext.ScrolledText(tab, height=16, font=("Consolas", 10))
+        self.workbench_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+    def _write_workbench(self, text):
+        self.workbench_text.delete(1.0, tk.END)
+        self.workbench_text.insert(tk.END, text)
+
+    @staticmethod
+    def _workbench_template_choices():
+        choices = ["无（使用默认配置）"]
+        for template in TemplateRepository().list_templates():
+            choices.append(f"{template.slug} | [{template.category}] {template.name}")
+        return choices
+
+    def _save_workbench_template(self):
+        sample = self.wb_sample_path.get().strip()
+        if not sample:
+            messagebox.showwarning("提示", "请先选择已排好版的样本文档")
+            return
+        try:
+            record = TemplateRepository().save_personal_template(
+                self.wb_template_name.get().strip() or Path(sample).stem,
+                "高校毕业论文", learn_style_profile(sample), "由样本文档自动学习",
+            )
+            self.wb_template_box.configure(values=self._workbench_template_choices())
+            self.wb_template_choice.set(f"{record.slug} | [{record.category}] {record.name}")
+            self._write_workbench(f"已保存个人模板：{record.name}")
+        except Exception as exc:
+            self._write_workbench(f"保存模板失败：{exc}")
+
+    def _scan_workbench(self):
+        path = self.wb_paper_path.get().strip()
+        if not path:
+            messagebox.showwarning("提示", "请先选择 .docx 论文")
+            return
+        try:
+            import json
+            self._write_workbench(json.dumps(scan_document(path), ensure_ascii=False, indent=2, default=str))
+        except Exception as exc:
+            self._write_workbench(f"扫描失败：{exc}")
+
+    def _inspect_workbench_sample(self):
+        path = self.wb_sample_path.get().strip()
+        if not path:
+            messagebox.showwarning("提示", "请先选择已排好版的 .docx 样本文档")
+            return
+        try:
+            import json
+            self._write_workbench(json.dumps(explain_style_profile(path), ensure_ascii=False, indent=2, default=str))
+        except Exception as exc:
+            self._write_workbench(f"样式学习失败：{exc}")
+
+    def _run_workbench(self):
+        paper = self.wb_paper_path.get().strip()
+        if not paper:
+            messagebox.showwarning("提示", "请先选择 .docx 论文")
+            return
+        self._write_workbench("正在应用格式，请稍候…")
+
+        def do_work():
+            try:
+                c = PaperFormatCorrector(CONFIG_PATH)
+                choice = self.wb_template_choice.get()
+                if choice != "无（使用默认配置）":
+                    stored = TemplateRepository().get(choice.split(" | ", 1)[0])
+                    if stored is None:
+                        raise ValueError("所选模板不存在，请刷新模板库后重试")
+                    c.config = c._merge_config(c.config, stored.config)
+                sample = self.wb_sample_path.get().strip()
+                if sample:
+                    c.config = c._merge_config(c.config, learn_style_profile(sample))
+                c.config = c._merge_config(c.config, manual_style_config(
+                    self.wb_body_font.get(), self.wb_body_size.get(), self.wb_line_spacing.get(), self.wb_indent.get(),
+                    self.wb_heading1_size.get(), self.wb_heading2_size.get(), self.wb_heading3_size.get(), self.wb_heading_font.get(),
+                    self.wb_table_style.get(), self.wb_table_size.get(), self.wb_image_width.get(),
+                ))
+                c.corrector = FormatCorrector(c.template_path, c.config)
+                output_dir = Path("output")
+                output_dir.mkdir(exist_ok=True)
+                output = output_dir / f"workbench_{Path(paper).name}"
+                report = c.corrector.correct_document(paper, str(output))
+                import json
+                text = f"已生成：{output}\n\n" + json.dumps(build_application_report(paper, report), ensure_ascii=False, indent=2, default=str)
+                self.root.after(0, lambda: self._write_workbench(text))
+            except Exception as exc:
+                error_text = f"应用格式失败：{exc}"
+                self.root.after(0, lambda: self._write_workbench(error_text))
+
+        threading.Thread(target=do_work, daemon=True).start()
 
     # ── Tab 2: 矫正预览 ──────────────────────────────────────
 
