@@ -90,6 +90,8 @@ class ImageHandler:
                 result.images_centered += 1
 
         result.captions_formatted = self._format_captions(doc)
+        pixel_warnings = self.check_pixel_dpi(doc)
+        self._warnings.extend(pixel_warnings)
         result.warnings = list(self._warnings)
         result.stats = self.get_image_stats(doc)
         return result
@@ -168,6 +170,42 @@ class ImageHandler:
                                 f"图片宽高比异常 ({width_inches:.1f}:{height_inches:.1f})，"
                                 "可能被拉伸或压缩"
                             )
+
+    def check_pixel_dpi(self, doc: Any) -> list[str]:
+        """Check actual pixel DPI of embedded images by reading image binaries."""
+        warnings: list[str] = []
+        try:
+            from io import BytesIO
+
+            from PIL import Image
+        except ImportError:
+            return warnings
+
+        rels_part = doc.part.rels
+        for _rel_id, rel in rels_part.items():
+            if "image" not in rel.reltype:
+                continue
+            try:
+                blob = rel.target_part.blob
+                img = Image.open(BytesIO(blob))
+                pixel_w, pixel_h = img.size
+                img.close()
+
+                img_part = rel.target_part
+                for drawing in img_part._element.findall(".//" + qn("wp:anchor")) + img_part._element.findall(".//" + qn("wp:inline")):
+                    for ext in drawing.iter(qn("wp:extent")):
+                        cx_emu = int(ext.get("cx", 0))
+                        if cx_emu > 0 and pixel_w > 0:
+                            display_w_inches = cx_emu / 914400
+                            dpi_x = pixel_w / display_w_inches
+                            if dpi_x < self.min_dpi:
+                                warnings.append(
+                                    f"图片 \"{rel.target_ref.split('/')[-1]}\" DPI={dpi_x:.0f}，"
+                                    f"低于建议值 {self.min_dpi}，打印可能模糊"
+                                )
+            except Exception:
+                continue
+        return warnings
 
     def _format_captions(self, doc: Any) -> int:
         """检测并格式化图题段落"""

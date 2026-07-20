@@ -2,6 +2,7 @@
 
 Generates comprehensive modification reports in HTML, Markdown, and JSON
 formats as specified in zhinan.md section 3.8.
+Also supports saving report history to the database.
 """
 
 from __future__ import annotations
@@ -29,10 +30,33 @@ class ReportData:
     total_elements: int = 0
     modified_elements: int = 0
     batch_summary: dict[str, Any] | None = None
+    citation_issues: list[dict[str, Any]] | None = None
 
 
 class ReportService:
     """Generate correction reports in multiple formats."""
+
+    def save_history(self, data: ReportData, database_path: str | Path | None = None) -> int:
+        """Save report to processing history database. Returns record ID."""
+        from ...infra.template_repository import TemplateRepository
+        repo = TemplateRepository(database_path)
+        return repo.save_processing_history(
+            input_file=data.input_file,
+            output_file=data.output_file,
+            template_used=data.template_used,
+            quality_score=data.quality_score,
+            total_elements=data.total_elements,
+            modified_elements=data.modified_elements,
+            processing_time=data.processing_time,
+            report={
+                "applied": data.applied,
+                "skipped": data.skipped,
+                "warnings": data.warnings,
+                "risk_items": data.risk_items,
+                "rule_sources": data.rule_sources,
+                "citation_issues": data.citation_issues,
+            },
+        )
 
     def generate_html(self, data: ReportData) -> str:
         """Generate a comprehensive HTML report."""
@@ -62,6 +86,18 @@ class ReportService:
         sources_html = ""
         for key, source in data.rule_sources.items():
             sources_html += f"<tr><td>{key}</td><td>{source}</td></tr>\n"
+
+        citation_html = ""
+        if data.citation_issues:
+            for issue in data.citation_issues:
+                issue_type_map = {
+                    "missing_in_references": "正文引用未找到对应条目",
+                    "missing_in_text": "参考文献条目未被正文引用",
+                    "duplicate": "重复引用",
+                    "doi_format": "DOI格式问题",
+                }
+                type_label = issue_type_map.get(issue.get("type", ""), issue.get("type", ""))
+                citation_html += f"<tr><td>{type_label}</td><td>{issue.get('message', '')}</td></tr>\n"
 
         return f"""<!DOCTYPE html>
 <html lang="zh-CN">
@@ -136,6 +172,14 @@ th {{ background: #f8f9fa; font-weight: 600; }}
 {sources_html}
 </table>
 </div>''' if sources_html else ''}
+
+{f'''<div class="section">
+<h2>引用一致性检查</h2>
+<table>
+<tr><th>问题类型</th><th>详情</th></tr>
+{citation_html}
+</table>
+</div>''' if citation_html else ''}
 </body>
 </html>"""
 
@@ -194,6 +238,19 @@ th {{ background: #f8f9fa; font-weight: 600; }}
                 lines.append(f"| {key} | {source} |")
             lines.append("")
 
+        if data.citation_issues:
+            lines.extend(["## 引用一致性检查", "", "| 问题类型 | 详情 |", "|----------|------|"])
+            issue_type_map = {
+                "missing_in_references": "正文引用未找到对应条目",
+                "missing_in_text": "参考文献条目未被正文引用",
+                "duplicate": "重复引用",
+                "doi_format": "DOI格式问题",
+            }
+            for issue in data.citation_issues:
+                type_label = issue_type_map.get(issue.get("type", ""), issue.get("type", ""))
+                lines.append(f"| {type_label} | {issue.get('message', '')} |")
+            lines.append("")
+
         return "\n".join(lines)
 
     def generate_json(self, data: ReportData) -> str:
@@ -218,6 +275,8 @@ th {{ background: #f8f9fa; font-weight: 600; }}
             "risk_items": data.risk_items,
             "rule_sources": data.rule_sources,
         }
+        if data.citation_issues:
+            report["citation_issues"] = data.citation_issues
         if data.batch_summary:
             report["batch_summary"] = data.batch_summary
         return json.dumps(report, ensure_ascii=False, indent=2)
@@ -265,4 +324,5 @@ def report_from_correction(report: dict[str, Any], input_file: str = "", output_
         rule_sources=report.get("rule_sources", {}),
         total_elements=report.get("total_elements", 0),
         modified_elements=report.get("modified_elements", 0),
+        citation_issues=report.get("citation_issues"),
     )

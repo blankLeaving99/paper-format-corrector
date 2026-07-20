@@ -39,7 +39,7 @@ class TemplateRecord:
 class TemplateRepository:
     """Stores reusable style profiles with versioning, tags, and import/export."""
 
-    SCHEMA_VERSION = 2
+    SCHEMA_VERSION = 3
 
     def __init__(self, database_path: str | Path | None = None):
         self.database_path = Path(database_path or Path("data") / "template_library.db")
@@ -109,6 +109,23 @@ class TemplateRepository:
             """)
 
             connection.execute("""
+                CREATE TABLE IF NOT EXISTS processing_history (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    input_file TEXT NOT NULL,
+                    output_file TEXT NOT NULL DEFAULT '',
+                    template_used TEXT NOT NULL DEFAULT '',
+                    quality_score REAL NOT NULL DEFAULT 0,
+                    total_elements INTEGER NOT NULL DEFAULT 0,
+                    modified_elements INTEGER NOT NULL DEFAULT 0,
+                    processing_time REAL NOT NULL DEFAULT 0,
+                    report_json TEXT NOT NULL DEFAULT '{}',
+                    status TEXT NOT NULL DEFAULT 'success',
+                    created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+            connection.execute("CREATE INDEX IF NOT EXISTS idx_history_created ON processing_history(created_at)")
+
+            connection.execute("""
                 CREATE TABLE IF NOT EXISTS schema_version (
                     version INTEGER NOT NULL
                 )
@@ -135,6 +152,26 @@ class TemplateRepository:
                 connection.execute("ALTER TABLE paper_templates ADD COLUMN source_file_hash TEXT NOT NULL DEFAULT ''")
                 connection.execute("ALTER TABLE paper_templates ADD COLUMN verified_at TEXT")
                 connection.execute("ALTER TABLE paper_templates ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1")
+            except sqlite3.OperationalError:
+                pass
+        if from_version < 3:
+            try:
+                connection.execute("""
+                    CREATE TABLE IF NOT EXISTS processing_history (
+                        id INTEGER PRIMARY KEY AUTOINCREMENT,
+                        input_file TEXT NOT NULL,
+                        output_file TEXT NOT NULL DEFAULT '',
+                        template_used TEXT NOT NULL DEFAULT '',
+                        quality_score REAL NOT NULL DEFAULT 0,
+                        total_elements INTEGER NOT NULL DEFAULT 0,
+                        modified_elements INTEGER NOT NULL DEFAULT 0,
+                        processing_time REAL NOT NULL DEFAULT 0,
+                        report_json TEXT NOT NULL DEFAULT '{}',
+                        status TEXT NOT NULL DEFAULT 'success',
+                        created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
+                    )
+                """)
+                connection.execute("CREATE INDEX IF NOT EXISTS idx_history_created ON processing_history(created_at)")
             except sqlite3.OperationalError:
                 pass
 
@@ -306,8 +343,11 @@ class TemplateRepository:
 
     def enable_template(self, slug: str) -> bool:
         with self._connect() as connection:
-            connection.execute("UPDATE paper_templates SET is_active = 1 WHERE slug = ?", (slug,))
-            return connection.total_changes > 0
+            cursor = connection.execute(
+                "UPDATE paper_templates SET is_active = 1 WHERE slug = ? AND is_active = 0",
+                (slug,),
+            )
+            return cursor.rowcount > 0
 
     def copy_template(self, source_slug: str, new_name: str, new_category: str | None = None) -> TemplateRecord | None:
         source = self.get(source_slug)
@@ -337,6 +377,66 @@ class TemplateRepository:
         with self._connect() as connection:
             rows = connection.execute("SELECT tag FROM template_tags WHERE slug = ?", (slug,)).fetchall()
         return [r["tag"] for r in rows]
+
+    # ========== 处理历史管理 ==========
+
+    def save_processing_history(
+        self,
+        input_file: str,
+        output_file: str,
+        template_used: str = "",
+        quality_score: float = 0.0,
+        total_elements: int = 0,
+        modified_elements: int = 0,
+        processing_time: float = 0.0,
+        report: dict | None = None,
+        status: str = "success",
+    ) -> int:
+        """保存一条处理记录，返回记录ID"""
+        report_json = json.dumps(report or {}, ensure_ascii=False)
+        with self._connect() as connection:
+            cursor = connection.execute(
+                """INSERT INTO processing_history
+                   (input_file, output_file, template_used, quality_score,
+                    total_elements, modified_elements, processing_time,
+                    report_json, status)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+                (input_file, output_file, template_used, quality_score,
+                 total_elements, modified_elements, processing_time,
+                 report_json, status),
+            )
+            return cursor.lastrowid or 0
+
+    def list_processing_history(self, limit: int = 50) -> list[dict]:
+        """列出最近的处理记录"""
+        with self._connect() as connection:
+            rows = connection.execute(
+                """SELECT id, input_file, output_file, template_used,
+                   quality_score, total_elements, modified_elements,
+                   processing_time, status, created_at
+                   FROM processing_history
+                   ORDER BY created_at DESC LIMIT ?""",
+                (limit,),
+            ).fetchall()
+        return [dict(r) for r in rows]
+
+    def get_processing_history(self, record_id: int) -> dict | None:
+        """获取单条处理记录详情"""
+        with self._connect() as connection:
+            row = connection.execute(
+                "SELECT * FROM processing_history WHERE id = ?", (record_id,)
+            ).fetchone()
+        if row is None:
+            return None
+        result = dict(row)
+        result["report"] = json.loads(result.pop("report_json", "{}"))
+        return result
+
+    def delete_processing_history(self, record_id: int) -> bool:
+        """删除单条处理记录"""
+        with self._connect() as connection:
+            connection.execute("DELETE FROM processing_history WHERE id = ?", (record_id,))
+            return connection.total_changes > 0
 
     def record_usage(self, slug: str) -> None:
         with self._connect() as connection:

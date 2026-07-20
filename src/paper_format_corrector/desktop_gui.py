@@ -31,6 +31,7 @@ except ImportError:
 from .app import PaperFormatCorrector
 from .application.services.style_workbench import (
     build_application_report,
+    build_correction_plan,
     explain_style_profile,
     learn_style_profile,
     manual_style_config,
@@ -300,6 +301,7 @@ class PaperFormatDesktopApp:
         self._build_correct_tab(notebook)
         self._build_workbench_tab(notebook)
         self._build_preview_tab(notebook)
+        self._build_history_tab(notebook)
         self._build_cover_tab(notebook)
         self._build_ai_gen_tab(notebook)
         self._build_rule_tab(notebook)
@@ -413,6 +415,7 @@ class PaperFormatDesktopApp:
         actions = ttk.Frame(tab)
         actions.pack(fill=tk.X, padx=10, pady=5)
         ttk.Button(actions, text="扫描论文", command=self._scan_workbench).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="预览矫正计划", command=self._preview_workbench_plan).pack(side=tk.LEFT, padx=5)
         ttk.Button(actions, text="查看样本学习结果", command=self._inspect_workbench_sample).pack(side=tk.LEFT, padx=5)
         ttk.Button(actions, text="保存样本为我的模板", command=self._save_workbench_template).pack(side=tk.LEFT, padx=5)
         ttk.Button(actions, text="应用到全部同类元素", command=self._run_workbench).pack(side=tk.LEFT, padx=5)
@@ -460,6 +463,52 @@ class PaperFormatDesktopApp:
             self._write_workbench(json.dumps(scan_document(path), ensure_ascii=False, indent=2, default=str))
         except Exception as exc:
             self._write_workbench(f"扫描失败：{exc}")
+
+    def _preview_workbench_plan(self):
+        """预览矫正计划（dry-run）"""
+        path = self.wb_paper_path.get().strip()
+        if not path:
+            messagebox.showwarning("提示", "请先选择 .docx 论文")
+            return
+        self._write_workbench("正在生成矫正计划，请稍候…")
+
+        def do_plan():
+            try:
+                c = PaperFormatCorrector(CONFIG_PATH)
+                choice = self.wb_template_choice.get()
+                if choice != "无（使用默认配置）":
+                    stored = TemplateRepository().get(choice.split(" | ", 1)[0])
+                    if stored is not None:
+                        c.config = c._merge_config(c.config, stored.config)
+                sample = self.wb_sample_path.get().strip()
+                if sample:
+                    c.config = c._merge_config(c.config, learn_style_profile(sample))
+                c.config = c._merge_config(c.config, manual_style_config(
+                    self.wb_body_font.get(), self.wb_body_size.get(), self.wb_line_spacing.get(), self.wb_indent.get(),
+                    self.wb_heading1_size.get(), self.wb_heading2_size.get(), self.wb_heading3_size.get(), self.wb_heading_font.get(),
+                    self.wb_table_style.get(), self.wb_table_size.get(), self.wb_image_width.get(),
+                ))
+                plan = build_correction_plan(path, c.config.get("format_rules", {}))
+                lines = [
+                    f"═══ 矫正计划（影响 {plan.total_affected} 个元素）═══\n",
+                    "元素类型          数量    操作                            来源",
+                    "─" * 70,
+                ]
+                for item in plan.items:
+                    lines.append(
+                        f"  {item.element_type:<12}  {item.element_count:>4}    "
+                        f"{item.action:<30}  [{item.source}]"
+                    )
+                if plan.risk_items:
+                    lines.append(f"\n⚠ 需要人工确认 ({len(plan.risk_items)} 项):")
+                    for risk in plan.risk_items:
+                        lines.append(f"  - {risk.get('element', '')}: {risk.get('reason', '')}")
+                self.root.after(0, lambda: self._write_workbench("\n".join(lines)))
+            except Exception as exc:
+                err_msg = f"生成计划失败：{exc}"
+                self.root.after(0, lambda m=err_msg: self._write_workbench(m))
+
+        threading.Thread(target=do_plan, daemon=True).start()
 
     def _inspect_workbench_sample(self):
         path = self.wb_sample_path.get().strip()
@@ -510,7 +559,7 @@ class PaperFormatDesktopApp:
 
         threading.Thread(target=do_work, daemon=True).start()
 
-    # ── Tab 2: 矫正预览 ──────────────────────────────────────
+    # ── Tab 3: 矫正预览 ──────────────────────────────────────
 
     def _build_preview_tab(self, notebook):
         tab = ttk.Frame(notebook)
@@ -597,6 +646,107 @@ class PaperFormatDesktopApp:
             os.startfile(str(self._last_diff_path))
         else:
             messagebox.showinfo("提示", "无对比报告（矫正时勾选'生成对比报告'）")
+
+    # ── Tab 4: 报告中心 ──────────────────────────────────────
+
+    def _build_history_tab(self, notebook):
+        tab = ttk.Frame(notebook)
+        notebook.add(tab, text="报告中心")
+
+        btn_frame = ttk.Frame(tab)
+        btn_frame.pack(fill=tk.X, padx=10, pady=5)
+        ttk.Button(btn_frame, text="刷新列表", command=self._refresh_history).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="查看详情", command=self._view_history_detail).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="删除记录", command=self._delete_history).pack(side=tk.LEFT, padx=5)
+
+        tree_frame = ttk.Frame(tab)
+        tree_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self.history_tree = ttk.Treeview(
+            tree_frame,
+            columns=("id", "input", "status", "score", "time", "created"),
+            show="headings", height=18,
+        )
+        self.history_tree.heading("id", text="ID")
+        self.history_tree.heading("input", text="输入文件")
+        self.history_tree.heading("status", text="状态")
+        self.history_tree.heading("score", text="质量评分")
+        self.history_tree.heading("time", text="耗时(s)")
+        self.history_tree.heading("created", text="处理时间")
+        self.history_tree.column("id", width=50, anchor="center")
+        self.history_tree.column("input", width=250)
+        self.history_tree.column("status", width=70, anchor="center")
+        self.history_tree.column("score", width=80, anchor="center")
+        self.history_tree.column("time", width=70, anchor="center")
+        self.history_tree.column("created", width=150)
+        scrollbar = ttk.Scrollbar(tree_frame, orient=tk.VERTICAL, command=self.history_tree.yview)
+        self.history_tree.configure(yscrollcommand=scrollbar.set)
+        self.history_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        self.history_detail_text = scrolledtext.ScrolledText(tab, height=10, font=("Consolas", 10))
+        self.history_detail_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+
+        self._refresh_history()
+
+    def _refresh_history(self):
+        for item in self.history_tree.get_children():
+            self.history_tree.delete(item)
+        try:
+            records = TemplateRepository().list_processing_history(limit=100)
+            for r in records:
+                self.history_tree.insert("", tk.END, values=(
+                    r["id"], Path(r["input_file"]).name, r["status"],
+                    f"{r['quality_score']:.1f}" if r["quality_score"] else "-",
+                    f"{r['processing_time']:.1f}" if r["processing_time"] else "-",
+                    r["created_at"][:19] if r["created_at"] else "",
+                ))
+        except Exception as exc:
+            self.history_detail_text.delete(1.0, tk.END)
+            self.history_detail_text.insert(tk.END, f"加载历史记录失败: {exc}")
+
+    def _view_history_detail(self):
+        sel = self.history_tree.selection()
+        if not sel:
+            messagebox.showinfo("提示", "请先选择一条记录")
+            return
+        record_id = int(self.history_tree.item(sel[0])["values"][0])
+        try:
+            record = TemplateRepository().get_processing_history(record_id)
+            if not record:
+                return
+            import json
+            lines = [
+                f"记录 ID: {record['id']}",
+                f"输入文件: {record['input_file']}",
+                f"输出文件: {record['output_file']}",
+                f"模板: {record.get('template_used', '默认')}",
+                f"质量评分: {record['quality_score']:.1f}",
+                f"总元素: {record['total_elements']}  已修改: {record['modified_elements']}",
+                f"耗时: {record['processing_time']:.1f}s",
+                f"状态: {record['status']}",
+                f"处理时间: {record['created_at']}",
+                "",
+                "─── 详细报告 ───",
+                json.dumps(record.get("report", {}), ensure_ascii=False, indent=2, default=str),
+            ]
+            self.history_detail_text.delete(1.0, tk.END)
+            self.history_detail_text.insert(tk.END, "\n".join(lines))
+        except Exception as exc:
+            self.history_detail_text.delete(1.0, tk.END)
+            self.history_detail_text.insert(tk.END, f"加载详情失败: {exc}")
+
+    def _delete_history(self):
+        sel = self.history_tree.selection()
+        if not sel:
+            messagebox.showinfo("提示", "请先选择一条记录")
+            return
+        if not messagebox.askyesno("确认", "确定删除选中的记录？"):
+            return
+        for item in sel:
+            record_id = int(self.history_tree.item(item)["values"][0])
+            TemplateRepository().delete_processing_history(record_id)
+        self._refresh_history()
 
     # ── Tab 3: 封面生成 ──────────────────────────────────────
 
@@ -820,6 +970,16 @@ class PaperFormatDesktopApp:
 - 点击"批量矫正"按钮，可选择多个文件一次性处理
 - 也可将多个文件拖拽到论文文件输入框（会自动识别）
 
+【格式工作台】
+- 上传论文后点击"扫描论文"查看文档结构
+- 点击"预览矫正计划"可在应用前查看影响范围
+- 配置样式后点击"应用到全部同类元素"执行矫正
+- 可从模板库选择已有模板，或将样本保存为个人模板
+
+【报告中心】
+- 查看历史处理记录，包含质量评分和耗时
+- 点击"查看详情"查看完整的矫正报告
+
 【封面生成】
 填写论文信息，点击"生成封面"自动生成标准封面页。
 
@@ -1034,6 +1194,26 @@ class PaperFormatDesktopApp:
         self._last_report = report
         self._last_diff_path = diff_path
         self._last_score_report = score_report
+
+        # 保存处理历史
+        try:
+            quality_score = 0.0
+            if self.do_score.get() and score_report:
+                import re as _re
+                _m = _re.search(r"总分[：:]\s*([\d.]+)", score_report)
+                if _m:
+                    quality_score = float(_m.group(1))
+            TemplateRepository().save_processing_history(
+                input_file=str(paper),
+                output_file=str(output_path),
+                template_used=self.wb_template_choice.get().split(" | ", 1)[0] if self.wb_template_choice.get() != "无（使用默认配置）" else "",
+                quality_score=quality_score,
+                total_elements=report.get("paragraphs_corrected", 0) + report.get("headings_fixed", 0) + report.get("body_fixed", 0),
+                modified_elements=report.get("paragraphs_corrected", 0),
+                report=report,
+            )
+        except Exception:
+            logging.getLogger(__name__).exception("保存处理历史失败")
 
         # 清理临时转换目录
         if tmp_dir and tmp_dir.exists():

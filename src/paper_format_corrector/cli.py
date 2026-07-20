@@ -1,8 +1,18 @@
-"""论文格式矫正工具 - CLI 入口"""
+"""论文格式矫正工具 - CLI 入口
+
+支持两种使用方式:
+  1. 子命令模式 (推荐):
+     python -m paper_format_corrector scan -f paper.docx
+     python -m paper_format_corrector correct -f paper.docx --preset ieee
+     python -m paper_format_corrector template list
+  2. 向后兼容的平铺参数模式:
+     python -m paper_format_corrector -f paper.docx --preset ieee
+"""
 
 from __future__ import annotations
 
 import argparse
+import json
 import sys
 from pathlib import Path
 
@@ -12,6 +22,442 @@ from .core.format_corrector import FormatCorrector
 from .infra.doc_template_loader import list_doc_templates, load_doc_template
 from .infra.preset_loader import format_preset_list, get_preset_choices
 
+# ======================================================================
+# 子命令: scan
+# ======================================================================
+
+def cmd_scan(args: argparse.Namespace) -> None:
+    """扫描文档结构和样式"""
+    from .application.services.style_workbench import build_correction_plan, scan_document
+
+    path = Path(args.file)
+    if not path.is_file():
+        print(f"错误: 文件不存在: {args.file}")
+        sys.exit(1)
+
+    print(f"\n扫描文档: {path.name}")
+    print("=" * 60)
+
+    inventory = scan_document(path)
+    elements = inventory["elements"]
+
+    print(f"\n总段落数: {elements.get('total_paragraphs', 0)}")
+    print(f"\n{'元素类型':<12} {'数量':>6}  {'说明'}")
+    print("-" * 50)
+
+    element_labels = {
+        "body": "正文段落",
+        "heading1": "一级标题",
+        "heading2": "二级标题",
+        "heading3": "三级标题",
+        "table": "表格",
+        "image": "图片",
+        "code": "代码块",
+        "formula": "公式",
+        "reference": "参考文献",
+        "abstract": "摘要",
+    }
+    for key, label in element_labels.items():
+        count = elements.get(key, 0)
+        if count > 0:
+            print(f"  {label:<12} {count:>6}")
+
+    if inventory.get("margins"):
+        m = inventory["margins"]
+        print(f"\n页边距: 上={m.get('top', '?')}cm  下={m.get('bottom', '?')}cm  "
+              f"左={m.get('left', '?')}cm  右={m.get('right', '?')}cm")
+
+    if inventory.get("page_setup"):
+        ps = inventory["page_setup"]
+        print(f"页面尺寸: {ps.get('page_width_cm', '?')}cm x {ps.get('page_height_cm', '?')}cm")
+
+    if inventory.get("confidence"):
+        print(f"\n{'置信度报告':}")
+        print(f"  {'元素':<12} {'级别':<6} {'原因'}")
+        print("  " + "-" * 46)
+        for item in inventory["confidence"]:
+            level_map = {"high": "高", "medium": "中", "low": "低"}
+            level = level_map.get(item.get("confidence", ""), item.get("confidence", ""))
+            print(f"  {item.get('element', ''):<12} {level:<6} {item.get('reason', '')}")
+
+    if inventory.get("samples"):
+        print("\n文本样例 (每类最多5条):")
+        for ptype, samples in inventory["samples"].items():
+            print(f"\n  [{ptype}]")
+            for s in samples[:3]:
+                text = s.get("text", "")[:60]
+                print(f"    #{s.get('position', '?')}: {text}")
+
+    if inventory.get("issues"):
+        print(f"\n发现 {len(inventory['issues'])} 个格式问题:")
+        for issue in inventory["issues"][:10]:
+            print(f"  - {issue}")
+
+    # 如果指定了配置，生成修正计划
+    if args.config:
+        print("\n生成修正计划...")
+        plan = build_correction_plan(path, args.config.get("format_rules", {}))
+        print(f"\n修正计划 (影响 {plan.total_affected} 个元素):")
+        for item in plan.items:
+            print(f"  {item.element_type}: {item.element_count} 个 -> {item.action} (来源: {item.source})")
+        if plan.risk_items:
+            print("\n风险项:")
+            for risk in plan.risk_items:
+                print(f"  - {risk.get('type', '')}: {risk.get('detail', '')}")
+
+    print("\n扫描完成。")
+
+
+# ======================================================================
+# 子命令: learn
+# ======================================================================
+
+def cmd_learn(args: argparse.Namespace) -> None:
+    """从样本文档学习格式"""
+    from .application.services.style_workbench import explain_style_profile, learn_style_profile
+
+    path = Path(args.file)
+    if not path.is_file():
+        print(f"错误: 文件不存在: {args.file}")
+        sys.exit(1)
+
+    print(f"\n从样本文档学习: {path.name}")
+    print("=" * 60)
+
+    explanation = explain_style_profile(path)
+    rules = learn_style_profile(path)
+
+    print(f"\n学习置信度: {explanation.get('confidence', '未知')}")
+    print(f"扫描段落数: {explanation.get('elements_scanned', 0)}")
+    print(f"注意事项: {explanation.get('notice', '')}")
+
+    if explanation.get("learned"):
+        print("\n学习到的规则:")
+        print(f"  {'元素':<10} {'规则'}")
+        print("  " + "-" * 50)
+        for item in explanation["learned"]:
+            rule_str = json.dumps(item.get("rule", {}), ensure_ascii=False)[:60]
+            print(f"  {item.get('element', ''):<10} {rule_str}")
+
+    if explanation.get("margins"):
+        print("\n页边距:")
+        for k, v in explanation["margins"].items():
+            print(f"  {k}: {v}")
+
+    if explanation.get("source_issues"):
+        print("\n样本文档问题:")
+        for issue in explanation["source_issues"][:5]:
+            print(f"  - {issue}")
+
+    # 保存规则到文件
+    if args.output:
+        output_path = Path(args.output)
+        output_path.parent.mkdir(parents=True, exist_ok=True)
+        with open(output_path, "w", encoding="utf-8") as f:
+            json.dump(rules, f, ensure_ascii=False, indent=2)
+        print(f"\n规则已保存到: {output_path}")
+    else:
+        print("\n规则 JSON:")
+        print(json.dumps(rules, ensure_ascii=False, indent=2))
+
+
+# ======================================================================
+# 子命令: template
+# ======================================================================
+
+def cmd_template(args: argparse.Namespace) -> None:
+    """模板管理子命令"""
+    from .infra.template_repository import TemplateRepository
+
+    repo = TemplateRepository()
+    sub = args.template_action
+
+    if sub == "list":
+        _template_list(repo, args)
+    elif sub == "import":
+        _template_import(repo, args)
+    elif sub == "export":
+        _template_export(repo, args)
+    elif sub == "delete":
+        _template_delete(repo, args)
+    elif sub == "info":
+        _template_info(repo, args)
+    else:
+        print(f"未知的模板操作: {sub}")
+        sys.exit(1)
+
+
+def _template_list(repo, args):
+    """列出模板"""
+    category = getattr(args, "category", None)
+    search = getattr(args, "search", None)
+
+    if search:
+        templates = repo.search_templates(search)
+    else:
+        templates = repo.list_templates(category=category, active_only=not getattr(args, "all", False))
+
+    if not templates:
+        print("未找到模板。")
+        return
+
+    print(f"\n共 {len(templates)} 个模板:")
+    print(f"{'Slug':<30} {'名称':<20} {'分类':<15} {'来源':<10} {'版本':<6}")
+    print("-" * 85)
+
+    for t in templates:
+        source_map = {"bundled": "内置", "personal": "个人", "official": "官方", "imported": "导入"}
+        source_label = source_map.get(t.source, t.source)
+        print(f"  {t.slug:<28} {t.name:<18} {t.category:<13} {source_label:<8} {t.version:<6}")
+
+
+def _template_import(repo, args):
+    """导入模板"""
+    file_path = Path(args.file)
+    if not file_path.is_file():
+        print(f"错误: 文件不存在: {args.file}")
+        sys.exit(1)
+
+    try:
+        if file_path.suffix.lower() == ".yaml":
+            record = repo.import_from_yaml(file_path)
+        elif file_path.suffix.lower() == ".json":
+            record = repo.import_from_json(file_path)
+        else:
+            print(f"错误: 不支持的文件格式: {file_path.suffix} (支持 .yaml / .json)")
+            sys.exit(1)
+        print("模板导入成功:")
+        print(f"  名称: {record.name}")
+        print(f"  Slug: {record.slug}")
+        print(f"  分类: {record.category}")
+    except Exception as e:
+        print(f"导入失败: {e}")
+        sys.exit(1)
+
+
+def _template_export(repo, args):
+    """导出模板"""
+    slug = args.slug
+    record = repo.get(slug)
+    if record is None:
+        print(f"错误: 模板不存在: {slug}")
+        sys.exit(1)
+
+    output = Path(args.output) if args.output else Path(f"{slug}.yaml")
+    fmt = args.format if hasattr(args, "format") and args.format else "yaml"
+
+    try:
+        if fmt == "json":
+            repo.export_to_json(slug, output)
+        else:
+            repo.export_to_yaml(slug, output)
+        print(f"模板已导出: {output}")
+    except Exception as e:
+        print(f"导出失败: {e}")
+        sys.exit(1)
+
+
+def _template_delete(repo, args):
+    """删除模板"""
+    slug = args.slug
+    record = repo.get(slug)
+    if record is None:
+        print(f"错误: 模板不存在: {slug}")
+        sys.exit(1)
+
+    if record.source == "bundled":
+        print(f"内置模板 '{record.name}' 不能直接删除，已设为禁用。")
+        repo.delete_template(slug)
+    else:
+        confirm = input(f"确定删除模板 '{record.name}' ({slug})? [y/N] ").strip().lower()
+        if confirm == "y":
+            repo.delete_template(slug)
+            print(f"已删除: {record.name}")
+        else:
+            print("已取消。")
+
+
+def _template_info(repo, args):
+    """查看模板详情"""
+    slug = args.slug
+    record = repo.get(slug)
+    if record is None:
+        print(f"错误: 模板不存在: {slug}")
+        sys.exit(1)
+
+    source_map = {"bundled": "内置模板", "personal": "个人模板", "official": "官方模板", "imported": "导入模板"}
+    print("\n模板详情:")
+    print(f"  名称:     {record.name}")
+    print(f"  Slug:     {record.slug}")
+    print(f"  分类:     {record.category}")
+    print(f"  来源:     {source_map.get(record.source, record.source)}")
+    print(f"  版本:     {record.version}")
+    print(f"  组织:     {record.organization or '未设置'}")
+    print(f"  学历:     {record.degree_level or '未设置'}")
+    print(f"  学科:     {record.discipline or '未设置'}")
+    print(f"  语言:     {record.language}")
+    print(f"  启用:     {'是' if record.is_active else '否'}")
+    print(f"  创建时间: {record.created_at}")
+    print(f"  更新时间: {record.updated_at}")
+
+    if record.tags:
+        print(f"  标签:     {', '.join(record.tags)}")
+
+    # 版本历史
+    versions = repo.get_versions(slug)
+    if versions:
+        print(f"\n  版本历史 ({len(versions)} 个版本):")
+        for v in versions[:5]:
+            print(f"    v{v['version']} ({v['created_at'][:10]}): {v.get('changelog', '无说明')}")
+
+
+# ======================================================================
+# 子命令: batch
+# ======================================================================
+
+def cmd_batch(args: argparse.Namespace) -> None:
+    """批量矫正多个文件"""
+    from .application.services.batch_service import BatchCorrectionService
+
+    input_path = Path(args.input_dir)
+    output_path = Path(args.output_dir)
+
+    # 加载配置
+    corrector_app = PaperFormatCorrector(args.config, args.log_level)
+    if args.preset:
+        corrector_app.apply_preset(args.preset)
+    if args.requirement:
+        corrector_app.apply_requirement(args.requirement, use_llm=args.llm,
+                                        use_offline_parser=args.offline_parser,
+                                        llm_provider=args.llm_provider,
+                                        llm_api_key=args.llm_key)
+
+    batch_service = BatchCorrectionService(corrector_app.config, args.log_level)
+
+    def progress(current, total, filename):
+        print(f"  [{current}/{total}] {filename}")
+
+    if input_path.is_dir():
+        print(f"\n批量处理目录: {input_path}")
+        summary = batch_service.process_directory(
+            input_path, output_path,
+            score=args.score,
+            progress_callback=progress,
+        )
+    else:
+        print("\n批量处理文件列表...")
+        files = [args.input_dir]  # 假设是文件路径
+        summary = batch_service.process_files(
+            files, output_path,
+            score=args.score,
+            progress_callback=progress,
+        )
+
+    print("\n处理完成!")
+    print(f"  成功: {summary.success_count}/{summary.total_files}")
+    print(f"  失败: {summary.failed_count}")
+    print(f"  耗时: {summary.total_processing_time:.1f}s")
+    if summary.avg_quality_score > 0:
+        print(f"  平均评分: {summary.avg_quality_score:.1f}/100")
+
+
+# ======================================================================
+# 子命令: report
+# ======================================================================
+
+def cmd_report(args: argparse.Namespace) -> None:
+    """生成或查看报告"""
+    from .application.services.report_service import ReportData, ReportService
+
+    if args.report_id:
+        # 查看历史报告
+        from .infra.template_repository import TemplateRepository
+        _repo = TemplateRepository()
+        detail = _repo.get_processing_history(int(args.report_id))
+        if detail is None:
+            print(f"未找到报告 ID: {args.report_id}")
+        else:
+            print(f"报告详情 (ID: {args.report_id}):")
+            print(f"  输入文件: {detail.get('input_file', '')}")
+            print(f"  输出文件: {detail.get('output_file', '')}")
+            print(f"  模板: {detail.get('template_used', '')}")
+            print(f"  评分: {detail.get('quality_score', 0)}")
+            print(f"  处理时间: {detail.get('processing_time', 0):.1f}s")
+        return
+
+    if not args.file:
+        print("错误: 请指定输入文件 (-f)")
+        sys.exit(1)
+
+    # 生成报告
+    path = Path(args.file)
+    if not path.is_file():
+        print(f"错误: 文件不存在: {args.file}")
+        sys.exit(1)
+
+    from .quality.quality_scorer import QualityScorer
+
+    print(f"\n生成报告: {path.name}")
+    print("=" * 60)
+
+    # 先矫正（如果指定了输出）
+    output_path = Path(args.output) if args.output else Path("output") / f"report_{path.stem}.docx"
+
+    corrector_app = PaperFormatCorrector(args.config, args.log_level)
+    if args.preset:
+        corrector_app.apply_preset(args.preset)
+    if args.requirement:
+        corrector_app.apply_requirement(args.requirement, use_llm=args.llm,
+                                        use_offline_parser=args.offline_parser,
+                                        llm_provider=args.llm_provider,
+                                        llm_api_key=args.llm_key)
+
+    try:
+        report = corrector_app.corrector.correct_document(str(path), str(output_path))
+    except Exception as e:
+        print(f"矫正失败: {e}")
+        sys.exit(1)
+
+    # 评分
+    quality_score = 0.0
+    if args.score:
+        try:
+            scorer = QualityScorer(corrector_app.config)
+            total, _, _ = scorer.score(str(output_path))
+            quality_score = total
+        except Exception:
+            pass
+
+    # 生成报告
+    report_data = ReportData(
+        input_file=str(path),
+        output_file=str(output_path),
+        template_used=args.preset or "默认配置",
+        processing_time=report.get("processing_time", 0),
+        quality_score=quality_score,
+        applied={
+            "paragraphs": report.get("paragraphs_corrected", 0),
+            "headings": report.get("headings_fixed", 0),
+            "body": report.get("body_fixed", 0),
+            "tables": report.get("tables_formatted", 0),
+            "images": report.get("images_centered", 0),
+        },
+        skipped=report.get("skipped_items", []),
+        warnings=report.get("warnings", []),
+        risk_items=report.get("risk_items", []),
+        rule_sources=report.get("rule_sources", {}),
+    )
+
+    svc = ReportService()
+    fmt = args.format if hasattr(args, "format") and args.format else "html"
+    report_path = output_path.with_suffix(f".{fmt}")
+    svc.save_report(report_data, report_path, fmt=fmt)
+    print(f"报告已保存: {report_path}")
+
+
+# ======================================================================
+# 向后兼容的子命令 (原有 -f 等参数模式)
+# ======================================================================
 
 def _handle_generate(args) -> None:  # noqa: C901
     """处理AI文档生成"""
@@ -57,51 +503,37 @@ def _handle_generate(args) -> None:  # noqa: C901
         sys.exit(1)
 
     if args.stream:
-        # 流式模式：实时输出AI生成的内容
         print("正在调用AI生成文档内容（流式模式）...\n")
-
         try:
             print("=" * 60)
             print("AI生成内容（实时输出）:")
             print("=" * 60)
-
-            # 流式生成完整文档结构
             for chunk in ai_gen.generate_structure_stream(user_input, args.doc_type):
                 print(chunk, end="", flush=True)
-
             print("\n" + "=" * 60)
             print("AI生成完成！")
-
-            # 获取最终结构
             structure = ai_gen.session.outline.get("structure", {})
             if not structure:
-                # 如果outline中没有structure，尝试重新生成
                 structure = ai_gen.generate_structure(user_input, args.doc_type)
-
         except Exception as e:
             print(f"\n错误: AI生成失败: {e}")
             sys.exit(1)
-
     else:
-        # 非流式模式（向后兼容）
         print("正在调用AI生成文档内容...")
         try:
             structure = ai_gen.generate_structure(user_input, args.doc_type)
         except Exception as e:
             print(f"错误: AI生成失败: {e}")
             sys.exit(1)
-
         print("AI生成完成！")
 
     print("\n正在创建Word文档...")
-
-    format_rules = template_config.get("format_rules", {}) if template_config else {}
-    doc_gen = DocGenerator(format_rules)
-
     output_path = Path("output") / "generated_document.docx"
     output_path.parent.mkdir(parents=True, exist_ok=True)
 
     try:
+        format_rules = template_config.get("format_rules", {}) if template_config else {}
+        doc_gen = DocGenerator(format_rules)
         doc_gen.generate(structure, str(output_path))
         print(f"\n文档已生成: {output_path.resolve()}")
         print(f"标题: {structure.get('title', '未命名')}")
@@ -178,7 +610,7 @@ def _handle_probe_model(args) -> None:
 
 
 def _handle_interactive_chat(args) -> None:  # noqa: C901
-    """处理交互式AI对话（新增功能）"""
+    """处理交互式AI对话"""
     from .parsers.ai_doc_generator import AIDocGenerator
 
     try:
@@ -216,9 +648,7 @@ def _handle_interactive_chat(args) -> None:  # noqa: C901
             continue
 
         try:
-            # 检查当前状态
             if ai_gen.session.outline is None:
-                # 生成大纲
                 print("\n[系统] 正在生成大纲...")
                 outline = ai_gen.generate_outline(user_input, args.doc_type or "通用文档")
 
@@ -238,7 +668,6 @@ def _handle_interactive_chat(args) -> None:  # noqa: C901
                 print("[提示] 输入 'confirm' 确认大纲，或告诉我需要修改的地方")
 
             elif not ai_gen.session.outline.get("structure"):
-                # 大纲已生成，等待确认
                 if "confirm" in user_input.lower() or "确认" in user_input:
                     ai_gen.confirm_outline(True)
                     print("\n[系统] 大纲已确认，开始生成文档内容...\n")
@@ -249,12 +678,10 @@ def _handle_interactive_chat(args) -> None:  # noqa: C901
                     )
                     ai_gen.session.outline["structure"] = structure
 
-                    # 生成预览
                     doc_gen = DocGenerator()
                     preview = doc_gen.generate_preview(structure)
                     print(f"AI: 文档生成完成！\n\n预览:\n{preview[:500]}...\n")
 
-                    # 保存文件
                     output_path = Path("output") / "generated_document.docx"
                     output_path.parent.mkdir(parents=True, exist_ok=True)
                     doc_gen.generate(structure, str(output_path))
@@ -264,7 +691,6 @@ def _handle_interactive_chat(args) -> None:  # noqa: C901
                     print("\nAI: 请告诉我需要调整的内容，或输入 'confirm' 确认大纲")
 
             else:
-                # 文档已生成
                 print("\nAI: 文档已生成完成。")
                 print("    你可以：")
                 print("    1. 输入 'reset' 生成新文档")
@@ -276,129 +702,166 @@ def _handle_interactive_chat(args) -> None:  # noqa: C901
             print("[提示] 请检查API配置后重试")
 
 
+# ======================================================================
+# 主入口
+# ======================================================================
+
+def _add_common_args(parser: argparse.ArgumentParser) -> None:
+    """添加通用参数"""
+    parser.add_argument("-c", "--config", default="config/config.yaml", help="配置文件路径")
+    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+
+
+def _add_preset_args(parser: argparse.ArgumentParser) -> None:
+    """添加预设和需求文档参数"""
+    preset_choices = get_preset_choices()
+    parser.add_argument("--preset", choices=preset_choices if preset_choices else None,
+                        help=f"格式预设: {', '.join(preset_choices)}")
+    parser.add_argument("-r", "--requirement", help="需求文档路径")
+    parser.add_argument("--llm", action="store_true", help="使用LLM智能解析需求文档")
+    parser.add_argument("--offline-parser", action="store_true", help="使用离线规则解析器")
+    parser.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic", "ollama"])
+    parser.add_argument("--llm-key", help="LLM API Key")
+    parser.add_argument("--llm-model", help="LLM模型名称")
+
+
 def main() -> None:  # noqa: C901
     """CLI 主入口"""
-    preset_choices = get_preset_choices()
-
     parser = argparse.ArgumentParser(
         description="论文格式自动矫正工具 v3.0",
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
-使用示例:
-  基础用法:
-    python -m paper_format_corrector                         # 批量处理 input/ 目录
-    python -m paper_format_corrector -f paper.docx           # 处理单个文件
-    python -m paper_format_corrector -f paper.docx -o out    # 指定输出路径
+子命令模式 (推荐):
+  python -m paper_format_corrector scan -f paper.docx
+  python -m paper_format_corrector correct -f paper.docx --preset ieee
+  python -m paper_format_corrector learn -f sample.docx -o rules.json
+  python -m paper_format_corrector template list
+  python -m paper_format_corrector template import file.yaml
+  python -m paper_format_corrector template export builtin-ieee -o ieee.yaml
+  python -m paper_format_corrector template delete personal-my-template
+  python -m paper_format_corrector batch -i input/ -o output/
+  python -m paper_format_corrector report -f paper.docx --score
 
-  格式预设（SCI/IEEE/Nature/APA/毕业论文）:
-    python -m paper_format_corrector --list-presets          # 列出所有预设
-    python -m paper_format_corrector --preset ieee -f paper.docx
-    python -m paper_format_corrector --preset nature -f paper.docx
-    python -m paper_format_corrector --preset chinese_thesis -f paper.docx
-
-  需求文档驱动:
-    python -m paper_format_corrector -r requirement.txt -f paper.docx
-    python -m paper_format_corrector -r requirement.docx     # 批量处理
-
-  质量检查:
-    python -m paper_format_corrector -f paper.docx --score
-    python -m paper_format_corrector -f paper.docx --diff
-    python -m paper_format_corrector -f paper.docx --rules rules.yaml
-
-  封面生成:
-    python -m paper_format_corrector --cover title="论文题目" author="张三"
-
-  AI文档生成:
-    python -m paper_format_corrector --generate "写一个关于智慧城市的可行性报告"
-    python -m paper_format_corrector --generate "写一个项目立项报告" --doc-type 报告
-    python -m paper_format_corrector --generate "写一个劳动合同" --doc-type 合同
-    python -m paper_format_corrector --generate --stream      # 流式输出模式
-    python -m paper_format_corrector --chat                    # 交互式对话模式
-    python -m paper_format_corrector --list-doc-templates
-
-  LLM智能解析:
-    python -m paper_format_corrector -r requirement.txt -f paper.docx --llm
-
-  模型发现（支持任意API端点和模型名）:
-    python -m paper_format_corrector --list-models                           # 列出可用模型
-    python -m paper_format_corrector --list-models --llm-provider ollama     # Ollama本地模型
-    python -m paper_format_corrector --probe-model gpt-4o gpt-4o-mini       # 探测指定模型
-    python -m paper_format_corrector --probe-model deepseek-chat            # 探测第三方模型
-    python -m paper_format_corrector --probe-model deepseek-chat \\
-        --llm-base-url https://api.deepseek.com/v1 --llm-provider openai   # 自定义端点
-
-  模板/导出:
-    python -m paper_format_corrector --extract
-    python -m paper_format_corrector -f paper.docx --format pdf html
-
-  GUI界面:
-    python -m paper_format_corrector --gui          # Web GUI（浏览器）
-    python -m paper_format_corrector --desktop-gui   # 桌面 GUI（原生窗口）
+平铺参数模式 (向后兼容):
+  python -m paper_format_corrector -f paper.docx --preset ieee
+  python -m paper_format_corrector --gui
+  python -m paper_format_corrector --desktop-gui
         """,
     )
 
-    # 基础参数
-    parser.add_argument("-f", "--file", help="处理单个文件路径 (支持 .docx/.doc/.odt/.rtf/.pdf/.txt/.md)")
-    parser.add_argument("-o", "--output", help="输出文件路径")
-    parser.add_argument("-i", "--input-dir", default="input", help="输入目录（默认: input）")
-    parser.add_argument("-d", "--output-dir", default="output", help="输出目录（默认: output）")
-    parser.add_argument("-t", "--template", help="模板文件路径")
-    parser.add_argument("--no-template", action="store_true", help="不使用模板，直接用配置规则矫正")
-    parser.add_argument("-c", "--config", default="config/config.yaml", help="配置文件路径")
+    subparsers = parser.add_subparsers(dest="command", help="子命令")
 
-    # 格式预设
-    parser.add_argument(
-        "--preset",
-        choices=preset_choices if preset_choices else None,
-        help=f"格式预设: {', '.join(preset_choices)}",
-    )
-    parser.add_argument("--list-presets", action="store_true", help="列出所有可用的格式预设")
+    # --- scan ---
+    scan_parser = subparsers.add_parser("scan", help="扫描文档结构和样式")
+    scan_parser.add_argument("-f", "--file", required=True, help="文档路径")
+    _add_common_args(scan_parser)
 
-    # 需求文档
-    parser.add_argument("-r", "--requirement", help="需求文档路径（.docx/.txt/.md）")
+    # --- correct ---
+    correct_parser = subparsers.add_parser("correct", help="矫正单个论文")
+    correct_parser.add_argument("-f", "--file", required=True, help="文档路径")
+    correct_parser.add_argument("-o", "--output", help="输出路径")
+    correct_parser.add_argument("-t", "--template", help="模板文件路径")
+    correct_parser.add_argument("--no-template", action="store_true", help="不使用模板")
+    correct_parser.add_argument("--score", action="store_true", help="输出质量评分")
+    correct_parser.add_argument("--diff", action="store_true", help="生成对比报告")
+    correct_parser.add_argument("--format", nargs="+", help="额外导出格式: pdf html txt md")
+    _add_preset_args(correct_parser)
+    _add_common_args(correct_parser)
 
-    # LLM
-    parser.add_argument("--llm", action="store_true", help="使用LLM智能解析需求文档")
-    parser.add_argument("--offline-parser", action="store_true", help="使用离线规则解析器（无需LLM API，推荐）")
-    parser.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic", "ollama"], help="LLM提供商")
-    parser.add_argument("--llm-key", help="LLM API Key (也可用环境变量)")
-    parser.add_argument("--llm-model", help="LLM模型名称")
+    # --- learn ---
+    learn_parser = subparsers.add_parser("learn", help="从样本文档学习格式")
+    learn_parser.add_argument("-f", "--file", required=True, help="样本文档路径")
+    learn_parser.add_argument("-o", "--output", help="保存规则到JSON文件")
+    _add_common_args(learn_parser)
 
-    # 模型发现
-    parser.add_argument("--list-models", action="store_true", help="列出当前provider可用的所有模型")
-    parser.add_argument("--probe-model", nargs="+", metavar="MODEL", help="探测指定模型是否可用（支持任意名称）")
-    parser.add_argument("--llm-base-url", help="自定义API端点（用于第三方API或模型探测）")
+    # --- template ---
+    template_parser = subparsers.add_parser("template", help="模板管理")
+    template_sub = template_parser.add_subparsers(dest="template_action", help="模板操作")
 
-    # 导出
-    parser.add_argument("--format", nargs="+", help="额外导出格式: pdf html txt md")
+    # template list
+    list_parser = template_sub.add_parser("list", help="列出模板")
+    list_parser.add_argument("--category", help="按分类筛选")
+    list_parser.add_argument("--search", help="搜索关键词")
+    list_parser.add_argument("--all", action="store_true", help="显示所有模板(含禁用)")
+    _add_common_args(list_parser)
 
-    # 质量检查
-    parser.add_argument("--score", action="store_true", help="输出格式质量评分")
-    parser.add_argument("--diff", action="store_true", help="生成矫正前后对比HTML报告")
-    parser.add_argument("--rules", help="自定义规则文件路径 (YAML)")
+    # template import
+    import_parser = template_sub.add_parser("import", help="导入模板")
+    import_parser.add_argument("file", help="模板文件路径 (.yaml/.json)")
+    _add_common_args(import_parser)
 
-    # 封面生成
-    parser.add_argument("--cover", nargs="*", help="生成封面，参数: key=value")
+    # template export
+    export_parser = template_sub.add_parser("export", help="导出模板")
+    export_parser.add_argument("slug", help="模板Slug")
+    export_parser.add_argument("-o", "--output", help="输出路径")
+    export_parser.add_argument("--format", choices=["yaml", "json"], default="yaml", help="导出格式")
+    _add_common_args(export_parser)
 
-    # AI文档生成
-    parser.add_argument("--generate", nargs="?", const="", help="AI生成文档: '描述文字' 或留空进入交互模式")
-    parser.add_argument("--stream", action="store_true", help="流式输出AI生成内容")
-    parser.add_argument("--chat", action="store_true", help="进入交互式AI对话模式")
+    # template delete
+    delete_parser = template_sub.add_parser("delete", help="删除个人模板")
+    delete_parser.add_argument("slug", help="模板Slug")
+    _add_common_args(delete_parser)
+
+    # template info
+    info_parser = template_sub.add_parser("info", help="查看模板详情")
+    info_parser.add_argument("slug", help="模板Slug")
+    _add_common_args(info_parser)
+
+    # --- batch ---
+    batch_parser = subparsers.add_parser("batch", help="批量矫正多个文件")
+    batch_parser.add_argument("-i", "--input-dir", required=True, help="输入目录或文件")
+    batch_parser.add_argument("-o", "--output-dir", default="output", help="输出目录")
+    batch_parser.add_argument("--score", action="store_true", help="输出质量评分")
+    _add_preset_args(batch_parser)
+    _add_common_args(batch_parser)
+
+    # --- report ---
+    report_parser = subparsers.add_parser("report", help="生成或查看报告")
+    report_parser.add_argument("-f", "--file", help="文档路径")
+    report_parser.add_argument("-o", "--output", help="报告输出路径")
+    report_parser.add_argument("--format", choices=["html", "md", "json"], default="html")
+    report_parser.add_argument("--score", action="store_true", help="输出质量评分")
+    report_parser.add_argument("--report-id", help="查看历史报告ID")
+    _add_preset_args(report_parser)
+    _add_common_args(report_parser)
+
+    # --- 向后兼容的平铺参数模式 ---
+    parser.add_argument("-f", "--file", dest="flat_file", help="处理单个文件路径")
+    parser.add_argument("-o", "--output", dest="flat_output", help="输出文件路径")
+    parser.add_argument("-i", "--input-dir", dest="flat_input_dir", default="input")
+    parser.add_argument("-d", "--output-dir", dest="flat_output_dir", default="output")
+    parser.add_argument("-t", "--template", dest="flat_template")
+    parser.add_argument("--no-template", action="store_true")
+    parser.add_argument("--preset", dest="flat_preset")
+    parser.add_argument("--list-presets", action="store_true")
+    parser.add_argument("-r", "--requirement", dest="flat_requirement")
+    parser.add_argument("--llm", action="store_true")
+    parser.add_argument("--offline-parser", action="store_true")
+    parser.add_argument("--llm-provider", default="openai", choices=["openai", "anthropic", "ollama"])
+    parser.add_argument("--llm-key")
+    parser.add_argument("--llm-model")
+    parser.add_argument("--list-models", action="store_true")
+    parser.add_argument("--probe-model", nargs="+", metavar="MODEL")
+    parser.add_argument("--llm-base-url")
+    parser.add_argument("--format", dest="flat_format", nargs="+")
+    parser.add_argument("--score", action="store_true")
+    parser.add_argument("--diff", action="store_true")
+    parser.add_argument("--rules")
+    parser.add_argument("--cover", nargs="*")
+    parser.add_argument("--generate", nargs="?", const="")
+    parser.add_argument("--stream", action="store_true")
+    parser.add_argument("--chat", action="store_true")
     parser.add_argument("--doc-type", default="通用文档",
-                        choices=["通用文档", "报告", "公文", "合同", "论文", "方案", "会议纪要", "可行性报告", "项目立项", "工作总结", "调研报告"],
-                        help="文档类型（报告/公文/论文/合同等）")
-    parser.add_argument("--doc-template", help="文档模板名称")
-    parser.add_argument("--list-doc-templates", action="store_true", help="列出所有可用的文档模板")
-    parser.add_argument("--gen-provider", default="openai", choices=["openai", "anthropic", "ollama"], help="AI生成使用的LLM提供商")
-    parser.add_argument("--gen-key", help="AI生成使用的LLM API Key")
-    parser.add_argument("--gen-model", help="AI生成使用的LLM模型名称")
-
-    # 其他
-    parser.add_argument("--gui", action="store_true", help="启动Web GUI界面（浏览器）")
-    parser.add_argument("--desktop-gui", action="store_true", help="启动桌面 GUI 界面")
-    parser.add_argument("--extract", action="store_true", help="仅提取模板样式信息")
-    parser.add_argument("--workers", type=int, default=None, help="最大并行进程数（默认: CPU核心数）")
-    parser.add_argument("--log-level", default="INFO", choices=["DEBUG", "INFO", "WARNING", "ERROR"])
+                        choices=["通用文档", "报告", "公文", "合同", "论文", "方案", "会议纪要", "可行性报告", "项目立项", "工作总结", "调研报告"])
+    parser.add_argument("--doc-template")
+    parser.add_argument("--list-doc-templates", action="store_true")
+    parser.add_argument("--gen-provider", default="openai", choices=["openai", "anthropic", "ollama"])
+    parser.add_argument("--gen-key")
+    parser.add_argument("--gen-model")
+    parser.add_argument("--gui", action="store_true")
+    parser.add_argument("--desktop-gui", action="store_true")
+    parser.add_argument("--extract", action="store_true")
+    parser.add_argument("--workers", type=int, default=None)
 
     args = parser.parse_args()
 
@@ -409,14 +872,90 @@ def main() -> None:  # noqa: C901
     for dir_name in ("template", "input", "output"):
         Path(dir_name).mkdir(exist_ok=True)
 
+    # ----- 子命令模式 -----
+    if args.command == "scan":
+        cmd_scan(args)
+        return
+
+    if args.command == "correct":
+        _cmd_correct(args)
+        return
+
+    if args.command == "learn":
+        cmd_learn(args)
+        return
+
+    if args.command == "template":
+        cmd_template(args)
+        return
+
+    if args.command == "batch":
+        cmd_batch(args)
+        return
+
+    if args.command == "report":
+        cmd_report(args)
+        return
+
+    # ----- 向后兼容的平铺参数模式 -----
+    _run_flat_mode(args)
+
+
+def _cmd_correct(args: argparse.Namespace) -> None:
+    """执行单文件矫正子命令"""
     corrector = PaperFormatCorrector(args.config, args.log_level)
 
-    # 列出预设
+    if args.preset:
+        print(f"\n应用格式预设: {args.preset}")
+        corrector.apply_preset(args.preset)
+
+    if args.requirement:
+        print(f"\n解析需求文档: {args.requirement}")
+        corrector.apply_requirement(
+            args.requirement, use_llm=args.llm,
+            use_offline_parser=args.offline_parser,
+            llm_provider=args.llm_provider,
+            llm_api_key=args.llm_key, llm_model=args.llm_model,
+        )
+
+    if args.no_template:
+        corrector.template_path = ""
+        corrector.corrector = FormatCorrector("", corrector.config)
+    elif args.template:
+        corrector.template_path = args.template
+        corrector.corrector = FormatCorrector(args.template, corrector.config)
+
+    corrector.process_single(args.file, args.output, args.format, args.score, args.diff)
+    print("\n处理完成！")
+
+
+def _run_flat_mode(args: argparse.Namespace) -> None:
+    """向后兼容的平铺参数模式"""
+    corrector = PaperFormatCorrector(args.config, args.log_level)
+
+    if args.flat_preset:
+        print(f"\n应用格式预设: {args.flat_preset}")
+        corrector.apply_preset(args.flat_preset)
+        print()
+
+    if args.flat_requirement:
+        print(f"\n解析需求文档: {args.flat_requirement}")
+        corrector.apply_requirement(
+            args.flat_requirement, use_llm=args.llm,
+            use_offline_parser=args.offline_parser,
+            llm_provider=args.llm_provider,
+            llm_api_key=args.llm_key, llm_model=args.llm_model,
+        )
+        print()
+
+    if args.flat_template:
+        corrector.template_path = args.flat_template
+        corrector.corrector = FormatCorrector(args.flat_template, corrector.config)
+
     if args.list_presets:
         print(format_preset_list())
         return
 
-    # 列出文档模板
     if args.list_doc_templates:
         templates = list_doc_templates()
         if not templates:
@@ -432,44 +971,14 @@ def main() -> None:  # noqa: C901
         print("-" * 60)
         return
 
-    # 模型发现：列出可用模型
     if args.list_models:
         _handle_list_models(args)
         return
 
-    # 模型发现：探测指定模型
     if args.probe_model:
         _handle_probe_model(args)
         return
 
-    # 应用格式预设
-    if args.preset:
-        print(f"\n应用格式预设: {args.preset}")
-        corrector.apply_preset(args.preset)
-        print()
-
-    # 需求文档
-    if args.requirement:
-        print(f"\n解析需求文档: {args.requirement}")
-        corrector.apply_requirement(
-            args.requirement,
-            use_llm=args.llm,
-            use_offline_parser=args.offline_parser,
-            llm_provider=args.llm_provider,
-            llm_api_key=args.llm_key,
-            llm_model=args.llm_model,
-        )
-        print()
-
-    # 模板覆盖
-    if args.no_template:
-        corrector.template_path = ""
-        corrector.corrector = FormatCorrector("", corrector.config)
-    elif args.template:
-        corrector.template_path = args.template
-        corrector.corrector = FormatCorrector(args.template, corrector.config)
-
-    # 启动GUI
     if args.gui:
         try:
             from .gui import main as gui_main
@@ -487,12 +996,10 @@ def main() -> None:  # noqa: C901
             sys.exit(1)
         return
 
-    # 仅提取模板信息
     if args.extract:
         corrector.extract_template_info()
         return
 
-    # 封面生成
     if args.cover is not None:
         metadata = {}
         for item in args.cover:
@@ -503,41 +1010,35 @@ def main() -> None:  # noqa: C901
             from datetime import datetime
             now = datetime.now()
             metadata = {
-                "title": "论文题目",
-                "author": "作者姓名",
-                "college": "学院名称",
-                "major": "专业名称",
+                "title": "论文题目", "author": "作者姓名",
+                "college": "学院名称", "major": "专业名称",
                 "date": f"{now.year}年{now.month}月",
             }
         cover_path = Path("output") / "cover.docx"
         corrector.generate_cover(metadata, str(cover_path))
         return
 
-    # 交互式AI对话模式
     if args.chat:
         _handle_interactive_chat(args)
         return
 
-    # AI文档生成
     if args.generate is not None:
         _handle_generate(args)
         return
 
-    # 自定义规则检查
-    if args.rules and args.file:
-        corrector.check_rules(args.file, rules_path=args.rules)
+    if args.rules and args.flat_file:
+        corrector.check_rules(args.flat_file, rules_path=args.rules)
         return
 
-    # 处理
-    if args.file:
-        if args.output:
+    if args.flat_file:
+        if args.flat_output:
             from .infra.path_security import ALLOWED_OUTPUT_EXTENSIONS, validate_output_path
-            validate_output_path(args.output, ALLOWED_OUTPUT_EXTENSIONS)
-        corrector.process_single(args.file, args.output, args.format, args.score, args.diff)
+            validate_output_path(args.flat_output, ALLOWED_OUTPUT_EXTENSIONS)
+        corrector.process_single(args.flat_file, args.flat_output, args.flat_format, args.score, args.diff)
     else:
         if corrector.template_path and not Path(corrector.template_path).exists():
             corrector.logger.warning(f"模板文件不存在 ({corrector.template_path})")
-        corrector.process_directory(args.input_dir, args.output_dir, args.format, args.score, args.workers)
+        corrector.process_directory(args.flat_input_dir, args.flat_output_dir, args.flat_format, args.score, args.workers)
 
     print("\n处理完成！")
 

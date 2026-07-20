@@ -246,6 +246,45 @@ def scan_workbench_document(paper_file):
         return f"扫描失败：{exc}"
 
 
+def preview_correction_plan(
+    paper_file, sample_file, template_choice, body_font, body_size, body_spacing,
+    body_indent, heading_font, heading1_size, heading2_size, heading3_size,
+    table_style, table_font_size, image_max_width,
+):
+    """Dry-run: show what would be modified without applying changes."""
+    if paper_file is None:
+        return "请先上传 .docx 论文。"
+    try:
+        from .application.services.style_workbench import build_correction_plan
+        c = PaperFormatCorrector(config_path)
+        c.config = c._merge_config(c.config, _load_workbench_template(template_choice))
+        if sample_file:
+            c.config = c._merge_config(c.config, learn_style_profile(sample_file.name))
+        c.config = c._merge_config(c.config, manual_style_config(
+            body_font, body_size, body_spacing, body_indent, heading1_size,
+            heading2_size, heading3_size, heading_font, table_style,
+            table_font_size, image_max_width,
+        ))
+        plan = build_correction_plan(paper_file.name, c.config.get("format_rules", {}))
+        lines = [
+            f"═══ 矫正计划（影响 {plan.total_affected} 个元素）═══\n",
+            "元素类型          数量    操作                            来源",
+            "─" * 70,
+        ]
+        for item in plan.items:
+            lines.append(
+                f"  {item.element_type:<12}  {item.element_count:>4}    "
+                f"{item.action:<30}  [{item.source}]"
+            )
+        if plan.risk_items:
+            lines.append(f"\n⚠ 需要人工确认 ({len(plan.risk_items)} 项):")
+            for risk in plan.risk_items:
+                lines.append(f"  - {risk.get('element', '')}: {risk.get('reason', '')}")
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"生成计划失败：{exc}"
+
+
 def inspect_sample_style(sample_file):
     if sample_file is None:
         return "请上传一份已排好版的 .docx 样本文档。"
@@ -458,6 +497,63 @@ def template_import(file, name, category):
         return f"导入成功: {record.name} (slug: {record.slug})"
     except Exception as e:
         return f"导入失败: {e}"
+
+
+def history_list():
+    """列出处理历史"""
+    try:
+        records = _get_template_repo().list_processing_history(limit=50)
+        if not records:
+            return "暂无处理记录"
+        lines = ["ID  输入文件                              状态  评分    耗时    处理时间", "─" * 80]
+        for r in records:
+            score = f"{r['quality_score']:.1f}" if r["quality_score"] else "-"
+            elapsed = f"{r['processing_time']:.1f}s" if r["processing_time"] else "-"
+            created = r["created_at"][:19] if r["created_at"] else ""
+            lines.append(f"{r['id']:<4}{Path(r['input_file']).name:<38}{r['status']:<6}{score:<8}{elapsed:<8}{created}")
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"加载历史失败: {exc}"
+
+
+def history_detail(record_id):
+    """获取单条历史详情"""
+    if not record_id or record_id <= 0:
+        return "请输入有效的记录 ID"
+    try:
+        record = _get_template_repo().get_processing_history(int(record_id))
+        if not record:
+            return f"记录不存在: {record_id}"
+        lines = [
+            f"记录 ID: {record['id']}",
+            f"输入文件: {record['input_file']}",
+            f"输出文件: {record['output_file']}",
+            f"模板: {record.get('template_used', '默认')}",
+            f"质量评分: {record['quality_score']:.1f}",
+            f"总元素: {record['total_elements']}  已修改: {record['modified_elements']}",
+            f"耗时: {record['processing_time']:.1f}s",
+            f"状态: {record['status']}",
+            f"处理时间: {record['created_at']}",
+            "",
+            "─── 详细报告 ───",
+            json.dumps(record.get("report", {}), ensure_ascii=False, indent=2, default=str),
+        ]
+        return "\n".join(lines)
+    except Exception as exc:
+        return f"加载详情失败: {exc}"
+
+
+def history_delete(record_id):
+    """删除单条历史"""
+    if not record_id or record_id <= 0:
+        return "请输入有效的记录 ID"
+    try:
+        success = _get_template_repo().delete_processing_history(int(record_id))
+        if success:
+            return f"记录 {int(record_id)} 已删除"
+        return f"记录不存在: {int(record_id)}"
+    except Exception as exc:
+        return f"删除失败: {exc}"
 
 
 def check_rules(paper_file, rules_file):
@@ -819,6 +915,7 @@ def build_ui():
                         wb_sample = gr.File(label="样本文档（可选，已排好版 .docx）", file_types=[".docx"])
                         wb_template = gr.Dropdown(choices=workbench_template_choices(), value="无（使用默认配置）", label="模板库（期刊 / 高校 / 我的模板）")
                         scan_btn = gr.Button("扫描文档元素")
+                        plan_btn = gr.Button("预览矫正计划（不应用）")
                         sample_btn = gr.Button("查看样本文档学习结果")
                         with gr.Row():
                             wb_template_name = gr.Textbox(label="保存为我的模板", placeholder="例如：张同学硕士论文")
@@ -846,6 +943,13 @@ def build_ui():
                         wb_diff = gr.File(label="差异报告（HTML）")
 
                 scan_btn.click(fn=scan_workbench_document, inputs=[wb_paper], outputs=[wb_inventory])
+                plan_btn.click(
+                    fn=preview_correction_plan,
+                    inputs=[wb_paper, wb_sample, wb_template, wb_body_font, wb_body_size, wb_body_spacing,
+                            wb_body_indent, wb_heading_font, wb_heading1, wb_heading2, wb_heading3,
+                            wb_table_style, wb_table_size, wb_image_width],
+                    outputs=[wb_inventory],
+                )
                 sample_btn.click(fn=inspect_sample_style, inputs=[wb_sample], outputs=[wb_inventory])
                 save_template_btn.click(
                     fn=save_sample_template,
@@ -914,7 +1018,26 @@ def build_ui():
                 tm_export_btn.click(fn=template_export, inputs=[tm_export_slug, tm_export_fmt], outputs=[tm_export_file, tm_export_output])
                 tm_delete_btn.click(fn=template_delete, inputs=[tm_delete_slug], outputs=[tm_delete_output])
 
-            # Tab 2: 封面生成
+            # Tab: 报告中心
+            with gr.Tab("报告中心"):
+                gr.Markdown("### 历史处理记录 - 查看、下载、删除")
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        hist_refresh_btn = gr.Button("刷新列表")
+                        hist_list = gr.Textbox(label="处理记录", lines=20, max_lines=25)
+                        with gr.Row():
+                            hist_id = gr.Number(label="记录 ID", value=0, precision=0)
+                            hist_detail_btn = gr.Button("查看详情")
+                            hist_delete_btn = gr.Button("删除记录", variant="stop")
+                        hist_status = gr.Textbox(label="操作结果", lines=2)
+                    with gr.Column(scale=2):
+                        hist_detail = gr.Textbox(label="详细报告", lines=25, max_lines=30)
+
+                hist_refresh_btn.click(fn=history_list, inputs=[], outputs=[hist_list])
+                hist_detail_btn.click(fn=history_detail, inputs=[hist_id], outputs=[hist_detail])
+                hist_delete_btn.click(fn=history_delete, inputs=[hist_id], outputs=[hist_status])
+
+            # Tab: 封面生成
             with gr.Tab("封面生成"):
                 with gr.Row():
                     with gr.Column():
