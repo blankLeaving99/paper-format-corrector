@@ -217,6 +217,16 @@ paper-format-corrector/
 
 感谢所有为本项目做出贡献的开发者！
 
+### 核心开发者
+
+| 开发者 | GitHub | 角色 |
+|--------|--------|------|
+| blankLeaving99 | [@blankLeaving99](https://github.com/blankLeaving99) | 项目发起人、核心架构师 |
+| root165 (zhangwanjian) | [@root165](https://github.com/root165) | 协作者、贡献者 |
+| xiaocai | [@xiaocai](https://github.com/xiaocai) | 协作者、贡献者 |
+
+### 所有贡献者
+
 <a href="https://github.com/blankLeaving99/paper-format-corrector/graphs/contributors">
   <img src="https://contrib.rocks/image?repo=blankLeaving99/paper-format-corrector" />
 </a>
