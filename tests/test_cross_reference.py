@@ -2,7 +2,7 @@
 
 from docx import Document
 
-from paper_format_corrector.domain.document.cross_reference import (
+from paper_format_corrector.core.document.cross_reference import (
     CitationConsistencyReport,
     CrossReferenceUpdater,
 )

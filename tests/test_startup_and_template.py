@@ -13,7 +13,7 @@ import pytest
 
 class TestCompat:
     def test_get_required_packages(self):
-        from paper_format_corrector.infrastructure.compat import get_required_packages
+        from paper_format_corrector.adapters.compat import get_required_packages
         pkgs = get_required_packages()
         assert len(pkgs) >= 4
         assert any("python-docx" in p for p in pkgs)
@@ -22,7 +22,7 @@ class TestCompat:
         assert any("Pillow" in p for p in pkgs)
 
     def test_get_optional_packages(self):
-        from paper_format_corrector.infrastructure.compat import get_optional_packages
+        from paper_format_corrector.adapters.compat import get_optional_packages
         pkgs = get_optional_packages()
         assert len(pkgs) >= 5
         assert any("gradio" in p for p in pkgs)
@@ -31,17 +31,17 @@ class TestCompat:
         assert any("pdfplumber" in p for p in pkgs)
 
     def test_get_all_packages(self):
-        from paper_format_corrector.infrastructure.compat import get_all_packages, get_optional_packages, get_required_packages
+        from paper_format_corrector.adapters.compat import get_all_packages, get_optional_packages, get_required_packages
         all_pkgs = get_all_packages()
         assert all_pkgs == get_required_packages() + get_optional_packages()
 
     def test_check_dependencies_returns_list(self):
-        from paper_format_corrector.infrastructure.compat import check_dependencies
+        from paper_format_corrector.adapters.compat import check_dependencies
         result = check_dependencies()
         assert isinstance(result, list)
 
     def test_required_packages_have_version_specifiers(self):
-        from paper_format_corrector.infrastructure.compat import get_required_packages
+        from paper_format_corrector.adapters.compat import get_required_packages
         for pkg in get_required_packages():
             assert ">=" in pkg, f"Missing version specifier: {pkg}"
 
@@ -51,7 +51,7 @@ class TestCompat:
 class TestFormatCorrectorFallback:
     def test_missing_template_uses_blank_document(self, config, tmp_path):
         """FormatCorrector should not crash when template file is missing."""
-        from paper_format_corrector.domain.correction.engine import FormatCorrector
+        from paper_format_corrector.core.correction.engine import FormatCorrector
 
         fake_path = str(tmp_path / "nonexistent_template.docx")
         corrector = FormatCorrector(fake_path, config)
@@ -62,21 +62,21 @@ class TestFormatCorrectorFallback:
 
     def test_none_template_uses_blank_document(self, config):
         """FormatCorrector should handle None template path."""
-        from paper_format_corrector.domain.correction.engine import FormatCorrector
+        from paper_format_corrector.core.correction.engine import FormatCorrector
 
         corrector = FormatCorrector(None, config)
         assert corrector.template is not None
 
     def test_empty_string_template_uses_blank_document(self, config):
         """FormatCorrector should handle empty string template path."""
-        from paper_format_corrector.domain.correction.engine import FormatCorrector
+        from paper_format_corrector.core.correction.engine import FormatCorrector
 
         corrector = FormatCorrector("", config)
         assert corrector.template is not None
 
     def test_valid_template_is_loaded(self, config, template_path):
         """FormatCorrector should load a valid template normally."""
-        from paper_format_corrector.domain.correction.engine import FormatCorrector
+        from paper_format_corrector.core.correction.engine import FormatCorrector
 
         corrector = FormatCorrector(template_path, config)
         assert corrector.template is not None
@@ -84,7 +84,7 @@ class TestFormatCorrectorFallback:
 
     def test_missing_template_can_correct_document(self, config, sample_paper_path, tmp_path):
         """Full correction pipeline should work even without a template file."""
-        from paper_format_corrector.domain.correction.engine import FormatCorrector
+        from paper_format_corrector.core.correction.engine import FormatCorrector
 
         fake_template = str(tmp_path / "missing.docx")
         corrector = FormatCorrector(fake_template, config)
@@ -130,7 +130,7 @@ class TestAppTemplateHandling:
         import yaml
 
         from paper_format_corrector.app import PaperFormatCorrector
-        from paper_format_corrector.domain.correction.engine import FormatCorrector
+        from paper_format_corrector.core.correction.engine import FormatCorrector
 
         config_path = tmp_path / "config.yaml"
         config_path.write_text(yaml.dump(config, allow_unicode=True), encoding="utf-8")
@@ -173,10 +173,10 @@ class TestRunPyHelpers:
 class TestOptionalDeps:
     def test_optional_import_failures_dont_crash(self):
         """Missing optional deps should not prevent core imports."""
-        from paper_format_corrector.domain.correction.engine import FormatCorrector
-        from paper_format_corrector.infrastructure.exporters.format_exporter import FormatExporter
-        from paper_format_corrector.domain.document.parser.structure import SectionDetector
-        from paper_format_corrector.domain.quality.quality_scorer import QualityScorer
+        from paper_format_corrector.core.correction.engine import FormatCorrector
+        from paper_format_corrector.adapters.word.format_exporter import FormatExporter
+        from paper_format_corrector.core.document.parser.structure import SectionDetector
+        from paper_format_corrector.core.quality.quality_scorer import QualityScorer
         # All these should succeed regardless of optional deps
         assert FormatCorrector is not None
         assert FormatExporter is not None
@@ -198,35 +198,35 @@ class TestOptionalDeps:
 class TestPresetSecurity:
     def test_preset_name_rejects_path_traversal(self):
         """load_preset should reject names with path traversal."""
-        from paper_format_corrector.infrastructure.preset_loader import load_preset
+        from paper_format_corrector.adapters.preset_loader import load_preset
 
         with pytest.raises(ValueError, match="Invalid preset name"):
             load_preset("../../etc/passwd")
 
     def test_preset_name_rejects_dot_dot(self):
         """load_preset should reject '../' in names."""
-        from paper_format_corrector.infrastructure.preset_loader import load_preset
+        from paper_format_corrector.adapters.preset_loader import load_preset
 
         with pytest.raises(ValueError, match="Invalid preset name"):
             load_preset("../config")
 
     def test_preset_name_rejects_backslash(self):
         """load_preset should reject backslash in names."""
-        from paper_format_corrector.infrastructure.preset_loader import load_preset
+        from paper_format_corrector.adapters.preset_loader import load_preset
 
         with pytest.raises(ValueError, match="Invalid preset name"):
             load_preset("..\\windows\\system32")
 
     def test_preset_name_rejects_slash(self):
         """load_preset should reject forward slash in names."""
-        from paper_format_corrector.infrastructure.preset_loader import load_preset
+        from paper_format_corrector.adapters.preset_loader import load_preset
 
         with pytest.raises(ValueError, match="Invalid preset name"):
             load_preset("sub/dir/name")
 
     def test_preset_name_rejects_special_chars(self):
         """load_preset should reject special characters."""
-        from paper_format_corrector.infrastructure.preset_loader import load_preset
+        from paper_format_corrector.adapters.preset_loader import load_preset
 
         for name in ["ieee;rm -rf", "ieee|cmd", "ieee&whoami", "ieee`id`"]:
             with pytest.raises(ValueError, match="Invalid preset name"):
@@ -234,7 +234,7 @@ class TestPresetSecurity:
 
     def test_preset_name_accepts_valid_names(self):
         """load_preset should accept valid preset names without raising ValueError."""
-        from paper_format_corrector.infrastructure.preset_loader import load_preset
+        from paper_format_corrector.adapters.preset_loader import load_preset
 
         # "ieee" exists as a preset file - should load without error
         result = load_preset("ieee")

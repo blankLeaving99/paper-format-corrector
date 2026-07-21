@@ -25,23 +25,23 @@ from typing import Any
 
 import yaml
 
-from .infrastructure.converters.file_converter import FileConverter
-from .infrastructure.converters.file_formatter import FormatCorrector
-from .infrastructure.exporters.format_exporter import FormatExporter
-from .infrastructure.adapters.docx_adapter import StyleExtractor
-from .infrastructure.generators.cover_generator import CoverPageGenerator
-from .infrastructure.compat import check_dependencies
-from .infrastructure.logger import Logger, ProgressBar
-from .infrastructure.path_security import ALLOWED_INPUT_EXTENSIONS, validate_input_path
-from .infrastructure.preset_loader import load_preset
-from .domain.document.requirement_parser import RequirementParser
-from .domain.quality.diff_reporter import DiffReporter
-from .domain.quality.quality_scorer import QualityScorer
-from .domain.quality.rule_engine import RuleEngine
+from .adapters.word.file_converter import FileConverter
+from .adapters.word.file_formatter import FormatCorrector
+from .adapters.word.format_exporter import FormatExporter
+from .adapters.word.docx_adapter import StyleExtractor
+from .adapters.word.cover_generator import CoverPageGenerator
+from .adapters.compat import check_dependencies
+from .adapters.logger import Logger, ProgressBar
+from .adapters.path_security import ALLOWED_INPUT_EXTENSIONS, validate_input_path
+from .adapters.preset_loader import load_preset
+from .core.document.requirement_parser import RequirementParser
+from .core.quality.diff_reporter import DiffReporter
+from .core.quality.quality_scorer import QualityScorer
+from .core.quality.rule_engine import RuleEngine
 
 try:
     from importlib.util import find_spec as _find_spec
-    HAS_LLM = _find_spec("paper_format_corrector.domain.document.llm_parser") is not None
+    HAS_LLM = _find_spec("paper_format_corrector.core.document.llm_parser") is not None
 except ImportError:
     HAS_LLM = False
 
@@ -66,9 +66,9 @@ def _process_one_file(
     """
     input_file, output_file, template_path, config, score, diff, export_formats = args
 
-    from .infrastructure.converters.file_converter import FileConverter
-    from .infrastructure.converters.file_formatter import FormatCorrector
-    from .infrastructure.exporters.format_exporter import FormatExporter
+    from .adapters.word.file_converter import FileConverter
+    from .adapters.word.file_formatter import FormatCorrector
+    from .adapters.word.format_exporter import FormatExporter
 
     try:
         input_path = Path(input_file)
@@ -93,7 +93,7 @@ def _process_one_file(
                 )
 
             if score:
-                from .domain.quality.quality_scorer import QualityScorer
+                from .core.quality.quality_scorer import QualityScorer
                 scorer = QualityScorer(config)
                 futures["score"] = pool.submit(scorer.score, output_file)
 
@@ -139,7 +139,7 @@ def _export_formats_parallel(exporter: FormatExporter, docx_path: Path, formats:
 
 def _generate_diff(orig_path: Path, output_path: Path) -> str | None:
     """生成对比报告，返回 diff 文件路径。"""
-    from .domain.quality.diff_reporter import DiffReporter
+    from .core.quality.diff_reporter import DiffReporter
     diff_path = output_path.with_suffix(".diff.html")
     reporter = DiffReporter()
     reporter.generate_html_report(str(orig_path), str(output_path), str(diff_path))
@@ -203,7 +203,7 @@ class PaperFormatCorrector:
         # 尝试LLM解析
         if use_llm and HAS_LLM:
             try:
-                from .domain.document.llm_parser import LLMParser, llm_parse_to_config
+                from .core.document.llm_parser import LLMParser, llm_parse_to_config
                 llm = LLMParser(provider=llm_provider, api_key=llm_api_key, model=llm_model)
                 doc_text = Path(requirement_path).read_text(encoding="utf-8")
                 llm_result = llm.parse(doc_text)
@@ -216,7 +216,7 @@ class PaperFormatCorrector:
         # 使用离线规则解析器（推荐的离线方案）
         if req_config is None and use_offline_parser:
             try:
-                from .domain.document.rule_parser import parse_requirement_file
+                from .core.document.rule_parser import parse_requirement_file
                 req_config = parse_requirement_file(requirement_path)
                 self.logger.info("离线规则解析成功")
             except Exception as e:

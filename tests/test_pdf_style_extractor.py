@@ -8,7 +8,7 @@ import pytest
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from paper_format_corrector.domain.document.pdf_style_extractor import (
+from paper_format_corrector.core.document.pdf_style_extractor import (
     PDFTextBlock,
     PDFPageInfo,
     _classify_block,
@@ -239,7 +239,7 @@ class TestExtractPdfStyle:
         with pytest.raises(ValueError, match="不是 PDF 文件"):
             extract_pdf_style(txt)
 
-    @patch("paper_format_corrector.domain.document.pdf_style_extractor._extract_with_pdfplumber")
+    @patch("paper_format_corrector.core.document.pdf_style_extractor._extract_with_pdfplumber")
     def test_returns_config_from_pdfplumber(self, mock_extract, tmp_path):
         pdf = tmp_path / "test.pdf"
         pdf.write_bytes(b"%PDF-1.4 fake")
@@ -267,7 +267,7 @@ class TestExtractPdfStyle:
         assert "headings" in rules
         assert "_extraction" in rules
 
-    @patch("paper_format_corrector.domain.document.pdf_style_extractor._extract_with_pdfplumber")
+    @patch("paper_format_corrector.core.document.pdf_style_extractor._extract_with_pdfplumber")
     def test_no_blocks_raises(self, mock_extract, tmp_path):
         pdf = tmp_path / "empty.pdf"
         pdf.write_bytes(b"%PDF-1.4 fake")

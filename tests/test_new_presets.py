@@ -2,7 +2,7 @@
 
 import yaml
 
-from paper_format_corrector.infrastructure.preset_loader import load_preset
+from paper_format_corrector.adapters.preset_loader import load_preset
 
 
 class TestNewPresets:

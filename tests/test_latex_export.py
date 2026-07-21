@@ -20,7 +20,7 @@ class TestLaTeXExporter:
 
     def test_export_english_docx(self, tmp_path):
         """英文 DOCX → LaTeX 基本转换"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         # 创建英文 DOCX
         doc = Document()
@@ -48,7 +48,7 @@ class TestLaTeXExporter:
 
     def test_export_chinese_docx_uses_ctex(self, tmp_path):
         """中文 DOCX → LaTeX 自动生成 ctex 支持"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         doc = Document()
         doc.add_heading("绪论", level=1)
@@ -67,7 +67,7 @@ class TestLaTeXExporter:
 
     def test_export_with_custom_document_class(self, tmp_path):
         """指定文档类"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         doc = Document()
         doc.add_paragraph("Test content.")
@@ -85,7 +85,7 @@ class TestLaTeXExporter:
 
     def test_export_with_extra_packages(self, tmp_path):
         """额外宏包注入"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         doc = Document()
         doc.add_paragraph("Test content.")
@@ -105,7 +105,7 @@ class TestLaTeXExporter:
 
     def test_export_file_not_found(self, tmp_path):
         """输入文件不存在时抛出异常"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         exporter = LaTeXExporter()
         with pytest.raises(FileNotFoundError):
@@ -113,7 +113,7 @@ class TestLaTeXExporter:
 
     def test_export_creates_output_directory(self, tmp_path):
         """输出目录不存在时自动创建"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         doc = Document()
         doc.add_paragraph("Test.")
@@ -127,7 +127,7 @@ class TestLaTeXExporter:
 
     def test_export_with_template(self, tmp_path):
         """自定义模板注入"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         doc = Document()
         doc.add_paragraph("Test.")
@@ -145,7 +145,7 @@ class TestLaTeXExporter:
 
     def test_detect_chinese(self):
         """中文检测功能"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         assert LaTeXExporter._detect_chinese("这是一段中文") is True
         assert LaTeXExporter._detect_chinese("Hello World") is False
@@ -154,7 +154,7 @@ class TestLaTeXExporter:
 
     def test_find_pandoc_returns_string_or_none(self):
         """pandoc 查找返回字符串或 None"""
-        from paper_format_corrector.infrastructure.converters.latex_exporter import LaTeXExporter
+        from paper_format_corrector.adapters.word.latex_exporter import LaTeXExporter
 
         result = LaTeXExporter._find_pandoc()
         assert result is None or isinstance(result, str)
@@ -168,7 +168,7 @@ class TestConvertTex:
 
     def test_convert_tex_with_pandoc(self, tmp_path, monkeypatch):
         """pandoc 可用时使用 pandoc 转换"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         # 创建 .tex 文件
         tex_content = r"""
@@ -186,7 +186,7 @@ This is a test document.
 
         # Mock pandoc 不存在
         monkeypatch.setattr(
-            "paper_format_corrector.infrastructure.converters.file_converter.shutil.which",
+            "paper_format_corrector.adapters.word.file_converter.shutil.which",
             lambda x: None,
         )
 
@@ -196,7 +196,7 @@ This is a test document.
 
     def test_convert_tex_pandoc_timeout_fallback(self, tmp_path, monkeypatch):
         """pandoc 超时时降级到文本提取"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex_content = r"""
 \documentclass{article}
@@ -213,7 +213,7 @@ Hello world content here.
         fake_pandoc.write_text("fake", encoding="utf-8")
 
         monkeypatch.setattr(
-            "paper_format_corrector.infrastructure.converters.file_converter.shutil.which",
+            "paper_format_corrector.adapters.word.file_converter.shutil.which",
             lambda x: str(fake_pandoc),
         )
 
@@ -221,7 +221,7 @@ Hello world content here.
             raise Exception("pandoc failed")
 
         monkeypatch.setattr(
-            "paper_format_corrector.infrastructure.converters.file_converter.subprocess.run",
+            "paper_format_corrector.adapters.word.file_converter.subprocess.run",
             fake_run,
         )
 
@@ -239,7 +239,7 @@ class TestExtractTextFromLatex:
 
     def test_preserves_bold_markdown(self):
         """\\textbf{} → **bold**"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\textbf{Important text}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -247,7 +247,7 @@ class TestExtractTextFromLatex:
 
     def test_preserves_italic_markdown(self):
         """\\textit{} / \\emph{} → *italic*"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\textit{Italic text} and \emph{Emphasized}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -256,7 +256,7 @@ class TestExtractTextFromLatex:
 
     def test_preserves_code_markdown(self):
         """\\texttt{} → `code`"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\texttt{monospace}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -264,7 +264,7 @@ class TestExtractTextFromLatex:
 
     def test_preserves_underline_markdown(self):
         """\\underline{} → <u>...</u>"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\underline{Underlined}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -272,7 +272,7 @@ class TestExtractTextFromLatex:
 
     def test_preserves_strikethrough_markdown(self):
         """\\sout{} → <s>...</s>"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\sout{Deleted text}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -280,7 +280,7 @@ class TestExtractTextFromLatex:
 
     def test_heading_mapping(self):
         """章节标题映射为 Markdown"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\section{Introduction}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -288,7 +288,7 @@ class TestExtractTextFromLatex:
 
     def test_subsection_mapping(self):
         """\\subsection → ###"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\subsection{Related Work}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -296,7 +296,7 @@ class TestExtractTextFromLatex:
 
     def test_abstract_extraction(self):
         """\\begin{abstract} → **摘要**"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = "\\begin{abstract}\nThis is the abstract.\n\\end{abstract}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -305,7 +305,7 @@ class TestExtractTextFromLatex:
 
     def test_image_placeholder(self):
         """\\includegraphics → [图片: ...]"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"\includegraphics[width=0.5\textwidth]{fig1.png}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -313,7 +313,7 @@ class TestExtractTextFromLatex:
 
     def test_list_item_conversion(self):
         """\\item → - list item"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = "\\begin{itemize}\n\\item First\n\\item Second\n\\end{itemize}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -322,7 +322,7 @@ class TestExtractTextFromLatex:
 
     def test_footnote_extraction(self):
         """\\footnote{} → (脚注: ...)"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"This has a footnote\footnote{Important note}."
         result = FileConverter._extract_text_from_latex(tex)
@@ -330,7 +330,7 @@ class TestExtractTextFromLatex:
 
     def test_removes_comments(self):
         """移除注释行"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = "% This is a comment\nActual content here.\n% Another comment"
         result = FileConverter._extract_text_from_latex(tex)
@@ -339,7 +339,7 @@ class TestExtractTextFromLatex:
 
     def test_removes_preamble(self):
         """移除 preamble"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = "\\documentclass{article}\n\\usepackage{amsmath}\n\\begin{document}\nContent\n\\end{document}"
         result = FileConverter._extract_text_from_latex(tex)
@@ -348,7 +348,7 @@ class TestExtractTextFromLatex:
 
     def test_combined_formatting(self):
         """混合格式保留"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"""
 \section{Results}
@@ -362,7 +362,7 @@ The \textbf{main result} shows that \textit{performance} improved by \texttt{15\
 
     def test_citation_removal(self):
         """引用命令被移除"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex = r"As shown in \cite{smith2020} and \ref{fig1}, the results are significant."
         result = FileConverter._extract_text_from_latex(tex)
@@ -379,7 +379,7 @@ class TestFileConverterTexInput:
 
     def test_tex_to_docx_basic(self, tmp_path):
         """基本 .tex → .docx 转换"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex_content = r"""
 \documentclass{article}
@@ -398,7 +398,7 @@ This is a test document with \textbf{bold} and \textit{italic} text.
 
     def test_tex_chinese_content(self, tmp_path):
         """中文 .tex 文件转换"""
-        from paper_format_corrector.infrastructure.converters.file_converter import FileConverter
+        from paper_format_corrector.adapters.word.file_converter import FileConverter
 
         tex_content = r"""
 \documentclass{ctexart}

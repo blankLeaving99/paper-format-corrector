@@ -17,7 +17,7 @@ from pathlib import Path
 
 import pytest
 
-from paper_format_corrector.interfaces.api.task_manager import TaskInfo, TaskManager
+from paper_format_corrector.api.api.task_manager import TaskInfo, TaskManager
 
 
 class TestTaskManager:
@@ -194,7 +194,7 @@ class TestAPIEndpoints:
         """设置测试客户端"""
         from fastapi.testclient import TestClient
 
-        from paper_format_corrector.interfaces.api.app import app
+        from paper_format_corrector.api.api.app import app
 
         self.client = TestClient(app)
 

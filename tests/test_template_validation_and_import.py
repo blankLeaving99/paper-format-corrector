@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from paper_format_corrector.application.template_validation_service import (
+from paper_format_corrector.services.template_validation_service import (
     TemplateValidationService,
     ValidationResult,
 )
-from paper_format_corrector.application.university_template_import_service import (
+from paper_format_corrector.services.university_template_import_service import (
     UniversityTemplateImportService,
     ImportWorkflow,
 )

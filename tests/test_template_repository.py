@@ -1,6 +1,6 @@
 """Tests for template repository including processing history."""
 
-from paper_format_corrector.infrastructure.template_repository import TemplateRepository
+from paper_format_corrector.adapters.storage.template_repository import TemplateRepository
 
 
 def test_repository_seeds_and_saves_personal_template(tmp_path):
@@ -178,7 +178,7 @@ def test_search_templates_by_tag(tmp_path):
 
 
 def test_template_validation_valid():
-    from paper_format_corrector.application.template_validation import TemplateValidationService
+    from paper_format_corrector.services.template_validation import TemplateValidationService
     validator = TemplateValidationService()
     config = {
         "format_rules": {
@@ -200,7 +200,7 @@ def test_template_validation_valid():
 
 
 def test_template_validation_missing_required():
-    from paper_format_corrector.application.template_validation import TemplateValidationService
+    from paper_format_corrector.services.template_validation import TemplateValidationService
     validator = TemplateValidationService()
     config = {"format_rules": {}}
     report = validator.validate("empty", config)
@@ -211,7 +211,7 @@ def test_template_validation_missing_required():
 
 
 def test_template_validation_warnings():
-    from paper_format_corrector.application.template_validation import TemplateValidationService
+    from paper_format_corrector.services.template_validation import TemplateValidationService
     validator = TemplateValidationService()
     config = {
         "format_rules": {
@@ -230,7 +230,7 @@ def test_template_validation_warnings():
 
 
 def test_template_validation_to_dict():
-    from paper_format_corrector.application.template_validation import TemplateValidationService
+    from paper_format_corrector.services.template_validation import TemplateValidationService
     validator = TemplateValidationService()
     config = {"format_rules": {"font": {"chinese": "宋体"}}}
     report = validator.validate("test", config)

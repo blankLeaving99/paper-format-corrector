@@ -5,7 +5,7 @@ import sys
 
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "src"))
 
-from paper_format_corrector.domain.document.requirement_parser import RequirementParser
+from paper_format_corrector.core.document.requirement_parser import RequirementParser
 
 
 def _parse_and_assert_basics(path):

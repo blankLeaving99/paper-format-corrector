@@ -18,7 +18,7 @@ class TestLLMParserURLValidation:
 
     def _validate_url(self, url, provider="openai"):
         """辅助方法：调用 URL 验证"""
-        from paper_format_corrector.domain.document.llm_parser import LLMParser
+        from paper_format_corrector.core.document.llm_parser import LLMParser
         parser = LLMParser(provider=provider, api_key="test")
         return parser._validate_url(url)
 
@@ -67,7 +67,7 @@ class TestLLMParserJSONParsing:
 
     def _parse_json(self, response):
         """辅助方法：调用 JSON 解析"""
-        from paper_format_corrector.domain.document.llm_parser import LLMParser
+        from paper_format_corrector.core.document.llm_parser import LLMParser
         parser = LLMParser(provider="openai", api_key="test")
         return parser._parse_json_response(response)
 

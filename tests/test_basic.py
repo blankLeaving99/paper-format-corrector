@@ -9,7 +9,7 @@ sys.path.insert(0, os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(
 
 
 def test_section_detector_import():
-    from paper_format_corrector.domain.document.parser.structure import SectionType, detect_language
+    from paper_format_corrector.core.document.parser.structure import SectionType, detect_language
     assert SectionType.CHAPTER is not None
     assert detect_language("这是中文") == "chinese"
     assert detect_language("This is English") == "english"
@@ -17,7 +17,7 @@ def test_section_detector_import():
 
 
 def test_detect_language():
-    from paper_format_corrector.domain.document.parser.structure import detect_language
+    from paper_format_corrector.core.document.parser.structure import detect_language
     assert detect_language("") == "unknown"
     assert detect_language("12345") == "unknown"
     assert detect_language("hello world test") == "english"
@@ -25,74 +25,74 @@ def test_detect_language():
 
 
 def test_requirement_parser_import():
-    from paper_format_corrector.domain.document.requirement_parser import FONT_SIZE_MAP
+    from paper_format_corrector.core.document.requirement_parser import FONT_SIZE_MAP
     assert "小四" in FONT_SIZE_MAP
     assert FONT_SIZE_MAP["小四"] == 12
     assert FONT_SIZE_MAP["二号"] == 22
 
 
 def test_quality_scorer_import():
-    from paper_format_corrector.domain.quality.quality_scorer import QualityScorer
+    from paper_format_corrector.core.quality.quality_scorer import QualityScorer
     assert QualityScorer is not None
 
 
 def test_rule_engine_import():
-    from paper_format_corrector.domain.quality.rule_engine import RuleEngine
+    from paper_format_corrector.core.quality.rule_engine import RuleEngine
     engine = RuleEngine()
     assert len(engine.checkers) > 0
 
 
 def test_plugin_manager():
-    from paper_format_corrector.infrastructure.plugin_manager import PluginManager
+    from paper_format_corrector.adapters.plugin_manager import PluginManager
     manager = PluginManager({})
     plugins = manager.list_plugins()
     assert len(plugins) == 0
 
 
 def test_cross_reference_import():
-    from paper_format_corrector.domain.document.cross_reference import CrossReferenceUpdater
+    from paper_format_corrector.core.document.cross_reference import CrossReferenceUpdater
     updater = CrossReferenceUpdater()
     assert updater._update_text("如图1所示") == "如图1所示"
 
 
 def test_image_handler_import():
-    from paper_format_corrector.domain.document.elements.image_handler import ImageHandler
+    from paper_format_corrector.core.document.elements.image_handler import ImageHandler
     handler = ImageHandler({})
     assert handler.center is True
 
 
 def test_diff_reporter_import():
-    from paper_format_corrector.domain.quality.diff_reporter import DiffReporter
+    from paper_format_corrector.core.quality.diff_reporter import DiffReporter
     reporter = DiffReporter()
     assert reporter is not None
 
 
 def test_logger_import():
-    from paper_format_corrector.infrastructure.logger import Logger
+    from paper_format_corrector.adapters.logger import Logger
     logger = Logger(level="DEBUG", color=False)
     logger.info("test message")
 
 
 def test_cover_page_generator_import():
-    from paper_format_corrector.infrastructure.generators.cover_generator import CoverPageGenerator
+    from paper_format_corrector.adapters.word.cover_generator import CoverPageGenerator
     gen = CoverPageGenerator()
     assert gen is not None
 
 
 def test_format_exporter_import():
-    from paper_format_corrector.infrastructure.exporters.format_exporter import FormatExporter
+    from paper_format_corrector.adapters.word.format_exporter import FormatExporter
     FormatExporter()
     assert "pdf" in FormatExporter.SUPPORTED_FORMATS
     assert "html" in FormatExporter.SUPPORTED_FORMATS
 
 
 def test_table_handler_import():
-    from paper_format_corrector.domain.document.elements.table_handler import TableHandler
+    from paper_format_corrector.core.document.elements.table_handler import TableHandler
     handler = TableHandler({})
     assert handler is not None
 
 
 def test_ref_auto_complete_import():
-    from paper_format_corrector.domain.document.ref_auto_complete import RefAutoComplete
+    from paper_format_corrector.core.document.ref_auto_complete import RefAutoComplete
     rc = RefAutoComplete()
     assert rc is not None

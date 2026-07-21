@@ -5,12 +5,12 @@ from __future__ import annotations
 import logging
 from unittest.mock import MagicMock, patch
 
-from paper_format_corrector.infrastructure.template_repository import (
+from paper_format_corrector.adapters.storage.template_repository import (
     TemplateRepository,
     _parse_version,
     _version_is_newer,
 )
-from paper_format_corrector.infrastructure.template_sync import TemplateSyncService
+from paper_format_corrector.adapters.template_sync import TemplateSyncService
 
 # ------------------------------------------------------------------
 # Helper function tests
@@ -368,7 +368,7 @@ class TestSeedWithRemote:
         repo = TemplateRepository(tmp_path / "templates.db")
 
         manifest = {}
-        with patch("paper_format_corrector.infrastructure.template_repository.requests") as mock_requests:
+        with patch("paper_format_corrector.adapters.storage.template_repository.requests") as mock_requests:
             mock_resp = MagicMock()
             mock_resp.json.return_value = manifest
             mock_resp.raise_for_status = MagicMock()

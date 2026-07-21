@@ -8,7 +8,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
-from paper_format_corrector.infrastructure.external_tools import find_libreoffice
+from paper_format_corrector.adapters.external_tools import find_libreoffice
 from paper_format_corrector.shared.docx_utils import (
     ALIGN_MAP,
     EMU_PER_CM,

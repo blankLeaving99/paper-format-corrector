@@ -63,7 +63,7 @@ class TestDocumentAnalyzerIntegration:
 
     def test_analyze_and_compare(self):
         """测试分析并比较"""
-        from paper_format_corrector.domain.document.analyzer import (
+        from paper_format_corrector.core.document.analyzer import (
             ParagraphType,
         )
 
@@ -76,7 +76,7 @@ class TestReferenceFormatterIntegration:
 
     def test_vancouver_style_detection(self):
         """测试Vancouver风格检测"""
-        from paper_format_corrector.domain.document.parser.reference import (
+        from paper_format_corrector.core.document.parser.reference import (
             ReferenceFormatter,
         )
 
@@ -86,7 +86,7 @@ class TestReferenceFormatterIntegration:
 
     def test_deduplicate_references_method_exists(self):
         """测试去重方法存在"""
-        from paper_format_corrector.domain.document.parser.reference import (
+        from paper_format_corrector.core.document.parser.reference import (
             ReferenceFormatter,
         )
 

@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from paper_format_corrector.infrastructure.remote_template_client import RemoteTemplateClient
-from paper_format_corrector.infrastructure.template_repository import TemplateRepository
+from paper_format_corrector.adapters.remote_template_client import RemoteTemplateClient
+from paper_format_corrector.adapters.storage.template_repository import TemplateRepository
 
 # ── Helpers ──────────────────────────────────────────────────────
 
@@ -438,7 +438,7 @@ class TestSyncEndpoints:
     def _get_app(self):
         from fastapi import FastAPI
 
-        from paper_format_corrector.interfaces.api.routes.templates import router
+        from paper_format_corrector.api.api.routes.templates import router
 
         app = FastAPI()
         app.include_router(router)

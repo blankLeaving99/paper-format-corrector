@@ -13,7 +13,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from fastapi.testclient import TestClient
 
-from paper_format_corrector.interfaces.api.app import app
+from paper_format_corrector.api.api.app import app
 
 client = TestClient(app, raise_server_exceptions=False)
 
@@ -83,7 +83,7 @@ class TestPresetsEndpoint:
     def test_list_presets_via_legacy_api(self):
         """Presets are served via the legacy api/app.py /presets endpoint."""
         from fastapi.testclient import TestClient as LegacyClient
-        from paper_format_corrector.interfaces.api.app import app as legacy_app
+        from paper_format_corrector.api.api.app import app as legacy_app
         legacy_client = LegacyClient(legacy_app, raise_server_exceptions=False)
         resp = legacy_client.get("/presets")
         assert resp.status_code == 200
@@ -93,7 +93,7 @@ class TestPresetsEndpoint:
 
     def test_presets_contain_required_fields(self):
         from fastapi.testclient import TestClient as LegacyClient
-        from paper_format_corrector.interfaces.api.app import app as legacy_app
+        from paper_format_corrector.api.api.app import app as legacy_app
         legacy_client = LegacyClient(legacy_app, raise_server_exceptions=False)
         resp = legacy_client.get("/presets")
         data = resp.json()
@@ -253,9 +253,9 @@ class TestTaskQueueEndpoints:
     @pytest.fixture(autouse=True)
     def _legacy_client(self):
         from fastapi.testclient import TestClient as LegacyClient
-        from paper_format_corrector.interfaces.api.app import app as legacy_app, get_task_queue
+        from paper_format_corrector.api.api.app import app as legacy_app, get_task_queue
         # Reset the global task queue before each test
-        import paper_format_corrector.interfaces.api.app as app_module
+        import paper_format_corrector.api.api.app as app_module
         app_module._task_queue = None
         app_module._worker = None
         self.client = LegacyClient(legacy_app, raise_server_exceptions=False)

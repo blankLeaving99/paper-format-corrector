@@ -3,7 +3,7 @@
 from docx import Document
 from docx.shared import Pt
 
-from paper_format_corrector.application.style_workbench import (
+from paper_format_corrector.services.style_workbench import (
     build_application_report,
     build_correction_plan,
     explain_style_profile,
@@ -61,7 +61,7 @@ def test_profile_explanation_and_coverage_report(sample_paper_path):
 
 
 def test_build_correction_plan_identifies_elements(sample_paper_path):
-    from paper_format_corrector.infrastructure.preset_loader import load_preset
+    from paper_format_corrector.adapters.preset_loader import load_preset
     config = load_preset("ieee")
     plan = build_correction_plan(sample_paper_path, config.get("format_rules", {}))
     assert plan.total_affected >= 0
@@ -69,7 +69,7 @@ def test_build_correction_plan_identifies_elements(sample_paper_path):
 
 
 def test_plan_to_dict_is_serializable(sample_paper_path):
-    from paper_format_corrector.infrastructure.preset_loader import load_preset
+    from paper_format_corrector.adapters.preset_loader import load_preset
     config = load_preset("ieee")
     plan = build_correction_plan(sample_paper_path, config.get("format_rules", {}))
     d = plan_to_dict(plan)
@@ -181,7 +181,7 @@ def test_build_application_report_includes_all_sections(sample_paper_path):
 
 def test_type_override_mapping():
     """Test that type override mapping works correctly."""
-    from paper_format_corrector.domain.document.parser.section_parser import (
+    from paper_format_corrector.core.document.parser.section_parser import (
         map_override_to_section_type,
         SectionType,
     )
@@ -202,7 +202,7 @@ def test_type_override_mapping():
 
 def test_format_corrector_accepts_type_overrides(tmp_path):
     """FormatCorrector should accept and store type_overrides parameter."""
-    from paper_format_corrector.infrastructure.converters.file_formatter import FormatCorrector
+    from paper_format_corrector.adapters.word.file_formatter import FormatCorrector
     config = {"format_rules": {"font": {"chinese": "宋体", "english": "Times New Roman"}}}
     overrides = {"code": "body", "unknown": "heading1"}
     corrector = FormatCorrector(None, config, type_overrides=overrides)
@@ -211,7 +211,7 @@ def test_format_corrector_accepts_type_overrides(tmp_path):
 
 def test_format_corrector_default_no_overrides():
     """FormatCorrector should default to empty type_overrides."""
-    from paper_format_corrector.infrastructure.converters.file_formatter import FormatCorrector
+    from paper_format_corrector.adapters.word.file_formatter import FormatCorrector
     config = {"format_rules": {"font": {"chinese": "宋体", "english": "Times New Roman"}}}
     corrector = FormatCorrector(None, config)
     assert corrector._type_overrides == {}

@@ -12,7 +12,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 import pytest
 from docx import Document
 
-from paper_format_corrector.infrastructure.converters.file_formatter import FormatCorrector
+from paper_format_corrector.adapters.word.file_formatter import FormatCorrector
 
 
 class TestGetScriptType:

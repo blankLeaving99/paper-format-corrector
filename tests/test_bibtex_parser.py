@@ -7,7 +7,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "src"))
 
 import pytest
 
-from paper_format_corrector.domain.document.parser.bibtex_parser import BibEntry, BibTeXParser
+from paper_format_corrector.core.document.parser.bibtex_parser import BibEntry, BibTeXParser
 
 
 SAMPLE_BIB = r"""

@@ -4,9 +4,9 @@ from unittest.mock import patch
 
 import pytest
 
-from paper_format_corrector.domain.document.ai_doc_generator import AIDocGenerator
-from paper_format_corrector.domain.document.llm_parser import LLMParser
-from paper_format_corrector.domain.document.model_discovery import (
+from paper_format_corrector.core.document.ai_doc_generator import AIDocGenerator
+from paper_format_corrector.core.document.llm_parser import LLMParser
+from paper_format_corrector.core.document.model_discovery import (
     _KNOWN_ANTHROPIC_MODELS,
     list_models,
     list_ollama_models,
@@ -27,7 +27,7 @@ class TestListOpenAIModels:
                 {"id": "gpt-4o-2024-11-20"},
             ]
         }
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp):
             result = list_openai_models("sk-test")
         assert result == ["gpt-4o", "gpt-4o-2024-11-20", "gpt-4o-mini"]
@@ -39,27 +39,27 @@ class TestListOpenAIModels:
                 {"id": "gpt-4o"},
             ]
         }
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp):
             result = list_openai_models("sk-test")
         assert result == ["gpt-4o"]
 
     def test_returns_empty_on_failure(self):
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=None):
             result = list_openai_models("sk-test")
         assert result == []
 
     def test_filters_empty_ids(self):
         mock_resp = {"data": [{"id": "gpt-4o"}, {"id": ""}, {}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp):
             result = list_openai_models("sk-test")
         assert result == ["gpt-4o"]
 
     def test_uses_custom_base_url(self):
         mock_resp = {"data": [{"id": "deepseek-chat"}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp) as mock_req:
             list_openai_models("sk-test", base_url="https://api.deepseek.com/v1")
             call_url = mock_req.call_args[0][0]
@@ -76,13 +76,13 @@ class TestListOllamaModels:
                 {"name": "llama3:8b"},
             ]
         }
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp):
             result = list_ollama_models()
         assert result == ["llama3:8b", "qwen2.5:7b"]
 
     def test_returns_empty_on_failure(self):
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=None):
             result = list_ollama_models()
         assert result == []
@@ -96,7 +96,7 @@ class TestProbeModel:
             "choices": [{"message": {"content": "ok"}}],
             "usage": {"prompt_tokens": 1, "completion_tokens": 1},
         }
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = probe_model("openai", "gpt-4o", api_key="sk-test")
         assert result["available"] is True
@@ -109,7 +109,7 @@ class TestProbeModel:
         mock_resp = {
             "error": {"message": "model not found", "type": "invalid_request_error"},
         }
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = probe_model("openai", "nonexistent", api_key="sk-test")
         assert result["available"] is False
@@ -123,7 +123,7 @@ class TestProbeModel:
 
     def test_anthropic_probe_success(self):
         mock_resp = {"content": [{"text": "ok"}], "usage": {"input_tokens": 1}}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = probe_model("anthropic", "claude-sonnet-4-20250514",
                                  api_key="sk-ant-test")
@@ -132,14 +132,14 @@ class TestProbeModel:
 
     def test_anthropic_probe_failure(self):
         mock_resp = {"error": {"message": "unknown model"}}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = probe_model("anthropic", "fake-model", api_key="sk-ant-test")
         assert result["available"] is False
 
     def test_ollama_probe_success(self):
         mock_resp = {"message": {"content": "ok"}}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = probe_model("ollama", "qwen2.5:7b")
         assert result["available"] is True
@@ -147,7 +147,7 @@ class TestProbeModel:
 
     def test_ollama_probe_failure(self):
         mock_resp = {"error": "model not found"}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = probe_model("ollama", "nonexistent")
         assert result["available"] is False
@@ -158,7 +158,7 @@ class TestProbeModel:
         assert "不支持的provider" in result["error"]
 
     def test_probe_returns_none_response(self):
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=None):
             result = probe_model("openai", "gpt-4o", api_key="sk-test")
         assert result["available"] is False
@@ -166,7 +166,7 @@ class TestProbeModel:
 
     def test_probe_latency_measured(self):
         mock_resp = {"choices": [{"message": {"content": "ok"}}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp), \
              patch("time.time", side_effect=[0.0, 0.1]):
             result = probe_model("openai", "gpt-4o", api_key="sk-test")
@@ -178,7 +178,7 @@ class TestProbeAnthropicModels:
 
     def test_probes_known_models(self):
         mock_resp = {"content": [{"text": "ok"}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp) as mock_req:
             result = probe_anthropic_models("sk-ant-test")
         assert len(result) == len(_KNOWN_ANTHROPIC_MODELS)
@@ -191,7 +191,7 @@ class TestProbeAnthropicModels:
                 return {"content": [{"text": "ok"}]}
             return None
 
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     side_effect=side_effect):
             result = probe_anthropic_models("sk-ant-test")
         assert all("sonnet" in m for m in result)
@@ -202,7 +202,7 @@ class TestLLMParserDiscovery:
 
     def test_class_method_discover_models(self):
         mock_resp = {"data": [{"id": "gpt-4o"}, {"id": "gpt-4o-mini"}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp):
             result = LLMParser.discover_models("openai", api_key="sk-test")
         assert "gpt-4o" in result
@@ -210,14 +210,14 @@ class TestLLMParserDiscovery:
 
     def test_class_method_probe_model(self):
         mock_resp = {"choices": [{"message": {"content": "ok"}}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = LLMParser.probe_model("openai", "gpt-4o", api_key="sk-test")
         assert result["available"] is True
 
     def test_class_method_probe_custom_models(self):
         mock_resp = {"choices": [{"message": {"content": "ok"}}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             results = LLMParser.probe_custom_models(
                 "openai", ["model-a", "model-b"], api_key="sk-test"
@@ -248,14 +248,14 @@ class TestAIDocGeneratorDiscovery:
 
     def test_class_method_discover_models(self):
         mock_resp = {"data": [{"id": "gpt-4o"}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp):
             result = AIDocGenerator.discover_models("openai", api_key="sk-test")
         assert "gpt-4o" in result
 
     def test_class_method_probe_model(self):
         mock_resp = {"choices": [{"message": {"content": "ok"}}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._post_request",
+        with patch("paper_format_corrector.core.document.model_discovery._post_request",
                     return_value=mock_resp):
             result = AIDocGenerator.probe_model("openai", "gpt-4o", api_key="sk-test")
         assert result["available"] is True
@@ -279,7 +279,7 @@ class TestListModelsUnified:
 
     def test_ollama_does_not_require_key(self):
         mock_resp = {"models": [{"name": "qwen2.5:7b"}]}
-        with patch("paper_format_corrector.domain.document.model_discovery._make_request",
+        with patch("paper_format_corrector.core.document.model_discovery._make_request",
                     return_value=mock_resp):
             result = list_models("ollama")
         assert result == ["qwen2.5:7b"]
