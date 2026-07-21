@@ -44,6 +44,7 @@ from .core.format_exporter import FormatExporter
 from .generators.cover_page_generator import CoverPageGenerator
 from .infra.doc_template_loader import list_doc_templates
 from .infra.template_repository import TemplateRepository
+from .parsers.requirement_parser import RequirementParser
 from .quality.diff_reporter import DiffReporter
 from .quality.quality_scorer import QualityScorer
 
@@ -301,6 +302,7 @@ class PaperFormatDesktopApp:
         self._build_correct_tab(notebook)
         self._build_workbench_tab(notebook)
         self._build_preview_tab(notebook)
+        self._build_template_tab(notebook)
         self._build_history_tab(notebook)
         self._build_cover_tab(notebook)
         self._build_ai_gen_tab(notebook)
@@ -418,10 +420,35 @@ class PaperFormatDesktopApp:
         ttk.Button(actions, text="预览矫正计划", command=self._preview_workbench_plan).pack(side=tk.LEFT, padx=5)
         ttk.Button(actions, text="查看样本学习结果", command=self._inspect_workbench_sample).pack(side=tk.LEFT, padx=5)
         ttk.Button(actions, text="保存样本为我的模板", command=self._save_workbench_template).pack(side=tk.LEFT, padx=5)
+        ttk.Button(actions, text="保存需求为模板", command=self._save_requirement_as_template).pack(side=tk.LEFT, padx=5)
         ttk.Button(actions, text="应用到全部同类元素", command=self._run_workbench).pack(side=tk.LEFT, padx=5)
 
         ttk.Entry(actions, textvariable=self.wb_template_name, width=22).pack(side=tk.RIGHT, padx=5)
         ttk.Label(actions, text="个人模板名称:").pack(side=tk.RIGHT)
+
+        # 低置信度人工修正区
+        confidence_frame = ttk.LabelFrame(tab, text="低置信度段落（可手动修正类型）", padding=5)
+        confidence_frame.pack(fill=tk.X, padx=10, pady=2)
+        conf_row = ttk.Frame(confidence_frame)
+        conf_row.pack(fill=tk.X)
+        self.conf_listbox = tk.Listbox(conf_row, height=4, font=("Consolas", 9), selectmode=tk.SINGLE)
+        conf_scroll = ttk.Scrollbar(conf_row, orient=tk.VERTICAL, command=self.conf_listbox.yview)
+        self.conf_listbox.configure(yscrollcommand=conf_scroll.set)
+        self.conf_listbox.pack(side=tk.LEFT, fill=tk.X, expand=True)
+        conf_scroll.pack(side=tk.RIGHT, fill=tk.Y)
+        self._confidence_items = []
+
+        override_row = ttk.Frame(confidence_frame)
+        override_row.pack(fill=tk.X, pady=(3, 0))
+        ttk.Label(override_row, text="修正为:").pack(side=tk.LEFT)
+        self.override_type_var = tk.StringVar(value="body")
+        type_combo = ttk.Combobox(override_row, textvariable=self.override_type_var,
+                                   values=["body", "heading1", "heading2", "heading3", "figure_caption",
+                                           "table_caption", "reference", "abstract", "code", "formula"],
+                                   state="readonly", width=15)
+        type_combo.pack(side=tk.LEFT, padx=5)
+        ttk.Button(override_row, text="应用修正", command=self._apply_type_override).pack(side=tk.LEFT, padx=5)
+        ttk.Button(override_row, text="刷新低置信度列表", command=self._refresh_confidence_list).pack(side=tk.RIGHT, padx=5)
 
         self.workbench_text = scrolledtext.ScrolledText(tab, height=16, font=("Consolas", 10))
         self.workbench_text.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
@@ -453,6 +480,28 @@ class PaperFormatDesktopApp:
         except Exception as exc:
             self._write_workbench(f"保存模板失败：{exc}")
 
+    def _save_requirement_as_template(self):
+        """Parse a requirement doc and save the result as a reusable template."""
+        req_path = self.requirement_path.get().strip()
+        if not req_path:
+            messagebox.showwarning("提示", "请先在论文矫正页面选择格式要求文档")
+            return
+        tpl_name = self.wb_template_name.get().strip()
+        if not tpl_name:
+            tpl_name = Path(req_path).stem
+        try:
+            import json
+            parser = RequirementParser()
+            req_config = parser.parse(req_path)
+            record = TemplateRepository().save_personal_template(
+                tpl_name, "导入模板", req_config, f"从需求文档 {Path(req_path).name} 导入",
+            )
+            self.wb_template_box.configure(values=self._workbench_template_choices())
+            self.wb_template_choice.set(f"{record.slug} | [{record.category}] {record.name}")
+            self._write_workbench(f"已从需求文档生成并保存模板：{record.name}\n\n规则预览：\n" + json.dumps(req_config, ensure_ascii=False, indent=2, default=str))
+        except Exception as exc:
+            self._write_workbench(f"保存需求模板失败：{exc}")
+
     def _scan_workbench(self):
         path = self.wb_paper_path.get().strip()
         if not path:
@@ -460,9 +509,49 @@ class PaperFormatDesktopApp:
             return
         try:
             import json
-            self._write_workbench(json.dumps(scan_document(path), ensure_ascii=False, indent=2, default=str))
+            result = scan_document(path)
+            self._write_workbench(json.dumps(result, ensure_ascii=False, indent=2, default=str))
+            # Populate low-confidence items
+            self._scan_confidence_result = result
+            self._refresh_confidence_list()
         except Exception as exc:
             self._write_workbench(f"扫描失败：{exc}")
+
+    def _refresh_confidence_list(self):
+        """Refresh the low-confidence paragraph list from scan results."""
+        result = getattr(self, "_scan_confidence_result", None)
+        self.conf_listbox.delete(0, tk.END)
+        self._confidence_items = []
+        if not result:
+            return
+        for item in result.get("confidence", []):
+            if item.get("confidence") == "low":
+                text = f"[{item['element']}] {item.get('reason', '')} (样例: {', '.join(item.get('samples', [])[:2])})"
+                self.conf_listbox.insert(tk.END, text)
+                self._confidence_items.append(item)
+
+    def _apply_type_override(self):
+        """Apply manual type override for a low-confidence paragraph."""
+        selection = self.conf_listbox.curselection()
+        if not selection:
+            messagebox.showinfo("提示", "请先选择一个低置信度段落")
+            return
+        idx = selection[0]
+        if idx >= len(self._confidence_items):
+            return
+        item = self._confidence_items[idx]
+        new_type = self.override_type_var.get()
+        old_type = item.get("element", "")
+        # Store the override
+        if not hasattr(self, "_type_overrides"):
+            self._type_overrides = {}
+        self._type_overrides[item.get("element", "")] = new_type
+        # Update the listbox display
+        self.conf_listbox.delete(idx)
+        self.conf_listbox.insert(idx, f"[{old_type} → {new_type}] {item.get('reason', '')} (已修正)")
+        self.conf_listbox.itemconfig(idx, fg="green")
+        self._write_workbench(f"已将 '{old_type}' 修正为 '{new_type}'\n\n当前修正规则:\n" +
+                              "\n".join(f"  {k} → {v}" for k, v in self._type_overrides.items()))
 
     def _preview_workbench_plan(self):
         """预览矫正计划（dry-run）"""
@@ -545,7 +634,7 @@ class PaperFormatDesktopApp:
                     self.wb_heading1_size.get(), self.wb_heading2_size.get(), self.wb_heading3_size.get(), self.wb_heading_font.get(),
                     self.wb_table_style.get(), self.wb_table_size.get(), self.wb_image_width.get(),
                 ))
-                c.corrector = FormatCorrector(c.template_path, c.config)
+                c.corrector = FormatCorrector(c.template_path, c.config, type_overrides=getattr(self, '_type_overrides', None))
                 output_dir = Path("output")
                 output_dir.mkdir(exist_ok=True)
                 output = output_dir / f"workbench_{Path(paper).name}"
@@ -646,6 +735,645 @@ class PaperFormatDesktopApp:
             os.startfile(str(self._last_diff_path))
         else:
             messagebox.showinfo("提示", "无对比报告（矫正时勾选'生成对比报告'）")
+
+    # ── Tab: 模板库管理 ──────────────────────────────────────
+
+    def _build_template_tab(self, notebook):
+        tab = ttk.Frame(notebook)
+        notebook.add(tab, text="📚 模板管理")
+
+        # 主分栏：左侧列表 + 右侧详情
+        main_paned = ttk.PanedWindow(tab, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        # ── 左侧面板：筛选 + 搜索 + 列表 ──
+        left_panel = ttk.Frame(main_paned)
+        main_paned.add(left_panel, weight=2)
+
+        # 筛选区
+        filter_frame = ttk.LabelFrame(left_panel, text="筛选", padding=5)
+        filter_frame.pack(fill=tk.X, padx=5, pady=(5, 2))
+
+        # 分类筛选
+        filter_row1 = ttk.Frame(filter_frame)
+        filter_row1.pack(fill=tk.X, pady=1)
+        ttk.Label(filter_row1, text="分类:", width=6).pack(side=tk.LEFT)
+        self.tm_category_var = tk.StringVar(value="全部")
+        self.tm_category_combo = ttk.Combobox(filter_row1, textvariable=self.tm_category_var,
+                                               values=["全部", "高校毕业论文", "国际期刊与会议", "引用与写作规范", "个人", "导入模板"],
+                                               state="readonly", width=14)
+        self.tm_category_combo.pack(side=tk.LEFT, padx=2)
+        self.tm_category_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_template_list())
+
+        # 来源筛选
+        ttk.Label(filter_row1, text="来源:", width=6).pack(side=tk.LEFT, padx=(10, 0))
+        self.tm_source_var = tk.StringVar(value="全部")
+        self.tm_source_combo = ttk.Combobox(filter_row1, textvariable=self.tm_source_var,
+                                             values=["全部", "bundled", "personal", "imported"],
+                                             state="readonly", width=10)
+        self.tm_source_combo.pack(side=tk.LEFT, padx=2)
+        self.tm_source_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_template_list())
+
+        # 可信度筛选
+        filter_row2 = ttk.Frame(filter_frame)
+        filter_row2.pack(fill=tk.X, pady=1)
+        ttk.Label(filter_row2, text="可信度:", width=6).pack(side=tk.LEFT)
+        self.tm_trust_var = tk.StringVar(value="全部")
+        self.tm_trust_combo = ttk.Combobox(filter_row2, textvariable=self.tm_trust_var,
+                                            values=["全部", "官方", "内置", "导入", "个人", "未验证"],
+                                            state="readonly", width=10)
+        self.tm_trust_combo.pack(side=tk.LEFT, padx=2)
+        self.tm_trust_combo.bind("<<ComboboxSelected>>", lambda e: self._refresh_template_list())
+
+        ttk.Button(filter_row2, text="刷新", command=self._refresh_template_list).pack(side=tk.RIGHT)
+
+        # 搜索区
+        search_frame = ttk.Frame(left_panel)
+        search_frame.pack(fill=tk.X, padx=5, pady=2)
+        self.tm_search_var = tk.StringVar()
+        self.tm_search_var.trace_add("write", lambda *args: self._on_search_change())
+        search_entry = ttk.Entry(search_frame, textvariable=self.tm_search_var)
+        search_entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+        ttk.Button(search_frame, text="搜索", command=self._search_templates).pack(side=tk.RIGHT)
+
+        # 模板列表 (Treeview)
+        list_frame = ttk.Frame(left_panel)
+        list_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=(2, 0))
+
+        self.tm_tree = ttk.Treeview(list_frame, columns=("name", "category", "source", "version", "updated"),
+                                     show="headings", height=15, selectmode="browse")
+        self.tm_tree.heading("name", text="名称")
+        self.tm_tree.heading("category", text="分类")
+        self.tm_tree.heading("source", text="来源")
+        self.tm_tree.heading("version", text="版本")
+        self.tm_tree.heading("updated", text="更新时间")
+
+        self.tm_tree.column("name", width=150, minwidth=100)
+        self.tm_tree.column("category", width=100, minwidth=80)
+        self.tm_tree.column("source", width=70, minwidth=60)
+        self.tm_tree.column("version", width=50, minwidth=40, anchor="center")
+        self.tm_tree.column("updated", width=120, minwidth=80)
+
+        tree_scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.tm_tree.yview)
+        self.tm_tree.configure(yscrollcommand=tree_scrollbar.set)
+        self.tm_tree.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        tree_scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        self.tm_tree.bind("<<TreeviewSelect>>", self._on_tree_select)
+        self.tm_tree.bind("<Double-1>", self._on_tree_double_click)
+
+        # 状态栏
+        self.tm_status_var = tk.StringVar(value="就绪")
+        ttk.Label(left_panel, textvariable=self.tm_status_var, foreground="gray", anchor=tk.W).pack(fill=tk.X, padx=5)
+
+        # ── 右侧面板：详情 + 操作 ──
+        right_panel = ttk.Frame(main_paned)
+        main_paned.add(right_panel, weight=3)
+
+        # 详情区
+        detail_frame = ttk.LabelFrame(right_panel, text="模板详情", padding=5)
+        detail_frame.pack(fill=tk.BOTH, expand=True, padx=5, pady=5)
+
+        self.tm_detail_text = scrolledtext.ScrolledText(detail_frame, font=("Consolas", 10), wrap=tk.WORD)
+        self.tm_detail_text.pack(fill=tk.BOTH, expand=True)
+
+        # 操作按钮区
+        op_frame = ttk.LabelFrame(right_panel, text="操作", padding=5)
+        op_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
+
+        # 第一行：CRUD 操作
+        op_row1 = ttk.Frame(op_frame)
+        op_row1.pack(fill=tk.X, pady=2)
+        ttk.Button(op_row1, text="新建模板", command=self._create_template).pack(side=tk.LEFT, padx=3)
+        ttk.Button(op_row1, text="编辑模板", command=self._edit_template).pack(side=tk.LEFT, padx=3)
+        ttk.Button(op_row1, text="复制模板", command=self._copy_template).pack(side=tk.LEFT, padx=3)
+        ttk.Button(op_row1, text="验证规则", command=self._validate_template).pack(side=tk.LEFT, padx=3)
+
+        # 第二行：导入导出 + 删除
+        op_row2 = ttk.Frame(op_frame)
+        op_row2.pack(fill=tk.X, pady=2)
+        ttk.Button(op_row2, text="导出 YAML", command=lambda: self._export_template("yaml")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(op_row2, text="导出 JSON", command=lambda: self._export_template("json")).pack(side=tk.LEFT, padx=3)
+        ttk.Button(op_row2, text="导入模板", command=self._import_template_dialog).pack(side=tk.LEFT, padx=3)
+        ttk.Button(op_row2, text="删除", command=self._delete_template).pack(side=tk.RIGHT, padx=3)
+
+        # ── 最近使用区 ──
+        usage_frame = ttk.LabelFrame(right_panel, text="最近使用", padding=5)
+        usage_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
+
+        self.tm_usage_tree = ttk.Treeview(usage_frame, columns=("name", "time"), show="headings", height=4)
+        self.tm_usage_tree.heading("name", text="模板名称")
+        self.tm_usage_tree.heading("time", text="使用时间")
+        self.tm_usage_tree.column("name", width=200)
+        self.tm_usage_tree.column("time", width=150)
+        self.tm_usage_tree.bind("<Double-1>", self._on_usage_double_click)
+        self.tm_usage_tree.pack(fill=tk.X)
+        self._usage_slugs = []
+
+        # 初始加载
+        self._refresh_template_list()
+        self._refresh_usage_history()
+
+    def _get_tm_repo(self):
+        from .infra.template_repository import TemplateRepository
+        return TemplateRepository()
+
+    def _refresh_template_list(self):
+        """刷新模板列表"""
+        repo = self._get_tm_repo()
+        category = self.tm_category_var.get()
+        source = self.tm_source_var.get()
+        trust = self.tm_trust_var.get()
+
+        # 构建筛选条件
+        cat = category if category and category != "全部" else None
+        src = source if source and source != "全部" else None
+
+        templates = repo.list_templates(category=cat, source=src)
+
+        # 应用可信度筛选
+        trust_map = {
+            "官方": lambda t: t.source == "bundled" and t.organization,
+            "内置": lambda t: t.source == "bundled",
+            "导入": lambda t: t.source == "imported",
+            "个人": lambda t: t.source == "personal",
+            "未验证": lambda t: not t.is_active,
+        }
+        if trust and trust != "全部" and trust in trust_map:
+            templates = [t for t in templates if trust_map[trust](t)]
+
+        # 清空并填充 Treeview
+        for item in self.tm_tree.get_children():
+            self.tm_tree.delete(item)
+
+        self._tm_slugs = []
+        source_labels = {"bundled": "内置", "personal": "个人", "imported": "导入"}
+        for t in templates:
+            source_label = source_labels.get(t.source, t.source)
+            updated = t.updated_at[:10] if t.updated_at else ""
+            self.tm_tree.insert("", tk.END, values=(t.name, t.category, source_label, t.version, updated))
+            self._tm_slugs.append(t.slug)
+
+        self.tm_status_var.set(f"共 {len(templates)} 个模板")
+
+    def _on_search_change(self):
+        """搜索框实时过滤"""
+        keyword = self.tm_search_var.get().strip()
+        if not keyword:
+            self._refresh_template_list()
+            return
+        self._do_search(keyword)
+
+    def _search_templates(self):
+        """搜索模板"""
+        keyword = self.tm_search_var.get().strip()
+        if not keyword:
+            self._refresh_template_list()
+            return
+        self._do_search(keyword)
+
+    def _do_search(self, keyword):
+        repo = self._get_tm_repo()
+        templates = repo.search_templates(keyword)
+        for item in self.tm_tree.get_children():
+            self.tm_tree.delete(item)
+        self._tm_slugs = []
+        source_labels = {"bundled": "内置", "personal": "个人", "imported": "导入"}
+        for t in templates:
+            source_label = source_labels.get(t.source, t.source)
+            updated = t.updated_at[:10] if t.updated_at else ""
+            self.tm_tree.insert("", tk.END, values=(t.name, t.category, source_label, t.version, updated))
+            self._tm_slugs.append(t.slug)
+        self.tm_status_var.set(f"搜索 '{keyword}'：找到 {len(templates)} 个模板")
+
+    def _on_tree_select(self, event):
+        """选中模板时显示详情"""
+        selection = self.tm_tree.selection()
+        if not selection:
+            return
+        idx = self.tm_tree.index(selection[0])
+        if idx >= len(self._tm_slugs):
+            return
+        slug = self._tm_slugs[idx]
+        self._show_template_detail(slug)
+
+    def _on_tree_double_click(self, event):
+        """双击模板记录使用"""
+        selection = self.tm_tree.selection()
+        if not selection:
+            return
+        idx = self.tm_tree.index(selection[0])
+        if idx >= len(self._tm_slugs):
+            return
+        slug = self._tm_slugs[idx]
+        repo = self._get_tm_repo()
+        repo.record_usage(slug)
+        self._refresh_usage_history()
+        record = repo.get(slug)
+        if record:
+            messagebox.showinfo("已选择", f"已选择模板: {record.name}")
+
+    def _show_template_detail(self, slug):
+        """显示模板详情"""
+        repo = self._get_tm_repo()
+        record = repo.get(slug)
+        if record is None:
+            return
+
+        tags_str = ", ".join(record.tags) if record.tags else "无"
+        verified = "已验证" if record.source == "bundled" else "未验证"
+
+        # 获取规则摘要
+        config = record.config
+        format_rules = config.get("format_rules", {})
+        body_font = format_rules.get("font", {}).get("chinese", "") or format_rules.get("font", {}).get("english", "")
+        body_size = format_rules.get("body_text", {}).get("font_size", "")
+        line_spacing = format_rules.get("body_text", {}).get("line_spacing", "")
+        margins = format_rules.get("page_setup", {})
+        margin_info = ""
+        if margins:
+            margin_parts = []
+            if margins.get("top"):
+                margin_parts.append(f"上:{margins['top']}")
+            if margins.get("bottom"):
+                margin_parts.append(f"下:{margins['bottom']}")
+            if margins.get("left"):
+                margin_parts.append(f"左:{margins['left']}")
+            if margins.get("right"):
+                margin_parts.append(f"右:{margins['right']}")
+            margin_info = " | ".join(margin_parts)
+
+        # 版本历史
+        versions = repo.get_versions(record.slug)
+        version_lines = "\n".join([f"  v{v['version']} ({v['created_at'][:10] if v['created_at'] else ''}): {v.get('changelog', '')}" for v in versions[:5]])
+
+        # JSON 预览
+        import json
+        json_preview = json.dumps(config, ensure_ascii=False, indent=2, default=str)
+
+        self.tm_detail_text.config(state=tk.NORMAL)
+        self.tm_detail_text.delete("1.0", tk.END)
+        self.tm_detail_text.insert(tk.END, f"""═══ 模板信息 ═══
+
+名称: {record.name}
+分类: {record.category}
+组织: {record.organization or '未指定'}
+学科: {record.discipline or '未指定'}
+语言: {record.language}
+版本: {record.version}
+来源: {record.source}
+来源URL: {record.source_url or '无'}
+验证状态: {verified}
+标签: {tags_str}
+说明: {record.description or '无'}
+创建时间: {record.created_at[:10] if record.created_at else ''}
+更新时间: {record.updated_at[:10] if record.updated_at else ''}
+
+═══ 规则摘要 ═══
+
+正文字体: {body_font or '未指定'}
+正文字号: {body_size or '未指定'}pt
+行距: {line_spacing or '未指定'}
+页边距: {margin_info or '未指定'}
+
+═══ 版本历史 ═══
+
+{version_lines or '  无版本记录'}
+
+═══ JSON 预览 ═══
+
+{json_preview}""")
+        self.tm_detail_text.config(state=tk.DISABLED)
+        self._tm_selected_slug = slug
+
+    def _create_template(self):
+        """新建模板"""
+        self._open_template_form("新建模板")
+
+    def _edit_template(self):
+        """编辑模板"""
+        slug = getattr(self, "_tm_selected_slug", None)
+        if not slug:
+            messagebox.showinfo("提示", "请先选择一个模板")
+            return
+        repo = self._get_tm_repo()
+        record = repo.get(slug)
+        if record and record.source == "bundled":
+            messagebox.showwarning("提示", "内置模板不能直接编辑，请先复制为个人模板")
+            return
+        self._open_template_form("编辑模板", slug)
+
+    def _open_template_form(self, title, slug=None):
+        """打开模板创建/编辑表单"""
+        form = tk.Toplevel(self.root)
+        form.title(title)
+        form.geometry("500x600")
+        form.transient(self.root)
+        form.grab_set()
+
+        # 表单字段
+        fields = [
+            ("名称:", "name"),
+            ("分类:", "category"),
+            ("组织:", "organization"),
+            ("学科:", "discipline"),
+            ("语言:", "language"),
+            ("标签 (逗号分隔):", "tags"),
+        ]
+
+        vars_dict = {}
+        row_frame = ttk.Frame(form, padding=10)
+        row_frame.pack(fill=tk.X)
+
+        for label, key in fields:
+            f = ttk.Frame(row_frame)
+            f.pack(fill=tk.X, pady=2)
+            ttk.Label(f, text=label, width=16).pack(side=tk.LEFT)
+            var = tk.StringVar()
+            vars_dict[key] = var
+            if key == "category":
+                ttk.Combobox(f, textvariable=var, values=["高校毕业论文", "国际期刊与会议", "引用与写作规范", "个人", "导入模板"],
+                             state="readonly", width=30).pack(side=tk.LEFT, fill=tk.X, expand=True)
+            elif key == "language":
+                ttk.Combobox(f, textvariable=var, values=["中文", "英文", "日文", "韩文"],
+                             state="readonly", width=30).pack(side=tk.LEFT, fill=tk.X, expand=True)
+            else:
+                ttk.Entry(f, textvariable=var, width=30).pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        # JSON 规则输入
+        json_frame = ttk.LabelFrame(form, text="JSON 规则 (可选)", padding=5)
+        json_frame.pack(fill=tk.BOTH, expand=True, padx=10, pady=5)
+        json_text = scrolledtext.ScrolledText(json_frame, font=("Consolas", 9), height=10)
+        json_text.pack(fill=tk.BOTH, expand=True)
+
+        # 如果是编辑模式，预填数据
+        if slug:
+            repo = self._get_tm_repo()
+            record = repo.get(slug)
+            if record:
+                vars_dict["name"].set(record.name)
+                vars_dict["category"].set(record.category)
+                vars_dict["organization"].set(record.organization)
+                vars_dict["discipline"].set(record.discipline)
+                vars_dict["language"].set(record.language)
+                vars_dict["tags"].set(", ".join(record.tags))
+                import json
+                json_text.insert("1.0", json.dumps(record.config, ensure_ascii=False, indent=2))
+
+        # 按钮
+        btn_frame = ttk.Frame(form, padding=10)
+        btn_frame.pack(fill=tk.X)
+
+        def save():
+            try:
+                import json
+                name = vars_dict["name"].get().strip()
+                if not name:
+                    messagebox.showwarning("提示", "名称不能为空")
+                    return
+                category = vars_dict["category"].get().strip() or "个人"
+                organization = vars_dict["organization"].get().strip()
+                discipline = vars_dict["discipline"].get().strip()
+                language = vars_dict["language"].get().strip() or "中文"
+                tags_str = vars_dict["tags"].get().strip()
+                tags = [t.strip() for t in tags_str.split(",") if t.strip()] if tags_str else []
+
+                config_str = json_text.get("1.0", tk.END).strip()
+                config = json.loads(config_str) if config_str else {}
+
+                repo = self._get_tm_repo()
+                if slug:
+                    repo.update_template(slug, {
+                        "name": name, "category": category, "organization": organization,
+                        "discipline": discipline, "language": language, "config": config, "tags": tags,
+                    })
+                    messagebox.showinfo("成功", f"模板已更新: {name}")
+                else:
+                    repo.save_personal_template(name, category, config, tags=tags,
+                                               organization=organization, discipline=discipline, language=language)
+                    messagebox.showinfo("成功", f"模板已创建: {name}")
+
+                self._refresh_template_list()
+                form.destroy()
+            except json.JSONDecodeError as e:
+                messagebox.showerror("错误", f"JSON 格式错误: {e}")
+            except Exception as e:
+                messagebox.showerror("错误", str(e))
+
+        ttk.Button(btn_frame, text="保存", command=save).pack(side=tk.LEFT, padx=5)
+        ttk.Button(btn_frame, text="取消", command=form.destroy).pack(side=tk.LEFT, padx=5)
+
+    def _copy_template(self):
+        """复制模板"""
+        slug = getattr(self, "_tm_selected_slug", None)
+        if not slug:
+            messagebox.showinfo("提示", "请先选择一个模板")
+            return
+        repo = self._get_tm_repo()
+        record = repo.get(slug)
+        if record is None:
+            return
+
+        # 弹出输入框获取新名称
+        dialog = tk.Toplevel(self.root)
+        dialog.title("复制模板")
+        dialog.geometry("400x150")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="新模板名称:", padding=10).pack()
+        name_var = tk.StringVar(value=f"{record.name} (副本)")
+        ttk.Entry(dialog, textvariable=name_var, width=40).pack(padx=10)
+
+        def do_copy():
+            new_name = name_var.get().strip()
+            if not new_name:
+                messagebox.showwarning("提示", "请输入名称")
+                return
+            try:
+                new_record = repo.copy_template(slug, new_name)
+                if new_record:
+                    messagebox.showinfo("成功", f"已复制为: {new_record.name}")
+                    self._refresh_template_list()
+                    dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("错误", str(e))
+
+        ttk.Button(dialog, text="确定", command=do_copy).pack(pady=10)
+
+    def _validate_template(self):
+        slug = getattr(self, "_tm_selected_slug", None)
+        if not slug:
+            messagebox.showinfo("提示", "请先选择一个模板")
+            return
+        repo = self._get_tm_repo()
+        stored = repo.get(slug)
+        if stored is None:
+            messagebox.showwarning("提示", "模板不存在")
+            return
+        from .application.services.template_validation import TemplateValidationService
+        validator = TemplateValidationService()
+        report = validator.validate(slug, stored.config)
+        lines = [
+            f"═══ 模板验证报告: {slug} ═══",
+            f"评分: {report.score:.0f}/100  {'✓ 合格' if report.is_valid else '✗ 存在错误'}\n",
+        ]
+        for issue in report.issues:
+            icon = {"error": "✗", "warning": "⚠", "info": "ℹ"}.get(issue.severity, "?")
+            lines.append(f"  [{icon}] {issue.field}: {issue.message}")
+        if not report.issues:
+            lines.append("  (无问题)")
+        self.tm_detail_text.config(state=tk.NORMAL)
+        self.tm_detail_text.delete(1.0, tk.END)
+        self.tm_detail_text.insert(tk.END, "\n".join(lines))
+        self.tm_detail_text.config(state=tk.DISABLED)
+        self._tm_selected_slug = slug
+        self.tm_status_var.set(f"验证完成: 评分 {report.score:.0f}/100")
+
+    def _export_template(self, fmt):
+        slug = getattr(self, "_tm_selected_slug", None)
+        if not slug:
+            messagebox.showinfo("提示", "请先选择一个模板")
+            return
+        ext = ".yaml" if fmt == "yaml" else ".json"
+        filetypes = [("YAML 文件", "*.yaml")] if fmt == "yaml" else [("JSON 文件", "*.json")]
+        path = filedialog.asksaveasfilename(defaultextension=ext, filetypes=filetypes,
+                                            initialfile=f"template_{slug}{ext}")
+        if not path:
+            return
+        repo = self._get_tm_repo()
+        try:
+            if fmt == "yaml":
+                repo.export_to_yaml(slug, path)
+            else:
+                repo.export_to_json(slug, path)
+            self.tm_status_var.set(f"导出成功: {Path(path).name}")
+        except Exception as exc:
+            messagebox.showerror("导出失败", str(exc))
+
+    def _import_template_dialog(self):
+        """导入模板对话框"""
+        dialog = tk.Toplevel(self.root)
+        dialog.title("导入模板")
+        dialog.geometry("500x200")
+        dialog.transient(self.root)
+        dialog.grab_set()
+
+        ttk.Label(dialog, text="模板名称:", padding=(10, 5)).pack(anchor=tk.W)
+        name_var = tk.StringVar()
+        ttk.Entry(dialog, textvariable=name_var, width=50).pack(padx=10, fill=tk.X)
+
+        ttk.Label(dialog, text="分类:", padding=(10, 5)).pack(anchor=tk.W)
+        cat_var = tk.StringVar(value="导入模板")
+        ttk.Combobox(dialog, textvariable=cat_var,
+                     values=["导入模板", "高校毕业论文", "国际期刊与会议", "引用与写作规范"],
+                     state="readonly", width=47).pack(padx=10, fill=tk.X)
+
+        ttk.Label(dialog, text="文件:", padding=(10, 5)).pack(anchor=tk.W)
+        file_frame = ttk.Frame(dialog)
+        file_frame.pack(fill=tk.X, padx=10)
+        file_var = tk.StringVar()
+        ttk.Entry(file_frame, textvariable=file_var, width=40).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        ttk.Button(file_frame, text="选择", command=lambda: self._browse_import_file(file_var, dialog)).pack(side=tk.RIGHT)
+
+        def do_import():
+            path = file_var.get().strip()
+            if not path:
+                messagebox.showwarning("提示", "请选择模板文件")
+                return
+            repo = self._get_tm_repo()
+            try:
+                if path.endswith((".yaml", ".yml")):
+                    record = repo.import_from_yaml(path)
+                elif path.endswith(".json"):
+                    record = repo.import_from_json(path)
+                else:
+                    messagebox.showerror("错误", "仅支持 YAML 和 JSON 格式")
+                    return
+                updates = {}
+                if name_var.get().strip():
+                    updates["name"] = name_var.get().strip()
+                if cat_var.get().strip():
+                    updates["category"] = cat_var.get().strip()
+                if updates:
+                    repo.update_template(record.slug, updates)
+                messagebox.showinfo("成功", f"导入成功: {record.name}")
+                self._refresh_template_list()
+                dialog.destroy()
+            except Exception as e:
+                messagebox.showerror("导入失败", str(e))
+
+        ttk.Button(dialog, text="导入", command=do_import).pack(pady=10)
+
+    def _browse_import_file(self, var, parent):
+        """浏览导入文件"""
+        path = filedialog.askopenfilename(parent=parent,
+                                          filetypes=[("模板文件", "*.yaml *.yml *.json"), ("所有文件", "*.*")])
+        if path:
+            var.set(path)
+
+    def _delete_template(self):
+        slug = getattr(self, "_tm_selected_slug", None)
+        if not slug:
+            messagebox.showinfo("提示", "请先选择一个模板")
+            return
+        repo = self._get_tm_repo()
+        record = repo.get(slug)
+        if record and record.source == "bundled":
+            messagebox.showwarning("提示", "内置模板只能禁用，不能删除")
+            if messagebox.askyesno("确认", "是否禁用此内置模板？"):
+                repo.delete_template(slug)
+                self._refresh_template_list()
+            return
+        if not messagebox.askyesno("确认删除", f"确定删除模板 {record.name if record else slug}？"):
+            return
+        success = repo.delete_template(slug)
+        if success:
+            self.tm_status_var.set("模板已删除")
+            self._refresh_template_list()
+            self.tm_detail_text.config(state=tk.NORMAL)
+            self.tm_detail_text.delete(1.0, tk.END)
+            self.tm_detail_text.config(state=tk.DISABLED)
+        else:
+            messagebox.showerror("删除失败", f"模板不存在: {slug}")
+
+    def _refresh_usage_history(self):
+        """刷新最近使用记录"""
+        for item in self.tm_usage_tree.get_children():
+            self.tm_usage_tree.delete(item)
+        self._usage_slugs = []
+        try:
+            repo = self._get_tm_repo()
+            with repo._connect() as conn:
+                rows = conn.execute(
+                    """SELECT ul.slug, ul.used_at, pt.name
+                       FROM template_usage_logs ul
+                       LEFT JOIN paper_templates pt ON ul.slug = pt.slug
+                       ORDER BY ul.used_at DESC LIMIT 10"""
+                ).fetchall()
+            for row in rows:
+                name = row["name"] or row["slug"]
+                used_at = row["used_at"][:19] if row["used_at"] else ""
+                self.tm_usage_tree.insert("", tk.END, values=(name, used_at))
+                self._usage_slugs.append(row["slug"])
+        except Exception:
+            pass
+
+    def _on_usage_double_click(self, event):
+        """双击使用记录选择模板"""
+        selection = self.tm_usage_tree.selection()
+        if not selection:
+            return
+        idx = self.tm_usage_tree.index(selection[0])
+        if idx < len(self._usage_slugs):
+            slug = self._usage_slugs[idx]
+            self._show_template_detail(slug)
+            # 在列表中高亮对应项
+            if slug in self._tm_slugs:
+                tree_idx = self._tm_slugs.index(slug)
+                children = self.tm_tree.get_children()
+                if tree_idx < len(children):
+                    self.tm_tree.selection_set(children[tree_idx])
+                    self.tm_tree.see(children[tree_idx])
 
     # ── Tab 4: 报告中心 ──────────────────────────────────────
 
@@ -976,6 +1704,11 @@ class PaperFormatDesktopApp:
 - 配置样式后点击"应用到全部同类元素"执行矫正
 - 可从模板库选择已有模板，或将样本保存为个人模板
 
+【模板库管理】
+- 浏览、搜索、查看详情、导出、删除模板
+- 支持按分类筛选（高校毕业论文、国际期刊等）
+- 支持导入 YAML/JSON 格式模板文件
+
 【报告中心】
 - 查看历史处理记录，包含质量评分和耗时
 - 点击"查看详情"查看完整的矫正报告
@@ -1040,7 +1773,7 @@ class PaperFormatDesktopApp:
         threading.Thread(target=do_work, daemon=True).start()
 
     def _run_batch_correct(self):
-        """批量矫正 - 选择多个文件"""
+        """批量矫正 - 选择多个文件，生成ZIP压缩包"""
         filetypes = [
             ("所有支持格式", "*.docx *.doc *.odt *.rtf *.pdf *.txt *.md"),
             ("Word文档", "*.docx *.doc"), ("PDF文件", "*.pdf"),
@@ -1050,26 +1783,58 @@ class PaperFormatDesktopApp:
         if not files:
             return
 
+        # 选择保存ZIP的位置
+        zip_path = filedialog.asksaveasfilename(
+            title="保存批量处理结果",
+            defaultextension=".zip",
+            filetypes=[("ZIP压缩包", "*.zip")],
+            initialfile="batch_results.zip"
+        )
+        if not zip_path:
+            return
+
         self.result_text.delete(1.0, tk.END)
         self.result_text.insert(tk.END, f"已选择 {len(files)} 个文件，开始批量处理...\n\n")
         self._set_buttons_state("disabled")
         self.root.update()
 
         def do_work():
-            results = []
-            for i, paper in enumerate(files, 1):
-                self.root.after(0, lambda p=paper, idx=i: self._show_result(
-                    f"[{idx}/{len(files)}] 正在处理: {Path(p).name}...\n"))
-                try:
-                    result = self._process_single(paper)
-                    results.append(f"[{i}/{len(files)}] {Path(paper).name}\n{result}\n")
-                except Exception:
-                    logging.getLogger(__name__).exception("批量处理失败")
-                    results.append(f"[{i}/{len(files)}] {Path(paper).name} - 处理失败，请检查文件格式\n")
+            try:
+                from .application.services.batch_service import BatchCorrectionService
+                import tempfile
 
-            final = "\n" + "=" * 60 + "\n批量处理完成\n" + "=" * 60 + "\n\n" + "\n".join(results)
-            self.root.after(0, lambda: self._show_result(final))
-            self.root.after(0, lambda: self._set_buttons_state("normal"))
+                cfg = self.config_path.get().strip() or CONFIG_PATH
+                c = PaperFormatCorrector(cfg)
+                tpl = self.template_path_var.get().strip()
+                if tpl:
+                    from .infra.path_security import validate_input_path
+                    tpl = str(validate_input_path(tpl, {".docx"}))
+                    c.template_path = tpl
+
+                service = BatchCorrectionService(c.config)
+                output_dir = Path(tempfile.mkdtemp())
+
+                summary = service.process_files(
+                    files, output_dir, score=True,
+                    progress_callback=lambda cur, total, name: self.root.after(
+                        0, lambda n=name, c=cur, t=total: self._show_result(
+                            f"[{c}/{t}] 正在处理: {n}...\n"))
+                )
+
+                # 创建ZIP压缩包
+                summary.create_zip(zip_path)
+
+                # 显示结果
+                report = summary.generate_report(fmt="text")
+                final = report + f"\n\n结果已保存到: {zip_path}"
+                self.root.after(0, lambda: self._show_result(final))
+                self.root.after(0, lambda: messagebox.showinfo("完成", f"批量处理完成！\n\nZIP文件已保存到:\n{zip_path}"))
+
+            except Exception as exc:
+                logging.getLogger(__name__).exception("批量处理失败")
+                self.root.after(0, lambda e=exc: self._show_result(f"批量处理失败: {e}"))
+            finally:
+                self.root.after(0, lambda: self._set_buttons_state("normal"))
 
         threading.Thread(target=do_work, daemon=True).start()
 

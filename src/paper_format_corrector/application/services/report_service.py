@@ -105,21 +105,34 @@ class ReportService:
 <meta charset="UTF-8">
 <title>论文格式矫正报告</title>
 <style>
-body {{ font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif; margin: 20px; color: #333; }}
-.header {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; }}
-.header h1 {{ margin: 0 0 10px 0; color: #2c3e50; }}
-.summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 10px; margin: 15px 0; }}
-.stat {{ background: white; padding: 15px; border-radius: 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); }}
+@page {{
+    size: A4;
+    margin: 2cm;
+    @top-center {{ content: "论文格式矫正报告"; font-size: 9pt; color: #888; }}
+    @bottom-center {{ content: "第 " counter(page) " 页 / 共 " counter(pages) " 页"; font-size: 9pt; color: #888; }}
+}}
+@media print {{
+    body {{ margin: 0; }}
+    .no-print {{ display: none; }}
+}}
+body {{ font-family: "SimSun", "宋体", "Noto Serif CJK SC", "Source Han Serif SC", "Times New Roman", serif; margin: 20px; color: #333; line-height: 1.6; }}
+.header {{ background: #f8f9fa; padding: 20px; border-radius: 8px; margin-bottom: 20px; border-left: 4px solid #3498db; }}
+.header h1 {{ margin: 0 0 10px 0; color: #2c3e50; font-family: "SimHei", "黑体", "Noto Sans CJK SC", "Source Han Sans SC", sans-serif; }}
+.header p {{ margin: 4px 0; font-size: 14px; color: #555; }}
+.summary {{ display: flex; flex-wrap: wrap; gap: 10px; margin: 15px 0; }}
+.stat {{ background: white; padding: 15px 20px; border-radius: 6px; text-align: center; box-shadow: 0 1px 3px rgba(0,0,0,0.1); min-width: 120px; flex: 1; }}
 .stat-value {{ font-size: 24px; font-weight: bold; color: #2c3e50; }}
 .stat-label {{ font-size: 12px; color: #666; margin-top: 5px; }}
-.section {{ margin: 20px 0; }}
-.section h2 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; }}
-table {{ width: 100%; border-collapse: collapse; margin: 10px 0; }}
+.section {{ margin: 20px 0; page-break-inside: avoid; }}
+.section h2 {{ color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 5px; font-family: "SimHei", "黑体", "Noto Sans CJK SC", sans-serif; }}
+table {{ width: 100%; border-collapse: collapse; margin: 10px 0; font-size: 13px; }}
 th, td {{ padding: 8px 12px; border: 1px solid #ddd; text-align: left; }}
 th {{ background: #f8f9fa; font-weight: 600; }}
 .warning {{ color: #e67e22; }}
 .risk {{ color: #e74c3c; }}
 .coverage {{ background: #27ae60; color: white; padding: 5px 10px; border-radius: 4px; font-weight: bold; }}
+code {{ font-family: "Consolas", "Courier New", monospace; background: #f4f4f4; padding: 2px 6px; border-radius: 3px; font-size: 13px; }}
+pre {{ background: #f8f8f8; padding: 12px; border-radius: 6px; overflow-x: auto; font-size: 13px; }}
 </style>
 </head>
 <body>
@@ -286,21 +299,115 @@ th {{ background: #f8f9fa; font-weight: 600; }}
         data: ReportData,
         output_path: str | Path,
         fmt: str = "html",
-    ) -> Path:
-        """Save report to file."""
+    ) -> dict[str, Any]:
+        """Save report to file.
+
+        Supported formats: html, md/markdown, json, pdf
+
+        PDF generation uses a fallback chain:
+          1. weasyprint (best Chinese support)
+          2. pdfkit (requires wkhtmltopdf)
+          3. xhtml2pdf (pure Python)
+          4. HTML fallback (always succeeds)
+
+        Returns:
+            dict with keys: success, path, actual_fmt, engine, message
+        """
         path = Path(output_path)
+        path.parent.mkdir(parents=True, exist_ok=True)
+
         if fmt == "html":
             content = self.generate_html(data)
-        elif fmt in ("md", "markdown"):
-            content = self.generate_markdown(data)
-        elif fmt == "json":
-            content = self.generate_json(data)
-        else:
-            raise ValueError(f"不支持的报告格式: {fmt}")
+            path.write_text(content, encoding="utf-8")
+            return {"success": True, "path": str(path), "actual_fmt": "html", "engine": "native", "message": ""}
 
-        path.parent.mkdir(parents=True, exist_ok=True)
-        path.write_text(content, encoding="utf-8")
-        return path
+        if fmt in ("md", "markdown"):
+            content = self.generate_markdown(data)
+            path.write_text(content, encoding="utf-8")
+            return {"success": True, "path": str(path), "actual_fmt": "markdown", "engine": "native", "message": ""}
+
+        if fmt == "json":
+            content = self.generate_json(data)
+            path.write_text(content, encoding="utf-8")
+            return {"success": True, "path": str(path), "actual_fmt": "json", "engine": "native", "message": ""}
+
+        if fmt == "pdf":
+            return self._save_pdf_with_fallback(data, path)
+
+        raise ValueError(f"不支持的报告格式: {fmt}")
+
+    # ------------------------------------------------------------------
+    # PDF export with multi-engine fallback
+    # ------------------------------------------------------------------
+
+    def _save_pdf_with_fallback(self, data: ReportData, path: Path) -> dict[str, Any]:
+        """Try weasyprint → pdfkit → xhtml2pdf → HTML fallback."""
+        html_content = self.generate_html(data)
+
+        # Priority 1: weasyprint
+        try:
+            from weasyprint import HTML as WeasyprintHTML  # noqa: PLC0415
+            WeasyprintHTML(string=html_content).write_pdf(str(path))
+            return {
+                "success": True,
+                "path": str(path),
+                "actual_fmt": "pdf",
+                "engine": "weasyprint",
+                "message": "",
+            }
+        except ImportError:
+            pass
+        except Exception:
+            # weasyprint installed but failed (e.g. missing system libs)
+            pass
+
+        # Priority 2: pdfkit (needs wkhtmltopdf binary)
+        try:
+            import pdfkit  # noqa: PLC0415
+            pdfkit.from_string(html_content, str(path))
+            return {
+                "success": True,
+                "path": str(path),
+                "actual_fmt": "pdf",
+                "engine": "pdfkit",
+                "message": "",
+            }
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+        # Priority 3: xhtml2pdf (pure Python)
+        try:
+            from xhtml2pdf import pisa  # noqa: PLC0415
+            with open(path, "wb") as f:
+                pisa.CreatePDF(html_content, f)
+            if path.stat().st_size > 0:
+                return {
+                    "success": True,
+                    "path": str(path),
+                    "actual_fmt": "pdf",
+                    "engine": "xhtml2pdf",
+                    "message": "",
+                }
+        except ImportError:
+            pass
+        except Exception:
+            pass
+
+        # Fallback: save as HTML
+        fallback_path = path.with_suffix(".html")
+        fallback_path.write_text(html_content, encoding="utf-8")
+        return {
+            "success": False,
+            "path": str(fallback_path),
+            "actual_fmt": "html",
+            "engine": "fallback",
+            "message": (
+                "PDF engine not installed. Saved as HTML instead. "
+                "Install PDF support: pip install weasyprint"
+            ),
+        }
 
 
 def report_from_correction(report: dict[str, Any], input_file: str = "", output_file: str = "") -> ReportData:

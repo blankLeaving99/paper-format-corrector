@@ -1,0 +1,410 @@
+# 模板索引文件
+# 供 GUI 和 CLI 索引使用，列出所有预设模板的分类信息
+
+version: "1.0"
+last_updated: "2026-07-21"
+
+categories:
+  chinese_university:
+    name: "中国高校学位论文"
+    description: "中国985/211高校学位论文格式模板，遵循各校写作规范"
+    language: "zh-CN"
+    reference_style: "GB/T 7714"
+
+  international_conference:
+    name: "国际学术会议"
+    description: "国际顶级学术会议论文格式模板"
+    language: "en-US"
+    reference_style: "ACL/NLM"
+
+  international_journal:
+    name: "国际学术期刊"
+    description: "国际知名学术期刊论文格式模板"
+    language: "en-US"
+    reference_style: "varies"
+
+  citation_style:
+    name: "引用格式"
+    description: "通用引用格式标准"
+    language: "en-US"
+
+  reference_standard:
+    name: "参考文献标准"
+    description: "各国参考文献标准规范"
+    language: "zh-CN"
+
+  publisher:
+    name: "出版商模板"
+    description: "学术出版商通用格式模板"
+    language: "en-US"
+
+  language_specific:
+    name: "特定语言模板"
+    description: "针对特定语言的论文格式模板"
+    language: "varies"
+
+  office_template:
+    name: "办公文档模板"
+    description: "通用办公文档格式模板"
+    language: "zh-CN"
+
+templates:
+  # ─── 中国高校学位论文 ───
+  - id: "tsinghua"
+    name: "清华大学"
+    name_en: "Tsinghua University"
+    file: "tsinghua.yaml"
+    category: "chinese_university"
+    source: "《清华大学研究生学位论文写作指南》"
+    year: 2024
+    verified: true
+    description: "清华大学学位论文格式模板"
+
+  - id: "peking"
+    name: "北京大学"
+    name_en: "Peking University"
+    file: "peking.yaml"
+    category: "chinese_university"
+    source: "《北京大学研究生学位论文写作指南》"
+    year: 2024
+    verified: true
+    description: "北京大学学位论文格式模板"
+
+  - id: "zhejiang"
+    name: "浙江大学"
+    name_en: "Zhejiang University"
+    file: "zhejiang.yaml"
+    category: "chinese_university"
+    source: "《浙江大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "浙江大学学位论文格式模板"
+
+  - id: "shanghaijiaotong"
+    name: "上海交通大学"
+    name_en: "Shanghai Jiao Tong University"
+    file: "shanghaijiaotong.yaml"
+    category: "chinese_university"
+    source: "《上海交通大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "上海交通大学学位论文格式模板"
+
+  - id: "fudan"
+    name: "复旦大学"
+    name_en: "Fudan University"
+    file: "fudan.yaml"
+    category: "chinese_university"
+    source: "《复旦大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "复旦大学学位论文格式模板"
+
+  - id: "nanjing"
+    name: "南京大学"
+    name_en: "Nanjing University"
+    file: "nanjing.yaml"
+    category: "chinese_university"
+    source: "《南京大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "南京大学学位论文格式模板"
+
+  - id: "ustc"
+    name: "中国科学技术大学"
+    name_en: "University of Science and Technology of China"
+    file: "ustc.yaml"
+    category: "chinese_university"
+    source: "《中国科学技术大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "中国科学技术大学学位论文格式模板"
+
+  - id: "hit"
+    name: "哈尔滨工业大学"
+    name_en: "Harbin Institute of Technology"
+    file: "hit.yaml"
+    category: "chinese_university"
+    source: "《哈尔滨工业大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "哈尔滨工业大学学位论文格式模板"
+
+  - id: "xjtu"
+    name: "西安交通大学"
+    name_en: "Xi'an Jiaotong University"
+    file: "xjtu.yaml"
+    category: "chinese_university"
+    source: "《西安交通大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "西安交通大学学位论文格式模板"
+
+  - id: "wuhan"
+    name: "武汉大学"
+    name_en: "Wuhan University"
+    file: "wuhan.yaml"
+    category: "chinese_university"
+    source: "《武汉大学研究生学位论文写作规范》"
+    year: 2024
+    verified: true
+    description: "武汉大学学位论文格式模板"
+
+  # ─── 国际学术会议 ───
+  - id: "aaai"
+    name: "AAAI"
+    full_name: "Association for the Advancement of Artificial Intelligence"
+    file: "aaai.yaml"
+    category: "international_conference"
+    source: "AAAI Press formatting guidelines"
+    year: 2024
+    verified: true
+    description: "人工智能顶级会议论文格式"
+
+  - id: "neurips"
+    name: "NeurIPS"
+    full_name: "Neural Information Processing Systems"
+    file: "neurips.yaml"
+    category: "international_conference"
+    source: "NeurIPS formatting guidelines"
+    year: 2024
+    verified: true
+    description: "神经信息处理系统会议论文格式"
+
+  - id: "icml"
+    name: "ICML"
+    full_name: "International Conference on Machine Learning"
+    file: "icml.yaml"
+    category: "international_conference"
+    source: "ICML formatting guidelines"
+    year: 2024
+    verified: true
+    description: "机器学习顶级会议论文格式"
+
+  - id: "acl"
+    name: "ACL"
+    full_name: "Association for Computational Linguistics"
+    file: "acl.yaml"
+    category: "international_conference"
+    source: "ACL formatting guidelines"
+    year: 2024
+    verified: true
+    description: "计算语言学顶会论文格式"
+
+  - id: "cvpr"
+    name: "CVPR"
+    full_name: "IEEE/CVF Conference on Computer Vision and Pattern Recognition"
+    file: "cvpr.yaml"
+    category: "international_conference"
+    source: "IEEE/CVF formatting guidelines"
+    year: 2024
+    verified: true
+    description: "计算机视觉顶级会议论文格式"
+
+  - id: "emnlp"
+    name: "EMNLP"
+    full_name: "Empirical Methods in Natural Language Processing"
+    file: "emnlp.yaml"
+    category: "international_conference"
+    source: "ACL/EMNLP formatting guidelines"
+    year: 2024
+    verified: false
+    description: "自然语言处理实证方法会议论文格式"
+
+  - id: "iclr"
+    name: "ICLR"
+    full_name: "International Conference on Learning Representations"
+    file: "iclr.yaml"
+    category: "international_conference"
+    source: "ICLR formatting guidelines"
+    year: 2024
+    verified: false
+    description: "国际学习表征会议论文格式"
+
+  - id: "kdd"
+    name: "KDD"
+    full_name: "ACM SIGKDD Conference on Knowledge Discovery and Data Mining"
+    file: "kdd.yaml"
+    category: "international_conference"
+    source: "ACM SIGKDD formatting guidelines"
+    year: 2024
+    verified: false
+    description: "知识发现与数据挖掘会议论文格式"
+
+  - id: "sigir"
+    name: "SIGIR"
+    full_name: "ACM Special Interest Group on Information Retrieval"
+    file: "sigir.yaml"
+    category: "international_conference"
+    source: "ACM SIGIR formatting guidelines"
+    year: 2024
+    verified: false
+    description: "信息检索顶级会议论文格式"
+
+  - id: "www"
+    name: "WWW"
+    full_name: "The Web Conference"
+    file: "www.yaml"
+    category: "international_conference"
+    source: "ACM WWW formatting guidelines"
+    year: 2024
+    verified: false
+    description: "万维网会议论文格式"
+
+  # ─── 国际学术期刊 ───
+  - id: "nature"
+    name: "Nature"
+    file: "nature.yaml"
+    category: "international_journal"
+    source: "Nature formatting guidelines"
+    year: 2024
+    verified: true
+    description: "Nature期刊论文格式"
+
+  - id: "science"
+    name: "Science"
+    file: "science.yaml"
+    category: "international_journal"
+    source: "AAAS Science formatting guidelines"
+    year: 2024
+    verified: true
+    description: "Science期刊论文格式"
+
+  # ─── 引用格式 ───
+  - id: "apa"
+    name: "APA"
+    full_name: "American Psychological Association"
+    file: "apa.yaml"
+    category: "citation_style"
+    source: "APA Publication Manual, 7th Edition"
+    year: 2019
+    verified: true
+    description: "APA引用格式标准"
+
+  - id: "mla"
+    name: "MLA"
+    full_name: "Modern Language Association"
+    file: "mla.yaml"
+    category: "citation_style"
+    source: "MLA Handbook, 9th Edition"
+    year: 2021
+    verified: true
+    description: "MLA引用格式标准"
+
+  - id: "chicago"
+    name: "Chicago"
+    full_name: "Chicago Manual of Style"
+    file: "chicago.yaml"
+    category: "citation_style"
+    source: "Chicago Manual of Style, 17th Edition"
+    year: 2017
+    verified: true
+    description: "Chicago引用格式标准"
+
+  - id: "harvard"
+    name: "Harvard"
+    full_name: "Harvard Referencing Style"
+    file: "harvard.yaml"
+    category: "citation_style"
+    source: "Harvard referencing guidelines"
+    year: 2024
+    verified: true
+    description: "Harvard引用格式标准"
+
+  - id: "ama"
+    name: "AMA"
+    full_name: "American Medical Association"
+    file: "ama.yaml"
+    category: "citation_style"
+    source: "AMA Manual of Style"
+    year: 2024
+    verified: true
+    description: "AMA引用格式标准"
+
+  # ─── 参考文献标准 ───
+  - id: "gb7714"
+    name: "GB/T 7714"
+    full_name: "信息与文献 参考文献著录规则"
+    file: "gb7714.yaml"
+    category: "reference_standard"
+    source: "GB/T 7714-2015 国家标准"
+    year: 2015
+    verified: true
+    description: "中国国家标准参考文献著录规则"
+
+  # ─── 出版商模板 ───
+  - id: "ieee"
+    name: "IEEE"
+    full_name: "Institute of Electrical and Electronics Engineers"
+    file: "ieee.yaml"
+    category: "publisher"
+    source: "IEEEtran LaTeX template"
+    year: 2024
+    verified: true
+    description: "IEEE期刊/会议论文格式"
+
+  - id: "acm"
+    name: "ACM"
+    full_name: "Association for Computing Machinery"
+    file: "acm.yaml"
+    category: "publisher"
+    source: "ACM formatting guidelines"
+    year: 2024
+    verified: true
+    description: "ACM期刊/会议论文格式"
+
+  - id: "springer"
+    name: "Springer"
+    file: "springer.yaml"
+    category: "publisher"
+    source: "Springer formatting guidelines"
+    year: 2024
+    verified: true
+    description: "Springer期刊论文格式"
+
+  - id: "elsevier"
+    name: "Elsevier"
+    file: "elsevier.yaml"
+    category: "publisher"
+    source: "Elsevier formatting guidelines"
+    year: 2024
+    verified: true
+    description: "Elsevier期刊论文格式"
+
+  - id: "wiley"
+    name: "Wiley"
+    file: "wiley.yaml"
+    category: "publisher"
+    source: "Wiley formatting guidelines"
+    year: 2024
+    verified: true
+    description: "Wiley期刊论文格式"
+
+  # ─── 特定语言模板 ───
+  - id: "japanese"
+    name: "日本語学位论文"
+    file: "japanese.yaml"
+    category: "language_specific"
+    source: "日本大学学位论文通用格式"
+    year: 2024
+    verified: false
+    description: "日本大学学位论文格式模板"
+
+  - id: "korean"
+    name: "한국어 학위논문"
+    file: "korean.yaml"
+    category: "language_specific"
+    source: "韩国大学学位论文通用格式"
+    year: 2024
+    verified: false
+    description: "韩国大学学位论文格式模板"
+
+  # ─── 办公文档模板 ───
+  - id: "chinese_thesis"
+    name: "中国大学毕业论文"
+    file: "chinese_thesis.yaml"
+    category: "office_template"
+    source: "GB/T 7714-2015 国家标准"
+    year: 2015
+    verified: true
+    description: "中国大学通用毕业论文格式模板"

@@ -17,7 +17,6 @@ from pathlib import Path
 from typing import Any
 
 from docx import Document
-from docx.shared import Pt
 
 
 class ParagraphType(Enum):
@@ -348,7 +347,6 @@ class DocumentAnalyzer:
         expected_font = format_rules.get("font", {})
         if expected_font:
             cn_font = expected_font.get("chinese", "")
-            en_font = expected_font.get("english", "")
             for font_name, count in analysis.fonts_used.items():
                 if cn_font and cn_font not in font_name and font_name not in cn_font:
                     diffs.append({

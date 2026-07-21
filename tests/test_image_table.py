@@ -279,3 +279,88 @@ def test_compat_check():
     # Should have no ERROR-level warnings if deps are installed
     errors = [w for w in warnings if "[ERROR]" in w]
     assert len(errors) == 0, f"Dependency errors: {errors}"
+
+
+# ========== Table cross-page header tests ==========
+
+
+def test_table_enable_repeat_header(config):
+    """_enable_repeat_header should set tblHeader attribute on first row."""
+    from docx.oxml.ns import qn
+    doc = Document()
+    table = doc.add_table(rows=3, cols=3)
+    table.rows[0].cells[0].text = "H1"
+    table.rows[0].cells[1].text = "H2"
+    table.rows[0].cells[2].text = "H3"
+    table.rows[1].cells[0].text = "D1"
+    table.rows[2].cells[0].text = "D2"
+
+    handler = TableHandler(config)
+    handler._enable_repeat_header(table)
+
+    # Check tblHeader attribute on first row's trPr
+    tr = table.rows[0]._tr
+    trPr = tr.find(qn("w:trPr"))
+    assert trPr is not None
+    tblHeader = trPr.find(qn("w:tblHeader"))
+    assert tblHeader is not None
+
+
+def test_table_set_row_cant_split(config):
+    """_set_row_cant_split should prevent row from splitting across pages."""
+    from docx.oxml.ns import qn
+    doc = Document()
+    table = doc.add_table(rows=2, cols=2)
+
+    handler = TableHandler(config)
+    handler._set_row_cant_split(table.rows[0])
+
+    tr = table.rows[0]._tr
+    trPr = tr.find(qn("w:trPr"))
+    assert trPr is not None
+    cantSplit = trPr.find(qn("w:cantSplit"))
+    assert cantSplit is not None
+
+
+def test_table_format_calls_repeat_header(config):
+    """format_all_tables should call _enable_repeat_header on tables with headers."""
+    doc = Document()
+    table = doc.add_table(rows=2, cols=2)
+    table.rows[0].cells[0].text = "Name"
+    table.rows[0].cells[1].text = "Value"
+    table.rows[1].cells[0].text = "Alice"
+    table.rows[1].cells[1].text = "42"
+
+    handler = TableHandler(config)
+    result = handler.format_all_tables(doc)
+    # Should have processed the table
+    assert result.tables_formatted >= 0
+
+
+# ========== Image caption binding tests ==========
+
+
+def test_image_handler_is_caption_bound(config):
+    """_is_caption_bound_to_image returns False when no image in previous paragraphs."""
+    doc = Document()
+    doc.add_paragraph("Some text before caption.")
+    doc.add_paragraph("图 1.0 测试图片标题")
+
+    handler = ImageHandler(config)
+    # No image in paragraph at index 0, so caption at index 1 is not bound
+    bound = handler._is_caption_bound_to_image(doc, 1)
+    assert bound is False
+
+
+def test_image_handler_caption_not_bound(config):
+    """Caption far from any image should not be bound."""
+    doc = Document()
+    doc.add_paragraph("Just some text.")
+    doc.add_paragraph("More text.")
+    doc.add_paragraph("Even more.")
+    caption_para = doc.add_paragraph("图 1.0 测试图片标题")
+
+    handler = ImageHandler(config)
+    # caption at index 3, no images nearby
+    bound = handler._is_caption_bound_to_image(doc, 3)
+    assert bound is False

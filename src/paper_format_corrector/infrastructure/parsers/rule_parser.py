@@ -18,7 +18,6 @@
 import re
 from typing import Any
 
-
 # 中文字号到 pt 的映射
 # 注意：必须先列出"小X"再列出"X号"，避免正则匹配时顺序错误
 CHINESE_SIZE_MAP: dict[str, float] = {

@@ -246,6 +246,41 @@ def scan_workbench_document(paper_file):
         return f"扫描失败：{exc}"
 
 
+# 全局存储低置信度扫描结果和用户修正
+_workbench_scan_result: dict | None = None
+_workbench_type_overrides: dict[str, str] = {}
+
+
+def refresh_override_table(paper_file):
+    """刷新低置信度段落列表，供用户手动修正类型。"""
+    global _workbench_scan_result, _workbench_type_overrides
+    if paper_file is None:
+        return [], "请先上传论文"
+    try:
+        inventory = scan_document(paper_file.name)
+        _workbench_scan_result = inventory
+        _workbench_type_overrides = {}  # 重置修正
+    except Exception as exc:
+        return [], f"扫描失败：{exc}"
+
+    confidence_items = inventory.get("confidence", [])
+    low_items = [item for item in confidence_items if item.get("confidence") == "low"]
+
+    if not low_items:
+        return [], "未发现低置信度段落，所有识别结果置信度较高"
+
+    # 构建表格数据
+    rows = []
+    for item in low_items:
+        element = item.get("element", "")
+        reason = item.get("reason", "")
+        samples = item.get("samples", [])
+        sample_text = samples[0].get("text", "")[:30] if samples else ""
+        rows.append([element, "low", f"{reason} (样例: {sample_text})", ""])
+
+    return rows, f"发现 {len(low_items)} 个低置信度段落，请在'修正为'列选择目标类型"
+
+
 def preview_correction_plan(
     paper_file, sample_file, template_choice, body_font, body_size, body_spacing,
     body_indent, heading_font, heading1_size, heading2_size, heading3_size,
@@ -308,12 +343,30 @@ def save_sample_template(sample_file, name, category):
         return f"保存模板失败：{exc}", gr.update()
 
 
+def save_requirement_as_template(requirement_file, name):
+    """Parse a requirement doc and save the result as a reusable template."""
+    if requirement_file is None:
+        return "请先上传格式要求文档（.txt/.md/.docx）", gr.update()
+    try:
+        from .parsers.requirement_parser import RequirementParser
+        parser = RequirementParser()
+        req_config = parser.parse(requirement_file.name)
+        tpl_name = name.strip() if name and name.strip() else Path(requirement_file.name).stem
+        record = _template_repository().save_personal_template(
+            tpl_name, "导入模板", req_config, f"从需求文档 {Path(requirement_file.name).name} 导入",
+        )
+        return f"已从需求文档生成并保存模板：{record.name}", gr.update(choices=workbench_template_choices())
+    except Exception as exc:
+        return f"保存需求模板失败：{exc}", gr.update()
+
+
 def process_with_workbench(  # noqa: PLR0913
     paper_file, sample_file, template_choice, body_font, body_size, body_spacing,
     body_indent, heading_font, heading1_size, heading2_size, heading3_size,
     table_style, table_font_size, image_max_width,
 ):
     """Apply a preset, an optional learned sample and explicit UI settings."""
+    global _workbench_type_overrides
     if paper_file is None:
         return None, "请上传论文文件", None
     if Path(paper_file.name).suffix.lower() != ".docx":
@@ -331,7 +384,9 @@ def process_with_workbench(  # noqa: PLR0913
             heading2_size, heading3_size, heading_font, table_style,
             table_font_size, image_max_width,
         ))
-        c.corrector = FormatCorrector(c.template_path, c.config)
+        # 使用用户手动修正的段落类型
+        type_overrides = _workbench_type_overrides if _workbench_type_overrides else None
+        c.corrector = FormatCorrector(c.template_path, c.config, type_overrides=type_overrides)
     except Exception as exc:
         return None, f"无法生成格式方案：{exc}", None
 
@@ -350,6 +405,36 @@ def process_with_workbench(  # noqa: PLR0913
     summary = source + format_report_text(report)
     summary += "\n\n覆盖与待复核项：\n" + json.dumps(coverage, ensure_ascii=False, indent=2)
     return str(output_path), summary, str(diff_path)
+
+
+def process_batch_files(files, template_choice):
+    """Process multiple files in batch with zip download and summary report."""
+    if not files:
+        return None, "请先选择要处理的文件"
+    from .application.services.batch_service import BatchCorrectionService
+    merged_config = _load_workbench_template(template_choice)
+    merged_config.update({"format_rules": config.get("format_rules", {})})
+    try:
+        c = PaperFormatCorrector(config_path)
+        c.config = c._merge_config(c.config, merged_config)
+    except Exception:
+        c = PaperFormatCorrector(config_path)
+
+    service = BatchCorrectionService(c.config)
+    input_paths = [f.name for f in files]
+    output_dir = Path(tempfile.mkdtemp())
+    _temp_dirs.append(str(output_dir))
+
+    summary = service.process_files(
+        input_paths, output_dir, score=True,
+        progress_callback=lambda cur, total, name: None,
+    )
+
+    # 创建 zip 压缩包
+    zip_path = output_dir / "batch_results.zip"
+    summary.create_zip(zip_path)
+
+    return str(zip_path), summary.generate_report(fmt="text")
 
 
 def generate_cover(title, title_en, author, college, major, student_id, advisor, date, university, paper_type, template):
@@ -921,6 +1006,8 @@ def build_ui():
                             wb_template_name = gr.Textbox(label="保存为我的模板", placeholder="例如：张同学硕士论文")
                             wb_template_category = gr.Dropdown(["高校毕业论文", "国际期刊与会议", "引用与写作规范", "个人"], value="高校毕业论文", label="模板分类")
                         save_template_btn = gr.Button("将样本文档保存到模板库")
+                        wb_req_file = gr.File(label="格式要求文档（可选，用于保存为模板）", file_types=[".txt", ".md", ".docx", ".pdf"])
+                        save_req_btn = gr.Button("将需求文档保存为模板")
                         with gr.Accordion("正文与标题", open=True):
                             wb_body_font = gr.Textbox(label="正文字体", value="宋体")
                             wb_body_size = gr.Number(label="正文字号 (pt)", value=12, precision=1)
@@ -935,6 +1022,17 @@ def build_ui():
                             wb_table_style = gr.Radio(["three_line", "full_border", "keep"], value="three_line", label="表格样式")
                             wb_table_size = gr.Number(label="表格字号 (pt)", value=10.5, precision=1)
                             wb_image_width = gr.Dropdown(["full", "90%", "80%", "70%", "50%"], value="full", label="图片最大宽度")
+                        with gr.Accordion("低置信度段落修正（可选）", open=False):
+                            gr.Markdown("扫描后若发现低置信度段落，可在此手动修正类型。")
+                            wb_override_table = gr.Dataframe(
+                                headers=["段落类型", "置信度", "原因", "修正为"],
+                                datatype=["str", "str", "str", "str"],
+                                interactive=False,
+                                label="低置信度段落",
+                                wrap=True,
+                            )
+                            wb_override_btn = gr.Button("刷新低置信度列表")
+                            wb_override_status = gr.Textbox(label="修正状态", lines=2, interactive=False)
                         wb_apply = gr.Button("应用到全部同类元素", variant="primary", size="lg")
                     with gr.Column():
                         wb_inventory = gr.Code(label="扫描结果（元素数量、样例和风险）", language="json", lines=22)
@@ -943,6 +1041,7 @@ def build_ui():
                         wb_diff = gr.File(label="差异报告（HTML）")
 
                 scan_btn.click(fn=scan_workbench_document, inputs=[wb_paper], outputs=[wb_inventory])
+                wb_override_btn.click(fn=refresh_override_table, inputs=[wb_paper], outputs=[wb_override_table, wb_override_status])
                 plan_btn.click(
                     fn=preview_correction_plan,
                     inputs=[wb_paper, wb_sample, wb_template, wb_body_font, wb_body_size, wb_body_spacing,
@@ -954,6 +1053,11 @@ def build_ui():
                 save_template_btn.click(
                     fn=save_sample_template,
                     inputs=[wb_sample, wb_template_name, wb_template_category],
+                    outputs=[wb_report, wb_template],
+                )
+                save_req_btn.click(
+                    fn=save_requirement_as_template,
+                    inputs=[wb_req_file, wb_template_name],
                     outputs=[wb_report, wb_template],
                 )
                 wb_apply.click(
@@ -1036,6 +1140,20 @@ def build_ui():
                 hist_refresh_btn.click(fn=history_list, inputs=[], outputs=[hist_list])
                 hist_detail_btn.click(fn=history_detail, inputs=[hist_id], outputs=[hist_detail])
                 hist_delete_btn.click(fn=history_delete, inputs=[hist_id], outputs=[hist_status])
+
+            # Tab: 批量处理
+            with gr.Tab("批量处理"):
+                gr.Markdown("### 批量矫正 - 选择多个文件一次性处理")
+                with gr.Row():
+                    with gr.Column(scale=1):
+                        batch_files = gr.File(label="选择多个论文文件", file_count="multiple", file_types=[".docx", ".doc", ".odt", ".rtf", ".pdf", ".txt", ".md"])
+                        batch_template = gr.Dropdown(choices=workbench_template_choices(), value="无（使用默认配置）", label="模板库")
+                        batch_btn = gr.Button("开始批量处理", variant="primary", size="lg")
+                    with gr.Column(scale=2):
+                        batch_output = gr.File(label="批量处理结果下载 (ZIP)")
+                        batch_result = gr.Textbox(label="批量处理结果", lines=20, max_lines=25)
+
+                batch_btn.click(fn=process_batch_files, inputs=[batch_files, batch_template], outputs=[batch_output, batch_result])
 
             # Tab: 封面生成
             with gr.Tab("封面生成"):

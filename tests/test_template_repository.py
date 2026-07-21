@@ -119,3 +119,123 @@ def test_template_enable(tmp_path):
         enabled = repo.get(slug)
         assert enabled is not None
         assert enabled.is_active is True
+
+
+def test_list_categories(tmp_path):
+    repo = TemplateRepository(tmp_path / "templates.db")
+    categories = repo.list_categories()
+    assert isinstance(categories, list)
+    assert len(categories) >= 1
+    for cat in categories:
+        assert "category" in cat
+        assert "count" in cat
+        assert cat["count"] > 0
+
+
+def test_list_organizations(tmp_path):
+    repo = TemplateRepository(tmp_path / "templates.db")
+    orgs = repo.list_organizations()
+    assert isinstance(orgs, list)
+    for org in orgs:
+        assert "organization" in org
+        assert "count" in org
+
+
+def test_list_tags(tmp_path):
+    repo = TemplateRepository(tmp_path / "templates.db")
+    tags = repo.list_tags()
+    assert isinstance(tags, list)
+    for tag in tags:
+        assert "tag" in tag
+        assert "count" in tag
+
+
+def test_get_template_summary(tmp_path):
+    repo = TemplateRepository(tmp_path / "templates.db")
+    builtin = repo.list_templates(source="bundled")
+    if builtin:
+        summary = repo.get_template_summary(builtin[0].slug)
+        assert summary is not None
+        assert "slug" in summary
+        assert "name" in summary
+        assert "style_summary" in summary
+        assert "body_font" in summary["style_summary"]
+        assert "heading_count" in summary["style_summary"]
+
+
+def test_search_templates_by_organization(tmp_path):
+    repo = TemplateRepository(tmp_path / "templates.db")
+    # Search by org name
+    results = repo.search_templates("大学")
+    # May or may not find results depending on seed data, but should not error
+    assert isinstance(results, list)
+
+
+def test_search_templates_by_tag(tmp_path):
+    repo = TemplateRepository(tmp_path / "templates.db")
+    results = repo.search_templates("APA")
+    assert isinstance(results, list)
+
+
+def test_template_validation_valid():
+    from paper_format_corrector.application.services.template_validation import TemplateValidationService
+    validator = TemplateValidationService()
+    config = {
+        "format_rules": {
+            "font": {"chinese": "宋体", "english": "Times New Roman"},
+            "body_text": {"font_size": 12, "line_spacing": 1.5},
+            "headings": {
+                "heading1": {"font_size": 16, "bold": True, "align": "center"},
+                "heading2": {"font_size": 14, "bold": True, "align": "left"},
+                "heading3": {"font_size": 12, "bold": True, "align": "left"},
+            },
+            "tables": {"style": "three_line", "font_size": 10},
+            "images": {"max_width": "90%"},
+            "margins": {"top": 2.54, "bottom": 2.54, "left": 3.17, "right": 3.17},
+        }
+    }
+    report = validator.validate("test", config)
+    assert report.is_valid
+    assert report.score > 80
+
+
+def test_template_validation_missing_required():
+    from paper_format_corrector.application.services.template_validation import TemplateValidationService
+    validator = TemplateValidationService()
+    config = {"format_rules": {}}
+    report = validator.validate("empty", config)
+    assert not report.is_valid
+    assert report.score < 80
+    errors = [i for i in report.issues if i.severity == "error"]
+    assert len(errors) >= 3  # Missing font, body_text, headings
+
+
+def test_template_validation_warnings():
+    from paper_format_corrector.application.services.template_validation import TemplateValidationService
+    validator = TemplateValidationService()
+    config = {
+        "format_rules": {
+            "font": {"chinese": "宋体", "english": "Times New Roman"},
+            "body_text": {"font_size": 50, "line_spacing": 0.5},  # Out of range
+            "headings": {
+                "heading1": {"font_size": 14},  # smaller than h2
+                "heading2": {"font_size": 16},  # larger than h1
+                "heading3": {},
+            },
+        }
+    }
+    report = validator.validate("warnings", config)
+    warnings = [i for i in report.issues if i.severity == "warning"]
+    assert len(warnings) >= 2  # Font size out of range + heading hierarchy
+
+
+def test_template_validation_to_dict():
+    from paper_format_corrector.application.services.template_validation import TemplateValidationService
+    validator = TemplateValidationService()
+    config = {"format_rules": {"font": {"chinese": "宋体"}}}
+    report = validator.validate("test", config)
+    d = report.to_dict()
+    assert "slug" in d
+    assert "is_valid" in d
+    assert "score" in d
+    assert "issues" in d

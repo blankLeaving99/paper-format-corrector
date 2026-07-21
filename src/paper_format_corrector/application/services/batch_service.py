@@ -52,6 +52,141 @@ class BatchSummary:
     results: list[BatchResult] = field(default_factory=list)
     errors: list[str] = field(default_factory=list)
 
+    def generate_report(self, fmt: str = "text") -> str:
+        """生成格式化的批量处理汇总报告。
+
+        Args:
+            fmt: 报告格式 - 'text' (纯文本) / 'markdown' / 'html'
+        """
+        if fmt == "markdown":
+            return self._report_markdown()
+        if fmt == "html":
+            return self._report_html()
+        return self._report_text()
+
+    def _report_text(self) -> str:
+        lines = [
+            "=" * 60,
+            "批量处理汇总报告",
+            "=" * 60,
+            f"  总文件数:     {self.total_files}",
+            f"  成功:         {self.success_count}",
+            f"  失败:         {self.failed_count}",
+            f"  总耗时:       {self.total_processing_time:.1f}s",
+            f"  平均耗时:     {self.avg_processing_time:.1f}s/文件",
+        ]
+        if self.avg_quality_score > 0:
+            lines.append(f"  平均质量评分: {self.avg_quality_score:.1f}/100")
+
+        # Per-file details
+        if self.results:
+            lines.append("\n" + "-" * 60)
+            lines.append("文件详情:")
+            lines.append("-" * 60)
+            for r in self.results:
+                status = "✓" if r.success else "✗"
+                score_str = f" 评分:{r.quality_score:.0f}" if r.quality_score > 0 else ""
+                time_str = f" {r.processing_time:.1f}s"
+                lines.append(f"  {status} {Path(r.input_file).name}{score_str}{time_str}")
+                if not r.success and r.error:
+                    lines.append(f"    错误: {r.error}")
+
+        if self.errors:
+            lines.append("\n" + "-" * 60)
+            lines.append("失败详情:")
+            lines.append("-" * 60)
+            for error in self.errors:
+                lines.append(f"  - {error}")
+
+        return "\n".join(lines)
+
+    def _report_markdown(self) -> str:
+        lines = [
+            "# 批量处理汇总报告\n",
+            f"| 指标 | 值 |",
+            f"|------|-----|",
+            f"| 总文件数 | {self.total_files} |",
+            f"| 成功 | {self.success_count} |",
+            f"| 失败 | {self.failed_count} |",
+            f"| 总耗时 | {self.total_processing_time:.1f}s |",
+            f"| 平均耗时 | {self.avg_processing_time:.1f}s/文件 |",
+        ]
+        if self.avg_quality_score > 0:
+            lines.append(f"| 平均质量评分 | {self.avg_quality_score:.1f}/100 |")
+
+        if self.results:
+            lines.append("\n## 文件详情\n")
+            lines.append("| 状态 | 文件名 | 评分 | 耗时 |")
+            lines.append("|------|--------|------|------|")
+            for r in self.results:
+                status = "✓" if r.success else "✗"
+                score = f"{r.quality_score:.0f}" if r.quality_score > 0 else "-"
+                name = Path(r.input_file).name
+                lines.append(f"| {status} | {name} | {score} | {r.processing_time:.1f}s |")
+
+        return "\n".join(lines)
+
+    def _report_html(self) -> str:
+        rows = ""
+        for r in self.results:
+            status = "✓" if r.success else "✗"
+            score = f"{r.quality_score:.0f}" if r.quality_score > 0 else "-"
+            name = Path(r.input_file).name
+            color = "#2d7d46" if r.success else "#d32f2f"
+            rows += f'<tr><td style="color:{color}">{status}</td><td>{name}</td><td>{score}</td><td>{r.processing_time:.1f}s</td></tr>\n'
+
+        return f"""<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>批量处理报告</title>
+<style>
+body {{ font-family: -apple-system, sans-serif; max-width: 800px; margin: 2rem auto; padding: 0 1rem; }}
+h1 {{ color: #333; border-bottom: 2px solid #2196F3; padding-bottom: 0.5rem; }}
+table {{ width: 100%; border-collapse: collapse; margin-top: 1rem; }}
+th, td {{ padding: 0.5rem 1rem; border: 1px solid #ddd; text-align: left; }}
+th {{ background: #f5f5f5; }}
+.summary {{ display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 1rem; margin: 1rem 0; }}
+.stat {{ background: #f8f9fa; padding: 1rem; border-radius: 8px; text-align: center; }}
+.stat .num {{ font-size: 1.5rem; font-weight: bold; color: #2196F3; }}
+.stat .label {{ color: #666; font-size: 0.9rem; }}
+</style></head><body>
+<h1>批量处理汇总报告</h1>
+<div class="summary">
+  <div class="stat"><div class="num">{self.total_files}</div><div class="label">总文件数</div></div>
+  <div class="stat"><div class="num" style="color:#2d7d46">{self.success_count}</div><div class="label">成功</div></div>
+  <div class="stat"><div class="num" style="color:#d32f2f">{self.failed_count}</div><div class="label">失败</div></div>
+  <div class="stat"><div class="num">{self.total_processing_time:.1f}s</div><div class="label">总耗时</div></div>
+  {"<div class='stat'><div class='num'>" + f"{self.avg_quality_score:.1f}" + "</div><div class='label'>平均评分</div></div>" if self.avg_quality_score > 0 else ""}
+</div>
+<h2>文件详情</h2>
+<table><thead><tr><th>状态</th><th>文件名</th><th>评分</th><th>耗时</th></tr></thead>
+<tbody>{rows}</tbody></table>
+</body></html>"""
+
+    def create_zip(self, zip_path: str | Path) -> Path:
+        """Create a zip archive containing all successful output files and reports.
+
+        Args:
+            zip_path: Path for the output zip file
+
+        Returns:
+            Path to the created zip file
+        """
+        import zipfile
+        zip_path = Path(zip_path)
+        zip_path.parent.mkdir(parents=True, exist_ok=True)
+
+        with zipfile.ZipFile(str(zip_path), "w", zipfile.ZIP_DEFLATED) as zf:
+            # Add all successful output files
+            for result in self.results:
+                if result.success and Path(result.output_file).exists():
+                    zf.write(result.output_file, Path(result.output_file).name)
+
+            # Add summary reports
+            zf.writestr("batch_summary.txt", self.generate_report(fmt="text"))
+            zf.writestr("batch_summary.md", self.generate_report(fmt="markdown"))
+            zf.writestr("batch_summary.html", self.generate_report(fmt="html"))
+
+        return zip_path
+
 
 class BatchCorrectionService:
     """Service for batch processing multiple documents."""

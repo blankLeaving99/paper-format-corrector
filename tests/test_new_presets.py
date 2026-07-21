@@ -1,6 +1,5 @@
 """新增预设测试"""
 
-import pytest
 import yaml
 
 from paper_format_corrector.infra.preset_loader import load_preset
@@ -103,7 +102,7 @@ class TestPresetYAML:
 
         yaml_path = Path("presets/springer.yaml")
         if yaml_path.exists():
-            with open(yaml_path, "r", encoding="utf-8") as f:
+            with open(yaml_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             assert data is not None
             assert "format_rules" in data
@@ -114,7 +113,7 @@ class TestPresetYAML:
 
         yaml_path = Path("presets/elsevier.yaml")
         if yaml_path.exists():
-            with open(yaml_path, "r", encoding="utf-8") as f:
+            with open(yaml_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             assert data is not None
             assert "format_rules" in data
@@ -125,7 +124,7 @@ class TestPresetYAML:
 
         yaml_path = Path("presets/acm.yaml")
         if yaml_path.exists():
-            with open(yaml_path, "r", encoding="utf-8") as f:
+            with open(yaml_path, encoding="utf-8") as f:
                 data = yaml.safe_load(f)
             assert data is not None
             assert "format_rules" in data

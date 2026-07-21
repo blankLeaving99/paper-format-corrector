@@ -1,0 +1,75 @@
+# CVPR Conference Paper Format
+# Based on IEEE/CVF Conference on Computer Vision and Pattern Recognition
+# Suitable for: CVPR, ICCV, ECCV conferences
+
+description: "CVPR/ICCV/ECCV - 计算机视觉与模式识别会议论文格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 10
+      bold: true
+      align: "center"
+      space_before: 6
+      space_after: 3
+      line_spacing: 1.0
+    heading2:
+      font_size: 10
+      bold: true
+      align: "left"
+      space_before: 6
+      space_after: 3
+      line_spacing: 1.0
+    heading3:
+      font_size: 10
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 4
+      space_after: 2
+      line_spacing: 1.0
+
+  body_text:
+    font_size: 10
+    line_spacing: 1.0
+    first_line_indent: 0
+    align: "justify"
+
+  margins:
+    top: 0.75      # 0.75 inch
+    bottom: 1.0
+    left: 0.625    # 0.625 inch
+    right: 0.625
+
+  abstract:
+    title_font_size: 10
+    title_bold: true
+    title_align: "center"
+    font_size: 10
+    line_spacing: 1.0
+    max_lines: 150
+
+auto_detect:
+  title:
+    patterns: ["title", "Title", "TITLE"]
+    confidence: 0.9
+  author:
+    patterns: ["author", "Author", "AUTHOR"]
+    confidence: 0.9
+  abstract:
+    patterns: ["abstract", "Abstract", "ABSTRACT"]
+    confidence: 0.95
+  keywords:
+    patterns: ["keywords", "Keywords", "KEYWORDS"]
+    confidence: 0.9
+  body:
+    patterns: ["introduction", "Introduction"]
+    confidence: 0.8
+  reference:
+    patterns: ["references", "References", "REFERENCES"]
+    confidence: 0.95

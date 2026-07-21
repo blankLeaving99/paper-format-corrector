@@ -1,0 +1,75 @@
+# AMA (American Medical Association) Citation Style
+# Based on AMA Manual of Style
+# Suitable for: Medical and healthcare journals
+
+description: "AMA - 医学期刊引用格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 2.0
+    heading2:
+      font_size: 12
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 10
+      space_after: 4
+      line_spacing: 2.0
+    heading3:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 8
+      space_after: 4
+      line_spacing: 2.0
+
+  body_text:
+    font_size: 12
+    line_spacing: 2.0
+    first_line_indent: 0
+    align: "left"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 2.54
+    right: 2.54
+
+  abstract:
+    title_font_size: 12
+    title_bold: true
+    title_align: "left"
+    font_size: 12
+    line_spacing: 2.0
+    max_lines: 250
+
+auto_detect:
+  title:
+    patterns: ["title", "Title", "TITLE"]
+    confidence: 0.9
+  author:
+    patterns: ["author", "Author", "AUTHOR"]
+    confidence: 0.9
+  abstract:
+    patterns: ["abstract", "Abstract", "ABSTRACT"]
+    confidence: 0.95
+  keywords:
+    patterns: ["keywords", "Keywords", "KEYWORDS"]
+    confidence: 0.9
+  body:
+    patterns: ["introduction", "Introduction"]
+    confidence: 0.8
+  reference:
+    patterns: ["references", "References", "REFERENCES"]
+    confidence: 0.95

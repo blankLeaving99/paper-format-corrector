@@ -1,0 +1,75 @@
+# EMNLP Conference Paper Format
+# Based on ACL/EMNLP formatting guidelines
+# Suitable for: EMNLP (Empirical Methods in Natural Language Processing)
+
+description: "EMNLP - 自然语言处理实证方法会议论文格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 12
+      bold: true
+      align: "center"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.0
+    heading2:
+      font_size: 11
+      bold: true
+      align: "left"
+      space_before: 10
+      space_after: 4
+      line_spacing: 1.0
+    heading3:
+      font_size: 10
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 8
+      space_after: 4
+      line_spacing: 1.0
+
+  body_text:
+    font_size: 10
+    line_spacing: 1.0
+    first_line_indent: 0
+    align: "justify"
+
+  margins:
+    top: 1.0
+    bottom: 1.0
+    left: 1.0
+    right: 1.0
+
+  abstract:
+    title_font_size: 10
+    title_bold: true
+    title_align: "center"
+    font_size: 10
+    line_spacing: 1.0
+    max_lines: 150
+
+auto_detect:
+  title:
+    patterns: ["title", "Title", "TITLE"]
+    confidence: 0.9
+  author:
+    patterns: ["author", "Author", "AUTHOR"]
+    confidence: 0.9
+  abstract:
+    patterns: ["abstract", "Abstract", "ABSTRACT"]
+    confidence: 0.95
+  keywords:
+    patterns: ["keywords", "Keywords", "KEYWORDS"]
+    confidence: 0.9
+  body:
+    patterns: ["introduction", "Introduction"]
+    confidence: 0.8
+  reference:
+    patterns: ["references", "References", "REFERENCES"]
+    confidence: 0.95

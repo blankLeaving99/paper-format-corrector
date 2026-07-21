@@ -33,6 +33,8 @@ class SectionType(Enum):
     APPENDIX_TITLE = auto()
     TOC_TITLE = auto()
     BLANK = auto()
+    FOOTNOTE = auto()
+    ENDNOTE = auto()
 
 
 @dataclass

@@ -1,0 +1,76 @@
+# Korean Academic Paper Format
+# Based on common Korean university thesis standards
+# Suitable for: Korean academic papers, theses
+
+description: "한국어 - 학술논문/졸업논문 형식"
+
+format_rules:
+  font:
+    chinese: "Batang"  # 韩文宋体
+    english: "Times New Roman"
+    heading_chinese: "Gothic"  # 韩文黑体
+    korean: "Batang"
+    korean_heading: "Gothic"
+
+  headings:
+    heading1:
+      font_size: 14
+      bold: true
+      align: "center"
+      space_before: 24
+      space_after: 12
+      line_spacing: 1.5
+    heading2:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 18
+      space_after: 8
+      line_spacing: 1.5
+    heading3:
+      font_size: 10.5
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.5
+
+  body_text:
+    font_size: 10.5
+    line_spacing: 1.5
+    first_line_indent: 1
+    align: "justify"
+
+  margins:
+    top: 3.0
+    bottom: 3.0
+    left: 2.5
+    right: 2.5
+
+  abstract:
+    title_font_size: 12
+    title_bold: true
+    title_align: "center"
+    font_size: 10.5
+    line_spacing: 1.5
+    max_lines: 20
+
+auto_detect:
+  title:
+    patterns: ["title", "제목", "타이틀"]
+    confidence: 0.8
+  author:
+    patterns: ["author", "저자", "저자명"]
+    confidence: 0.8
+  abstract:
+    patterns: ["abstract", "초록", "요약"]
+    confidence: 0.9
+  keywords:
+    patterns: ["keywords", "키워드", "핵심어"]
+    confidence: 0.9
+  body:
+    patterns: ["body", "본문"]
+    confidence: 0.7
+  reference:
+    patterns: ["reference", "references", "참고문헌", "문헌"]
+    confidence: 0.9

@@ -267,6 +267,10 @@ class RuleEngine:
         font_rules = config.get("format_rules", {}).get("font", {})
         cn_font = font_rules.get("chinese", "宋体")
         en_font = font_rules.get("english", "Times New Roman")
+        # Also accept Japanese/Korean fonts if configured
+        jp_font = font_rules.get("japanese", "MS Mincho")
+        kr_font = font_rules.get("korean", "Batang")
+        accepted_fonts = {cn_font, en_font, jp_font, kr_font}
 
         mismatch = 0
         checked = 0
@@ -274,7 +278,7 @@ class RuleEngine:
             if len(para.text.strip()) < 20:
                 continue
             for run in para.runs:
-                if run.font.name and run.font.name not in (cn_font, en_font):
+                if run.font.name and run.font.name not in accepted_fonts:
                     mismatch += 1
                 checked += 1
                 if checked >= 100:

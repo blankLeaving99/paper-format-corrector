@@ -6,6 +6,7 @@ modification reports as specified in zhinan.md sections 3.1 and 3.2.
 
 from __future__ import annotations
 
+import re
 from collections import Counter
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -14,7 +15,6 @@ from typing import Any
 from docx import Document
 
 from ...infrastructure.parsers.document_analyzer import DocumentAnalyzer, ParagraphInfo
-
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -97,6 +97,8 @@ def scan_document(path: str | Path) -> dict[str, Any]:
         "issues": analysis.issues,
         "confidence": [_confidence_to_dict(c) for c in confidence_items],
         "page_setup": _extract_page_setup(document),
+        "header_footer": _extract_header_footer(document),
+        "font_summary": _summarize_fonts(analysis),
     }
 
 
@@ -118,6 +120,7 @@ def learn_style_profile(path: str | Path) -> dict[str, Any]:
     config: dict[str, Any] = {"format_rules": {"margins": analysis.metadata.get("margins", {})}}
     rules = config["format_rules"]
 
+    # 学习正文字体和段落规则
     body = _dominant_style(grouped.get("body", []))
     if body:
         rules["body_text"] = _to_paragraph_rule(body, include_indent=True)
@@ -126,6 +129,7 @@ def learn_style_profile(path: str | Path) -> dict[str, Any]:
             "english": body.get("font_name") or "Times New Roman",
         }
 
+    # 学习标题层级
     headings: dict[str, Any] = {}
     for element_name in ("heading1", "heading2", "heading3"):
         style = _dominant_style(grouped.get(element_name, []))
@@ -134,24 +138,54 @@ def learn_style_profile(path: str | Path) -> dict[str, Any]:
     if headings:
         rules["headings"] = headings
 
+    # 学习摘要格式
     abstract_style = _dominant_style(grouped.get("abstract", []))
     if abstract_style:
         rules["abstract"] = {
             "content": _to_paragraph_rule(abstract_style, include_indent=True),
         }
 
+    # 学习关键词格式
+    keywords_style = _dominant_style(grouped.get("keywords_cn", []) + grouped.get("keywords_en", []))
+    if keywords_style:
+        rules["keywords"] = _to_paragraph_rule(keywords_style)
+
+    # 学习表格格式
     doc = Document(str(path))
     table_rule = _learn_table_rule(doc)
     if table_rule:
         rules["tables"] = table_rule
 
+    # 学习图片格式
     image_rule = _learn_image_rule(doc)
     if image_rule:
         rules["images"] = image_rule
 
+    # 学习参考文献格式
     ref_style = _dominant_style(grouped.get("reference", []))
     if ref_style:
         rules["references"] = _to_paragraph_rule(ref_style)
+
+    # 学习代码块格式
+    code_style = _dominant_style(grouped.get("code", []))
+    if code_style:
+        rules["code"] = {
+            "mono_font": code_style.get("font_name") or "Consolas",
+            "mono_font_size": code_style.get("font_size") or 10,
+        }
+
+    # 学习公式格式
+    formula_style = _dominant_style(grouped.get("formula", []) + grouped.get("formula_content", []))
+    if formula_style:
+        rules["formulas"] = {
+            "font_size": formula_style.get("font_size") or 12,
+            "center": formula_style.get("align") == "center",
+        }
+
+    # 学习页眉页脚
+    hf_rule = _learn_header_footer(doc)
+    if hf_rule:
+        rules["header_footer"] = hf_rule
 
     return config
 
@@ -165,6 +199,8 @@ def explain_style_profile(path: str | Path) -> dict[str, Any]:
     for source, label in (
         ("body_text", "正文"), ("headings", "标题"), ("tables", "表格"),
         ("images", "图片"), ("abstract", "摘要"), ("references", "参考文献"),
+        ("keywords", "关键词"), ("code", "代码块"), ("formulas", "公式"),
+        ("header_footer", "页眉页脚"),
     ):
         if source in rules:
             learned.append({"element": label, "rule": rules[source]})
@@ -444,6 +480,56 @@ def _learn_image_rule(document: Document) -> dict[str, Any]:
     return {"max_width": f"{avg_width:.1f}cm", "alignment": "center"}
 
 
+def _learn_header_footer(document: Document) -> dict[str, Any]:
+    """学习页眉页脚格式"""
+    if not document.sections:
+        return {}
+    section = document.sections[0]
+    result: dict[str, Any] = {}
+
+    # 检查页眉
+    try:
+        header = section.header
+        if header and header.paragraphs:
+            for para in header.paragraphs:
+                if para.text.strip():
+                    result["header_text"] = para.text.strip()
+                    if para.runs:
+                        run = para.runs[0]
+                        if run.font.size:
+                            result["header_font_size"] = run.font.size.pt
+                        if run.font.bold is not None:
+                            result["header_bold"] = run.font.bold
+                    break
+    except Exception:
+        pass
+
+    # 检查页脚
+    try:
+        footer = section.footer
+        if footer and footer.paragraphs:
+            for para in footer.paragraphs:
+                if para.text.strip():
+                    result["footer_text"] = para.text.strip()
+                    break
+    except Exception:
+        pass
+
+    # 检查页码位置
+    try:
+        from docx.oxml.ns import qn
+        sectPr = section._sectPr
+        pgNumType = sectPr.find(qn("w:pgNumType"))
+        if pgNumType is not None:
+            start = pgNumType.get(qn("w:start"))
+            if start:
+                result["page_number_start"] = int(start)
+    except Exception:
+        pass
+
+    return result if result else {}
+
+
 def _count_images(document: Document) -> int:
     return sum(
         1 for paragraph in document.paragraphs
@@ -507,6 +593,48 @@ def _extract_page_setup(document: Document) -> dict[str, Any]:
         "right_margin_cm": round(section.right_margin / 360000, 2),
         "top_margin_cm": round(section.top_margin / 360000, 2),
         "bottom_margin_cm": round(section.bottom_margin / 360000, 2),
+    }
+
+
+def _extract_header_footer(document: Document) -> dict[str, Any]:
+    """提取页眉页脚信息"""
+    result: dict[str, Any] = {}
+    if not document.sections:
+        return result
+    section = document.sections[0]
+
+    # 页眉
+    try:
+        header = section.header
+        if header and not header.is_linked_to_previous and header.paragraphs:
+            texts = [p.text.strip() for p in header.paragraphs if p.text.strip()]
+            if texts:
+                result["header"] = texts[0][:50]
+    except Exception:
+        pass
+
+    # 页脚
+    try:
+        footer = section.footer
+        if footer and not footer.is_linked_to_previous and footer.paragraphs:
+            texts = [p.text.strip() for p in footer.paragraphs if p.text.strip()]
+            if texts:
+                result["footer"] = texts[0][:50]
+    except Exception:
+        pass
+
+    return result
+
+
+def _summarize_fonts(analysis: DocumentAnalysis) -> dict[str, Any]:
+    """字体使用摘要"""
+    total = sum(analysis.fonts_used.values()) or 1
+    top_fonts = sorted(analysis.fonts_used.items(), key=lambda x: -x[1])[:5]
+    return {
+        "total_fonts": len(analysis.fonts_used),
+        "top_fonts": [{"name": name, "count": count, "ratio": f"{count/total*100:.1f}%"} for name, count in top_fonts],
+        "total_sizes": len(analysis.font_sizes_used),
+        "sizes_used": sorted(analysis.font_sizes_used.keys()),
     }
 
 

@@ -1,0 +1,75 @@
+# Wiley Journal Format
+# Based on Wiley journal publishing guidelines
+# Suitable for: Wiley journals
+
+description: "Wiley - 期刊论文格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.5
+    heading2:
+      font_size: 11
+      bold: true
+      align: "left"
+      space_before: 10
+      space_after: 4
+      line_spacing: 1.5
+    heading3:
+      font_size: 10
+      bold: true
+      italic: true
+      align: "left"
+      space_before: 8
+      space_after: 4
+      line_spacing: 1.5
+
+  body_text:
+    font_size: 10
+    line_spacing: 1.5
+    first_line_indent: 0
+    align: "justify"
+
+  margins:
+    top: 2.54
+    bottom: 2.54
+    left: 2.54
+    right: 2.54
+
+  abstract:
+    title_font_size: 10
+    title_bold: true
+    title_align: "left"
+    font_size: 10
+    line_spacing: 1.5
+    max_lines: 200
+
+auto_detect:
+  title:
+    patterns: ["title", "Title", "TITLE"]
+    confidence: 0.9
+  author:
+    patterns: ["author", "Author", "AUTHOR"]
+    confidence: 0.9
+  abstract:
+    patterns: ["abstract", "Abstract", "ABSTRACT"]
+    confidence: 0.95
+  keywords:
+    patterns: ["keywords", "Keywords", "KEYWORDS"]
+    confidence: 0.9
+  body:
+    patterns: ["introduction", "Introduction"]
+    confidence: 0.8
+  reference:
+    patterns: ["references", "References", "REFERENCES"]
+    confidence: 0.95

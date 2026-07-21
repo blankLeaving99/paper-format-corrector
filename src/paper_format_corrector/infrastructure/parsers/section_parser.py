@@ -6,7 +6,11 @@ from .modules.base import DetectionContext, SectionModule
 from .modules.body_module import BodyModule
 from .modules.caption_module import CaptionModule
 from .modules.closing_module import ClosingModule
+from .modules.code_block_detector import CodeBlockDetector
+from .modules.footnote_detector import FootnoteDetector
+from .modules.formula_detector import FormulaDetector
 from .modules.heading_module import HeadingModule
+from .modules.list_detector import ListDetector
 from .modules.reference_module import ReferenceModule
 from .modules.special_module import SpecialModule
 from .modules.title_module import TitleModule
@@ -33,14 +37,18 @@ class SectionDetector:
 
         # 初始化各检测模块（按检测优先级排列）
         self._modules: list[SectionModule] = [
-            ReferenceModule(config),   # 参考文献（有状态，需在其他模块之前）
-            TitleModule(config),       # 标题页
-            AbstractModule(config),    # 摘要/关键词
-            ClosingModule(config),     # 致谢/附录
-            SpecialModule(config),     # 代码/公式（在标题之前，避免代码数字误判）
-            HeadingModule(config),     # 章/节/小节标题
-            CaptionModule(config),     # 图注/表注
-            BodyModule(config),        # 正文（兜底，最后）
+            ReferenceModule(config),      # 参考文献（有状态，需在其他模块之前）
+            TitleModule(config),          # 标题页
+            AbstractModule(config),       # 摘要/关键词
+            ClosingModule(config),        # 致谢/附录
+            CodeBlockDetector(config),    # 代码块（增强检测，在标题之前）
+            FormulaDetector(config),      # 公式（增强检测，在标题之前）
+            FootnoteDetector(config),     # 脚注/尾注（需在列表之前检测）
+            ListDetector(config),         # 列表
+            SpecialModule(config),        # 代码/公式（原有兜底检测）
+            HeadingModule(config),        # 章/节/小节标题
+            CaptionModule(config),        # 图注/表注
+            BodyModule(config),           # 正文（兜底，最后）
         ]
 
         # 保留原有接口的兼容属性（detect() 方法仍使用）
@@ -505,3 +513,58 @@ def detect_document_language(doc):
         return "chinese"  # 默认中文
 
     return lang_counter.most_common(1)[0][0]
+
+
+# ========== 段落类型映射（用于手动修正） ==========
+
+# 从 DocumentAnalyzer 的 ParagraphType.value 字符串映射到 SectionType 枚举
+_PARA_TYPE_TO_SECTION_TYPE: dict[str, SectionType] = {
+    "title": SectionType.TITLE,
+    "author": SectionType.AUTHORS,
+    "affiliation": SectionType.AFFILIATION,
+    "abstract_cn": SectionType.ABSTRACT_CN,
+    "abstract_en": SectionType.ABSTRACT_EN,
+    "keywords_cn": SectionType.KEYWORDS_CN,
+    "keywords_en": SectionType.KEYWORDS_EN,
+    "heading1": SectionType.CHAPTER,
+    "heading2": SectionType.SECTION,
+    "heading3": SectionType.SUBSECTION,
+    "body": SectionType.BODY,
+    "figure_caption": SectionType.FIGURE_CAPTION,
+    "table_caption": SectionType.TABLE_CAPTION,
+    "formula": SectionType.FORMULA_CONTENT,
+    "code": SectionType.CODE,
+    "reference": SectionType.REFERENCE_ITEM,
+    "acknowledgment": SectionType.ACKNOWLEDGMENT,
+    "appendix": SectionType.APPENDIX_TITLE,
+    "toc": SectionType.TOC_TITLE,
+    "unknown": SectionType.UNKNOWN,
+}
+
+# 反向映射：SectionType 枚举名 -> 用户可选的字符串（用于 UI 下拉框）
+SECTION_TYPE_DISPLAY_NAMES: dict[str, str] = {
+    "body": "正文",
+    "heading1": "一级标题",
+    "heading2": "二级标题",
+    "heading3": "三级标题",
+    "figure_caption": "图题",
+    "table_caption": "表题",
+    "reference": "参考文献",
+    "abstract": "摘要",
+    "code": "代码块",
+    "formula": "公式",
+    "title": "标题",
+    "unknown": "未知",
+}
+
+
+def map_override_to_section_type(override_value: str) -> SectionType | None:
+    """将用户选择的修正类型字符串映射为 SectionType 枚举。
+
+    Args:
+        override_value: 用户在 UI 中选择的类型字符串（如 "body", "heading1"）
+
+    Returns:
+        对应的 SectionType，如果无法映射则返回 None
+    """
+    return _PARA_TYPE_TO_SECTION_TYPE.get(override_value)

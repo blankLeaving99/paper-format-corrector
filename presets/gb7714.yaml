@@ -1,0 +1,81 @@
+# GB/T 7714 Chinese National Standard for References
+# Based on Information and documentation — Rules for bibliographic references
+# Suitable for: Chinese academic papers
+
+description: "GB/T 7714 - 中文参考文献国家标准格式"
+
+format_rules:
+  font:
+    chinese: "宋体"
+    english: "Times New Roman"
+    heading_chinese: "黑体"
+
+  headings:
+    heading1:
+      font_size: 14
+      bold: true
+      align: "center"
+      space_before: 24
+      space_after: 12
+      line_spacing: 1.5
+    heading2:
+      font_size: 13
+      bold: true
+      align: "left"
+      space_before: 18
+      space_after: 8
+      line_spacing: 1.5
+    heading3:
+      font_size: 12
+      bold: true
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.5
+
+  body_text:
+    font_size: 12
+    line_spacing: 1.5
+    first_line_indent: 2
+    align: "justify"
+
+  margins:
+    top: 3.0
+    bottom: 3.0
+    left: 2.5
+    right: 2.5
+
+  abstract:
+    title_font_size: 12
+    title_bold: true
+    title_align: "center"
+    font_size: 12
+    line_spacing: 1.5
+    max_lines: 200
+
+  reference:
+    style: "gb7714"
+    author_format: "full_name"
+    title_style: "sentence_case"
+    journal_abbreviation: false
+    doi_format: "doi:10.xxxx"
+
+auto_detect:
+  title:
+    patterns: ["题目", "标题", "title", "Title"]
+    confidence: 0.9
+  author:
+    patterns: ["作者", "author", "Author"]
+    confidence: 0.9
+  abstract:
+    patterns: ["摘要", "abstract", "Abstract"]
+    confidence: 0.95
+  keywords:
+    patterns: ["关键词", "keywords", "Keywords"]
+    confidence: 0.9
+  body:
+    patterns: ["正文", "body", "Body"]
+    confidence: 0.7
+  reference:
+    patterns: ["参考文献", "references", "References"]
+    confidence: 0.95

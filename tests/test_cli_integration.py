@@ -1,8 +1,5 @@
 """CLI集成测试"""
 
-import pytest
-from unittest.mock import patch, MagicMock
-from pathlib import Path
 
 
 class TestCLIArgumentParsing:
@@ -10,12 +7,8 @@ class TestCLIArgumentParsing:
 
     def test_offline_parser_argument(self):
         """测试 --offline-parser 参数存在"""
-        import sys
-        from paper_format_corrector.cli import main
 
         # 验证参数解析器包含 offline-parser
-        import argparse
-        from paper_format_corrector.cli import main as cli_main
 
         # 不能直接测试main，但可以验证参数定义
         # 通过检查argparse来验证
@@ -71,11 +64,9 @@ class TestDocumentAnalyzerIntegration:
     def test_analyze_and_compare(self):
         """测试分析并比较"""
         from paper_format_corrector.parsers.document_analyzer import (
-            DocumentAnalyzer,
             ParagraphType,
         )
 
-        analyzer = DocumentAnalyzer()
         assert ParagraphType.BODY.value == "body"
         assert ParagraphType.HEADING1.value == "heading1"
 
@@ -101,4 +92,4 @@ class TestReferenceFormatterIntegration:
 
         formatter = ReferenceFormatter({})
         assert hasattr(formatter, "deduplicate_references")
-        assert callable(getattr(formatter, "deduplicate_references"))
+        assert callable(formatter.deduplicate_references)

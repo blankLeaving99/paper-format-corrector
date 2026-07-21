@@ -1,0 +1,184 @@
+# 示例大学硕士论文格式模板
+# 基于《示例大学研究生学位论文撰写规范（2024年版）》
+# 适用于：示例大学硕士/博士学位论文
+
+description: "示例大学硕士/博士学位论文格式"
+
+format_rules:
+  # ── 字体设置 ──
+  font:
+    chinese: "宋体"                    # 中文正文使用宋体
+    english: "Times New Roman"         # 英文正文使用 Times New Roman
+    heading_chinese: "黑体"            # 中文标题使用黑体
+
+  # ── 标题格式 ──
+  headings:
+    heading1:                          # 一级标题（章标题，如"第一章 绪论"）
+      font_size: 16                    # 三号（16pt）
+      bold: true                       # 加粗
+      italic: false                    # 不斜体
+      align: "center"                  # 居中对齐
+      space_before: 24                 # 段前 24pt
+      space_after: 18                  # 段后 18pt
+      line_spacing: 1.5                # 1.5 倍行距
+
+    heading2:                          # 二级标题（节标题，如"1.1 研究背景"）
+      font_size: 14                    # 四号（14pt）
+      bold: true                       # 加粗
+      italic: false
+      align: "left"                    # 左对齐
+      space_before: 18
+      space_after: 12
+      line_spacing: 1.5
+
+    heading3:                          # 三级标题（小节标题，如"1.1.1 国内研究"）
+      font_size: 12                    # 小四（12pt）
+      bold: true                       # 加粗
+      italic: false
+      align: "left"
+      space_before: 12
+      space_after: 6
+      line_spacing: 1.5
+
+  # ── 正文格式 ──
+  body_text:
+    font_size: 12                      # 小四（12pt）
+    line_spacing: 1.5                  # 1.5 倍行距
+    first_line_indent: 2               # 首行缩进 2 字符
+    align: "justify"                   # 两端对齐
+
+  # ── 页边距 ──
+  margins:
+    top: 2.54                          # 上边距 2.54cm
+    bottom: 2.54                       # 下边距 2.54cm
+    left: 3.17                         # 左边距 3.17cm
+    right: 3.17                        # 右边距 3.17cm
+
+  # ── 摘要格式 ──
+  abstract:
+    title_font_size: 16                # "摘要"标题：三号
+    title_bold: true
+    title_align: "center"
+    content_font_size: 12              # 摘要正文：小四
+    content_line_spacing: 1.5
+    content_first_line_indent: 0        # 摘要通常不缩进
+
+  # ── 关键词格式 ──
+  keywords:
+    label: "关键词："                   # 标签文本
+    font_size: 12
+    bold_label: true                   # "关键词："加粗
+    separator: "；"                    # 分号分隔
+
+  # ── 题目/作者格式 ──
+  title_page:
+    title_font_size: 22                # 二号偏大
+    title_bold: true
+    title_align: "center"
+    author_font_size: 12
+    author_align: "center"
+    affiliation_font_size: 10.5        # 五号
+    affiliation_align: "center"
+
+  # ── 参考文献格式 ──
+  references:
+    style: "GB/T 7714"                 # 国标格式
+    font_size: 10.5                    # 五号
+    line_spacing: 1.25
+    hanging_indent: true               # 悬挂缩进
+    numbering: "sequential"            # 顺序编号
+    templates:
+      journal: "[{num}] {authors}. {title}[J]. {journal}, {year}, {volume}({number}): {pages}."
+      book: "[{num}] {authors}. {title}[M]. {city}: {publisher}, {year}: {pages}."
+      conference: "[{num}] {authors}. {title}[C]//{proceedings}. {city}: {publisher}, {year}: {pages}."
+      thesis: "[{num}] {author}. {title}[D]. {city}: {university}, {year}."
+      online: "[{num}] {authors}. {title}[EB/OL]. ({year}-{month}-{day})[{access_date}]. {url}."
+
+  # ── 图格式 ──
+  figures:
+    label: "图"                        # 标签前缀
+    numbering: "chapter"               # 按章节编号（图1-1）
+    separator: "-"                     # 章-序号 分隔符
+    caption_position: "below"          # 图标题在图下方
+    font_size: 10.5                    # 五号
+    align: "center"
+
+  # ── 表格式 ──
+  tables:
+    label: "表"
+    numbering: "chapter"
+    separator: "-"
+    caption_position: "above"          # 表标题在表上方
+    font_size: 10.5
+    header_bold: true                  # 表头加粗
+    align: "center"
+
+  # ── 公式格式 ──
+  formulas:
+    numbering: true                    # 公式编号
+    numbering_style: "paren"           # 编号样式：(1-1)
+    numbering_position: "right"        # 编号右对齐
+    font_size: 12
+
+  # ── 代码格式 ──
+  code:
+    preserve: true                     # 保留代码块原始格式
+    force_mono: false
+
+  # ── 页眉页脚 ──
+  header_footer:
+    enabled: true
+    header:
+      text: "{chapter}"                # 页眉显示章名
+      font_size: 10.5
+      font_name: "宋体"
+      align: "center"
+      bottom_border: true              # 页眉下方有横线
+    footer:
+      page_number: true                # 页脚显示页码
+      font_size: 10.5
+      align: "center"
+    different_first_page: true         # 首页不显示页眉
+    different_odd_even: false
+
+  # ── 页码设置 ──
+  page_numbering:
+    enabled: true
+    front_matter:
+      style: "roman_lower"             # 前置页用小写罗马数字（i, ii, iii）
+      start: 1
+    body:
+      style: "arabic"                  # 正文用阿拉伯数字（1, 2, 3）
+      start: 1
+    position: "footer_center"
+
+  # ── 目录 ──
+  toc:
+    enabled: true                      # 自动生成目录
+    title: "目  录"
+    title_font_size: 16
+    title_bold: true
+    title_align: "center"
+    max_level: 3                       # 目录包含到三级标题
+    font_size: 12
+    line_spacing: 1.5
+
+# ── 自动检测规则 ──
+auto_detect:
+  title_pattern: '^论文题目[:：]?|^题目[:：]?'
+  chapter_pattern: '^第[一二三四五六七八九十百零\d]+[章部分篇]'
+  section_pattern: '^\d+\.\d+'
+  subsection_pattern: '^\d+\.\d+\.\d+'
+  abstract_pattern: '^摘\s*要$|^Abstract$|^ABSTRACT$'
+  abstract_en_pattern: '^Abstract$|^ABSTRACT$'
+  keywords_pattern: '^关键词[:：]|^Key\s*[Ww]ords[:：]?'
+  reference_keywords:
+    - "参考文献"
+    - "参考资料"
+    - "References"
+    - "REFERENCES"
+  acknowledgment_pattern: '^致\s*谢$|^Acknowledge?ments?$'
+  appendix_pattern: '^附\s*录[A-Z]?'
+  figure_caption_pattern: '^图\s*\d'
+  table_caption_pattern: '^表\s*\d'
+  formula_pattern: '^\(?\d+[-\.]\d+\)?$'

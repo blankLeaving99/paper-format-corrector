@@ -5,8 +5,8 @@ import pytest
 from paper_format_corrector.parsers.rule_parser import (
     CHINESE_SIZE_MAP,
     RuleParser,
-    parse_requirement_text,
     parse_requirement_file,
+    parse_requirement_text,
 )
 
 

@@ -99,6 +99,13 @@ class TableHandler:
 
         header_rows = self._detect_header_rows(table)
 
+        # 启用跨页重复表头
+        self._enable_repeat_header(table, header_rows)
+
+        # 设置表头行不可拆分
+        for i in range(min(header_rows, len(table.rows))):
+            self._set_row_cant_split(table.rows[i])
+
         for row_idx, row in enumerate(table.rows):
             is_header = row_idx < header_rows
             for col_idx, cell in enumerate(row.cells):
@@ -311,6 +318,38 @@ class TableHandler:
         if old_w is not None:
             tblPr.remove(old_w)
         tblPr.append(tblW)
+
+    def _enable_repeat_header(self, table: Any, header_rows: int = 1) -> None:
+        """启用跨页重复表头。
+
+        为表头行设置 tblHeader 属性，使 Word 在跨页时自动重复表头。
+        """
+        if not table.rows:
+            return
+        for i in range(min(header_rows, len(table.rows))):
+            tr = table.rows[i]._tr
+            trPr = tr.find(qn("w:trPr"))
+            if trPr is None:
+                trPr = OxmlElement("w:trPr")
+                tr.insert(0, trPr)
+            tblHeader = trPr.find(qn("w:tblHeader"))
+            if tblHeader is None:
+                tblHeader = OxmlElement("w:tblHeader")
+                trPr.append(tblHeader)
+            tblHeader.set(qn("w:val"), "true")
+
+    def _set_row_cant_split(self, row: Any) -> None:
+        """设置行不可拆分（防止表头行被分页截断）"""
+        tr = row._tr
+        trPr = tr.find(qn("w:trPr"))
+        if trPr is None:
+            trPr = OxmlElement("w:trPr")
+            tr.insert(0, trPr)
+        cantSplit = trPr.find(qn("w:cantSplit"))
+        if cantSplit is None:
+            cantSplit = OxmlElement("w:cantSplit")
+            trPr.append(cantSplit)
+        cantSplit.set(qn("w:val"), "true")
 
     def get_table_stats(self, doc: Any) -> dict[str, Any]:
         """获取文档表格统计信息"""

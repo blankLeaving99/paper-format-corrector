@@ -226,15 +226,80 @@ class TemplateRepository:
         return [self._record_with_meta(row, connection=self._connect()) for row in rows]
 
     def search_templates(self, keyword: str) -> list[TemplateRecord]:
+        """搜索模板，支持名称、描述、组织、分类、标签模糊匹配"""
         like = f"%{keyword}%"
-        query = """SELECT slug, name, category, source, description, config_json, version,
-                   organization, degree_level, discipline, language, source_url, is_active,
-                   created_at, updated_at FROM paper_templates
-                   WHERE is_active = 1 AND (name LIKE ? OR description LIKE ? OR organization LIKE ? OR category LIKE ?)
-                   ORDER BY category, name"""
+        query = """SELECT DISTINCT pt.slug, pt.name, pt.category, pt.source, pt.description,
+                   pt.config_json, pt.version, pt.organization, pt.degree_level,
+                   pt.discipline, pt.language, pt.source_url, pt.is_active,
+                   pt.created_at, pt.updated_at
+                   FROM paper_templates pt
+                   LEFT JOIN template_tags tt ON pt.slug = tt.slug
+                   WHERE pt.is_active = 1 AND (
+                       pt.name LIKE ? OR pt.description LIKE ? OR
+                       pt.organization LIKE ? OR pt.category LIKE ? OR
+                       pt.discipline LIKE ? OR tt.tag LIKE ?
+                   )
+                   ORDER BY pt.category, pt.name"""
         with self._connect() as connection:
-            rows = connection.execute(query, (like, like, like, like)).fetchall()
+            rows = connection.execute(query, (like, like, like, like, like, like)).fetchall()
         return [self._record_with_meta(row, connection=self._connect()) for row in rows]
+
+    def list_categories(self) -> list[dict[str, Any]]:
+        """列出所有分类及其模板数量"""
+        query = """SELECT category, COUNT(*) as count
+                   FROM paper_templates WHERE is_active = 1
+                   GROUP BY category ORDER BY count DESC"""
+        with self._connect() as connection:
+            rows = connection.execute(query).fetchall()
+        return [{"category": r["category"], "count": r["count"]} for r in rows]
+
+    def list_organizations(self) -> list[dict[str, Any]]:
+        """列出所有组织/学校及其模板数量"""
+        query = """SELECT organization, COUNT(*) as count
+                   FROM paper_templates WHERE is_active = 1 AND organization != ''
+                   GROUP BY organization ORDER BY count DESC"""
+        with self._connect() as connection:
+            rows = connection.execute(query).fetchall()
+        return [{"organization": r["organization"], "count": r["count"]} for r in rows]
+
+    def list_tags(self) -> list[dict[str, Any]]:
+        """列出所有标签及其使用次数"""
+        query = """SELECT tag, COUNT(*) as count
+                   FROM template_tags GROUP BY tag ORDER BY count DESC"""
+        with self._connect() as connection:
+            rows = connection.execute(query).fetchall()
+        return [{"tag": r["tag"], "count": r["count"]} for r in rows]
+
+    def get_template_summary(self, slug: str) -> dict[str, Any] | None:
+        """获取模板摘要信息（不含完整配置）"""
+        record = self.get(slug)
+        if record is None:
+            return None
+        config = record.config
+        format_rules = config.get("format_rules", {})
+        return {
+            "slug": record.slug,
+            "name": record.name,
+            "category": record.category,
+            "source": record.source,
+            "description": record.description,
+            "version": record.version,
+            "organization": record.organization,
+            "degree_level": record.degree_level,
+            "discipline": record.discipline,
+            "language": record.language,
+            "tags": record.tags,
+            "is_active": record.is_active,
+            "created_at": record.created_at,
+            "updated_at": record.updated_at,
+            "style_summary": {
+                "body_font": format_rules.get("font", {}).get("chinese", ""),
+                "body_size": format_rules.get("body_text", {}).get("font_size", ""),
+                "heading_count": len(format_rules.get("headings", {})),
+                "table_style": format_rules.get("tables", {}).get("style", ""),
+                "image_alignment": format_rules.get("images", {}).get("alignment", ""),
+            },
+        }
 
     def get(self, slug: str) -> TemplateRecord | None:
         with self._connect() as connection:

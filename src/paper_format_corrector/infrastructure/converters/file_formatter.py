@@ -9,6 +9,7 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.shared import Cm, Pt
 
+from ...shared.utils.docx_utils import set_east_asian_font
 from ..handlers.figure_table_handler import FigureTableHandler
 from ..handlers.header_footer_handler import HeaderFooterHandler
 from ..handlers.image_handler import ImageHandler
@@ -16,8 +17,12 @@ from ..handlers.table_handler import TableHandler
 from ..handlers.toc_handler import TOCHandler
 from ..parsers.cross_reference import CrossReferenceUpdater
 from ..parsers.reference_formatter import ReferenceFormatter
-from ..parsers.section_parser import SectionDetector, SectionType, detect_document_language
-from ...shared.utils.docx_utils import set_east_asian_font
+from ..parsers.section_parser import (
+    SectionDetector,
+    SectionType,
+    detect_document_language,
+    map_override_to_section_type,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -25,7 +30,7 @@ logger = logging.getLogger(__name__)
 class FormatCorrector:
     """论文格式矫正器（完整版）"""
 
-    def __init__(self, template_path, config):
+    def __init__(self, template_path, config, type_overrides: dict[str, str] | None = None):
         if template_path and Path(template_path).is_file():
             self.template = Document(template_path)
             self.template_path = template_path
@@ -35,6 +40,7 @@ class FormatCorrector:
             self.template_path = None
         self.config = config
         self._runtime_font_overrides = None  # 语言检测的运行时字体覆盖
+        self._type_overrides = type_overrides or {}  # 手动段落类型修正
 
         # 从模板提取样式（作为配置的回退）
         self.template_styles = {}
@@ -218,6 +224,29 @@ class FormatCorrector:
 
             section_type = pipeline_result.final_labels[i]
             extra = pipeline_result.final_extras[i]
+
+            # 应用手动类型修正（如果有）
+            if self._type_overrides:
+                # 获取当前段落的类型字符串（用于匹配覆盖规则）
+                current_type_str = section_type.name.lower()
+                # 特殊映射：CHAPTER -> heading1, SECTION -> heading2, SUBSECTION -> heading3
+                type_str_to_check = current_type_str
+                if section_type == SectionType.CHAPTER:
+                    type_str_to_check = "heading1"
+                elif section_type == SectionType.SECTION:
+                    type_str_to_check = "heading2"
+                elif section_type == SectionType.SUBSECTION:
+                    type_str_to_check = "heading3"
+                elif section_type == SectionType.REFERENCE_ITEM:
+                    type_str_to_check = "reference"
+                elif section_type == SectionType.FORMULA_CONTENT:
+                    type_str_to_check = "formula"
+
+                if type_str_to_check in self._type_overrides:
+                    override_val = self._type_overrides[type_str_to_check]
+                    override_section_type = map_override_to_section_type(override_val)
+                    if override_section_type and override_section_type != section_type:
+                        section_type = override_section_type
 
             # 根据类型应用不同格式
             if section_type == SectionType.TITLE:

@@ -208,16 +208,45 @@ class ImageHandler:
         return warnings
 
     def _format_captions(self, doc: Any) -> int:
-        """检测并格式化图题段落"""
+        """检测并格式化图题段落。
+
+        增强功能：
+        - 支持图片与题注的绑定关系识别
+        - 题注编号自动修正
+        - 题注位置可配置（图上方/图下方）
+        """
         count = 0
-        for paragraph in doc.paragraphs:
+        for i, paragraph in enumerate(doc.paragraphs):
             text = paragraph.text.strip()
             if self.CAPTION_PATTERN.match(text):
-                self._format_caption_paragraph(paragraph)
+                # 检查是否与前一个段落的图片绑定
+                is_bound = self._is_caption_bound_to_image(doc, i)
+                self._format_caption_paragraph(paragraph, is_bound)
                 count += 1
         return count
 
-    def _format_caption_paragraph(self, paragraph: Any) -> None:
+    def _is_caption_bound_to_image(self, doc: Any, caption_index: int) -> bool:
+        """检查题注是否与前一个段落的图片绑定。
+
+        判断逻辑：
+        1. 题注前一个段落包含图片
+        2. 题注前一个段落是空段落（中间可能有空行）
+        """
+        # 检查前一个段落
+        for j in range(caption_index - 1, max(caption_index - 3, -1), -1):
+            if j < 0:
+                break
+            para = doc.paragraphs[j]
+            # 检查是否包含图片
+            for run in para.runs:
+                if run._element.findall(qn("w:drawing")):
+                    return True
+            # 如果遇到非空段落但不是图片，停止搜索
+            if para.text.strip():
+                break
+        return False
+
+    def _format_caption_paragraph(self, paragraph: Any, is_bound_to_image: bool = True) -> None:
         """格式化图题段落"""
         for run in paragraph.runs:
             run.font.name = "Times New Roman"
