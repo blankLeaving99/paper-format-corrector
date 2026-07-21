@@ -83,7 +83,7 @@ class TestPresetsEndpoint:
     def test_list_presets_via_legacy_api(self):
         """Presets are served via the legacy api/app.py /presets endpoint."""
         from fastapi.testclient import TestClient as LegacyClient
-        from paper_format_corrector.api.app import app as legacy_app
+        from paper_format_corrector.interfaces.api.app import app as legacy_app
         legacy_client = LegacyClient(legacy_app, raise_server_exceptions=False)
         resp = legacy_client.get("/presets")
         assert resp.status_code == 200
@@ -93,7 +93,7 @@ class TestPresetsEndpoint:
 
     def test_presets_contain_required_fields(self):
         from fastapi.testclient import TestClient as LegacyClient
-        from paper_format_corrector.api.app import app as legacy_app
+        from paper_format_corrector.interfaces.api.app import app as legacy_app
         legacy_client = LegacyClient(legacy_app, raise_server_exceptions=False)
         resp = legacy_client.get("/presets")
         data = resp.json()
@@ -242,3 +242,80 @@ class TestOpenAPI:
         ]
         for ep in expected:
             assert ep in paths, f"Missing endpoint: {ep}"
+
+
+# ── Task Queue (Legacy API) ───────────────────────────────────
+
+
+class TestTaskQueueEndpoints:
+    """Tests for task queue endpoints on the legacy api/app.py."""
+
+    @pytest.fixture(autouse=True)
+    def _legacy_client(self):
+        from fastapi.testclient import TestClient as LegacyClient
+        from paper_format_corrector.interfaces.api.app import app as legacy_app, get_task_queue
+        # Reset the global task queue before each test
+        import paper_format_corrector.interfaces.api.app as app_module
+        app_module._task_queue = None
+        app_module._worker = None
+        self.client = LegacyClient(legacy_app, raise_server_exceptions=False)
+        self._get_queue = get_task_queue
+
+    def test_submit_task_returns_task_id(self):
+        resp = self.client.post("/tasks/submit", json={
+            "file_path": "test_paper.docx",
+            "filename": "test_paper.docx",
+        })
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "task_id" in data
+        assert data["status"] == "pending"
+
+    def test_get_task_status_returns_404_for_missing(self):
+        resp = self.client.get("/tasks/nonexistent-task-id")
+        assert resp.status_code == 404
+
+    def test_submit_then_get_status(self):
+        # Submit a task
+        resp = self.client.post("/tasks/submit", json={
+            "file_path": "test_paper.docx",
+            "filename": "test_paper.docx",
+        })
+        assert resp.status_code == 200
+        task_id = resp.json()["task_id"]
+
+        # Query status - the queue should be the same global instance
+        queue = self._get_queue()
+        status = queue.get_status(task_id)
+        assert status.get("error") is None or "error" not in status
+        assert status["task_id"] == task_id
+        assert status["status"] in ("pending", "processing", "completed", "failed")
+
+    def test_list_tasks(self):
+        # Submit a task
+        self.client.post("/tasks/submit", json={
+            "file_path": "test_paper.docx",
+            "filename": "test_paper.docx",
+        })
+
+        resp = self.client.get("/tasks")
+        assert resp.status_code == 200
+        data = resp.json()
+        assert "total" in data
+        assert "tasks" in data
+        assert data["total"] >= 1
+
+    def test_list_tasks_with_status_filter(self):
+        resp = self.client.get("/tasks?status=pending")
+        assert resp.status_code == 200
+        data = resp.json()
+        for t in data["tasks"]:
+            assert t["status"] == "pending"
+
+    def test_remove_nonexistent_task_returns_404(self):
+        resp = self.client.delete("/tasks/nonexistent-task-id")
+        assert resp.status_code == 404
+
+    def test_get_result_for_nonexistent_returns_404(self):
+        resp = self.client.get("/tasks/nonexistent-task-id/result")
+        assert resp.status_code == 404

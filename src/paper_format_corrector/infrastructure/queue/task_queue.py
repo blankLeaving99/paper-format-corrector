@@ -53,7 +53,11 @@ class TaskQueue:
 
     提供线程安全的任务提交、状态查询和持久化存储。
     支持任务恢复：重启服务后可自动加载未完成的任务。
+    自动清理：保留最近 MAX_COMPLETED_TASKS 个已完成任务。
     """
+
+    MAX_COMPLETED_TASKS = 100
+    """保留的已完成任务最大数量"""
 
     def __init__(self, storage_dir: str = "./tasks") -> None:
         self.storage_dir = Path(storage_dir)
@@ -225,6 +229,9 @@ class TaskQueue:
         if loaded_count > 0:
             logger.info(f"已加载 {loaded_count} 个未完成任务")
 
+        # 启动时清理多余的已完成任务
+        self.cleanup_completed_tasks()
+
     def _get_status_message(self, task: Task) -> str:
         """根据任务状态生成提示消息"""
         messages = {
@@ -234,3 +241,38 @@ class TaskQueue:
             "failed": f"处理失败: {task.error}" if task.error else "处理失败",
         }
         return messages.get(task.status, "未知状态")
+
+    def cleanup_completed_tasks(self) -> int:
+        """清理多余的已完成/失败任务，保留最近 MAX_COMPLETED_TASKS 个。
+
+        Returns:
+            清理的任务数量
+        """
+        # 收集所有已完成或失败的任务，按更新时间排序
+        finished = [
+            t for t in self.tasks.values()
+            if t.status in ("completed", "failed")
+        ]
+        if len(finished) <= self.MAX_COMPLETED_TASKS:
+            return 0
+
+        # 按更新时间降序排序，保留最新的
+        finished.sort(key=lambda t: t.updated_at, reverse=True)
+        to_remove = finished[self.MAX_COMPLETED_TASKS:]
+
+        removed = 0
+        for task in to_remove:
+            task_id = task.id
+            del self.tasks[task_id]
+            self._progress_callbacks.pop(task_id, None)
+            task_file = self.storage_dir / f"{task_id}.json"
+            if task_file.exists():
+                try:
+                    task_file.unlink()
+                except Exception as e:
+                    logger.warning(f"清理任务文件失败 {task_id}: {e}")
+            removed += 1
+
+        if removed > 0:
+            logger.info(f"已清理 {removed} 个过期已完成任务")
+        return removed

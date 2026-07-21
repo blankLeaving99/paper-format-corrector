@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: presets_and_templates
+title: 预设模板库与全局配置
+scope:
+    - presets/
+    - config/
+source_files: []
+depends_on: []
+related_to: []

@@ -353,9 +353,15 @@ def main():
         if not _is_running_in_venv():
             venv_python = _find_or_create_env()
             if venv_python and os.path.isfile(venv_python):
-                os.execv(venv_python, [venv_python, os.path.abspath(__file__)])
+                os.execv(venv_python, [venv_python, os.path.abspath(__file__)] + sys.argv[1:])
 
-        # 2. 已在 venv 中，二次确认依赖完整性
+        # 2. 如果传入了命令行参数，直接委托给 CLI
+        if len(sys.argv) > 1:
+            from paper_format_corrector.interfaces.cli.main import main as cli_main
+            cli_main()
+            return
+
+        # 3. 已在 venv 中，二次确认依赖完整性
         try:
             from importlib.metadata import PackageNotFoundError, version
             missing = []
@@ -389,9 +395,9 @@ def main():
 
         # 4. 启动对应 GUI
         if mode == "desktop":
-            from paper_format_corrector.desktop_gui import main as run
+            from paper_format_corrector.interfaces.desktop.app import main as run
         else:
-            from paper_format_corrector.gui import main as run
+            from paper_format_corrector.interfaces.web.app import main as run
 
         run()
 

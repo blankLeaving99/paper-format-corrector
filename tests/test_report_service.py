@@ -2,7 +2,7 @@
 
 import json
 
-from paper_format_corrector.application.services.report_service import (
+from paper_format_corrector.application.report_service import (
     ReportData,
     ReportService,
     report_from_correction,
@@ -71,7 +71,7 @@ def test_report_service_saves_and_loads_history(tmp_path):
     assert record_id > 0
 
     # Verify via repository
-    from paper_format_corrector.infra.template_repository import TemplateRepository
+    from paper_format_corrector.infrastructure.template_repository import TemplateRepository
     repo = TemplateRepository(db_path)
     history = repo.list_processing_history()
     assert len(history) >= 1

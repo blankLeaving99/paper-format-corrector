@@ -1,4 +1,4 @@
-/* global OfficeHelper, Office */
+/* global Office, Word */
 
 /**
  * 论文格式矫正 - 任务窗格核心逻辑
@@ -26,6 +26,115 @@ function cacheElements() {
   els.presetHint = document.getElementById('presetHint');
   els.apiStatus = document.getElementById('apiStatus');
 }
+
+// ── Office 辅助对象 ──────────────────────────────────────────
+const OfficeHelper = {
+  _ready: false,
+
+  async initialize() {
+    return new Promise((resolve, reject) => {
+      if (typeof Office === 'undefined') {
+        // 非 Office 环境（测试模式）
+        console.warn('Office.js 未加载，运行在测试模式');
+        this._ready = true;
+        resolve();
+        return;
+      }
+      Office.onReady((info) => {
+        if (info.host === Office.HostType.Word) {
+          this._ready = true;
+          resolve();
+        } else {
+          reject(new Error('此插件仅支持 Word'));
+        }
+      });
+      // 超时保护：5秒后如果 Office.onReady 未回调则降级
+      setTimeout(() => {
+        if (!this._ready) {
+          console.warn('Office.onReady 超时，降级为测试模式');
+          this._ready = true;
+          resolve();
+        }
+      }, 5000);
+    });
+  },
+
+  /**
+   * 获取当前文档的 .docx 文件 Blob
+   */
+  async getDocumentFile() {
+    if (typeof Word === 'undefined' || typeof Office === 'undefined') {
+      // 测试模式：返回空 Blob
+      return new Blob(['test-mode'], { type: 'application/octet-stream' });
+    }
+    return new Promise((resolve, reject) => {
+      Word.run(async (context) => {
+        // 获取文档的 base64 内容
+        const doc = context.document;
+        doc.load('body');
+        await context.sync();
+
+        // 使用 getFileAsync 获取完整 .docx
+        Office.context.document.getFileAsync(
+          Office.FileType.Compressed,
+          { sliceSize: 65536 },
+          (result) => {
+            if (result.status === Office.AsyncResultStatus.Failed) {
+              reject(new Error('获取文档失败: ' + result.error.message));
+              return;
+            }
+            const fileHandle = result.value;
+            const slices = [];
+            const readSlice = (index) => {
+              fileHandle.getSliceAsync(index, (sliceResult) => {
+                if (sliceResult.status === Office.AsyncResultStatus.Failed) {
+                  fileHandle.closeAsync();
+                  reject(new Error('读取文档分片失败'));
+                  return;
+                }
+                if (sliceResult.value.index === index) {
+                  slices.push(sliceResult.value.data);
+                  if (sliceResult.value.index < fileHandle.sliceCount - 1) {
+                    readSlice(index + 1);
+                  } else {
+                    fileHandle.closeAsync();
+                    const blob = new Blob(slices, { type: 'application/vnd.openxmlformats-officedocument.wordprocessingml.document' });
+                    resolve(blob);
+                  }
+                }
+              });
+            };
+            readSlice(0);
+          }
+        );
+      }).catch(reject);
+    });
+  },
+
+  /**
+   * 用矫正后的 Blob 替换当前文档内容
+   */
+  async replaceDocument(blob) {
+    if (typeof Office === 'undefined') {
+      console.log('测试模式：跳过文档替换');
+      return;
+    }
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => {
+        const base64 = reader.result.split(',')[1];
+        // 通过 base64 插入新文档内容
+        Word.run(async (context) => {
+          context.document.body.insertFileFromBase64(base64, 'replace');
+          await context.sync();
+          resolve();
+        }).catch(reject);
+      };
+      reader.onerror = () => reject(new Error('文件读取失败'));
+      reader.readAsDataURL(blob);
+    });
+  }
+};
 
 // ── 工具函数 ────────────────────────────────────────────────
 function sleep(ms) {
@@ -165,7 +274,7 @@ async function scanDocument() {
   }
 }
 
-// ── 执行矫正 ────────────────────────────────────────────────
+// ── 执行矫正（带真实进度轮询） ────────────────────────────────
 async function correctDocument() {
   const templateValue = els.templateSelect.value;
   if (!templateValue) {
@@ -197,40 +306,98 @@ async function correctDocument() {
       formData.append('preset', slug);
     }
 
-    // 模拟进度
-    let progress = 0;
-    const progressTimer = setInterval(() => {
-      if (progress < 90) {
-        progress += Math.random() * 8;
-        els.progressBar.value = Math.min(progress, 90);
-        els.progressText.textContent = Math.round(Math.min(progress, 90)) + '%';
+    // 提交任务并获取 task_id（如果支持异步）
+    let taskId = null;
+    let usePolling = false;
+
+    // 尝试异步提交
+    try {
+      const asyncResp = await fetch(`${API_BASE}/tasks/submit`, {
+        method: 'POST',
+        body: formData,
+      });
+      if (asyncResp.ok) {
+        const asyncResult = await asyncResp.json();
+        taskId = asyncResult.task_id;
+        usePolling = true;
       }
-    }, 500);
-
-    const resp = await fetch(`${API_BASE}/correct`, {
-      method: 'POST',
-      body: formData,
-    });
-
-    clearInterval(progressTimer);
-
-    if (!resp.ok) {
-      const err = await resp.text();
-      throw new Error(err || `HTTP ${resp.status}`);
+    } catch (e) {
+      // 异步接口不可用，回退到同步模式
     }
 
-    // API 直接返回矫正后的文件
-    const resultBlob = await resp.blob();
+    if (usePolling && taskId) {
+      // 真实进度轮询模式
+      const pollProgress = async () => {
+        try {
+          const statusResp = await fetch(`${API_BASE}/tasks/${taskId}`);
+          if (statusResp.ok) {
+            const status = await statusResp.json();
+            const progress = status.progress || 0;
+            els.progressBar.value = progress;
+            els.progressText.textContent = progress + '%';
 
-    els.progressBar.value = 95;
-    els.progressText.textContent = '95%';
+            if (status.status === 'completed') {
+              // 任务完成，下载结果
+              if (status.result_path) {
+                const resultResp = await fetch(`${API_BASE}/tasks/${taskId}/download`);
+                if (resultResp.ok) {
+                  const resultBlob = await resultResp.blob();
+                  await OfficeHelper.replaceDocument(resultBlob);
+                }
+              }
+              els.progressBar.value = 100;
+              els.progressText.textContent = '100%';
+              showStatus('矫正完成！文档已更新。', 'success');
+              return;
+            } else if (status.status === 'failed') {
+              throw new Error(status.error || '矫正任务失败');
+            }
 
-    // 将矫正后的文件写回 Word 文档
-    await OfficeHelper.replaceDocument(resultBlob);
+            // 继续轮询
+            setTimeout(pollProgress, 1000);
+          }
+        } catch (pollErr) {
+          // 轮询失败，回退到同步
+          throw pollErr;
+        }
+      };
+      await pollProgress();
+    } else {
+      // 同步模式：直接等待结果，显示不确定进度
+      let syncProgress = 0;
+      const progressTimer = setInterval(() => {
+        if (syncProgress < 85) {
+          syncProgress += Math.random() * 5;
+          els.progressBar.value = Math.min(syncProgress, 85);
+          els.progressText.textContent = Math.round(Math.min(syncProgress, 85)) + '%';
+        }
+      }, 800);
 
-    els.progressBar.value = 100;
-    els.progressText.textContent = '100%';
-    showStatus('矫正完成！文档已更新。', 'success');
+      const resp = await fetch(`${API_BASE}/correct`, {
+        method: 'POST',
+        body: formData,
+      });
+
+      clearInterval(progressTimer);
+
+      if (!resp.ok) {
+        const err = await resp.text();
+        throw new Error(err || `HTTP ${resp.status}`);
+      }
+
+      // API 直接返回矫正后的文件
+      const resultBlob = await resp.blob();
+
+      els.progressBar.value = 95;
+      els.progressText.textContent = '95%';
+
+      // 将矫正后的文件写回 Word 文档
+      await OfficeHelper.replaceDocument(resultBlob);
+
+      els.progressBar.value = 100;
+      els.progressText.textContent = '100%';
+      showStatus('矫正完成！文档已更新。', 'success');
+    }
   } catch (err) {
     showStatus('矫正失败: ' + err.message, 'error');
   } finally {

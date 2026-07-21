@@ -4,7 +4,7 @@ import pytest
 from docx import Document
 from docx.shared import Pt
 
-from paper_format_corrector.parsers.document_analyzer import (
+from paper_format_corrector.domain.document.analyzer import (
     DocumentAnalyzer,
     ParagraphType,
     analyze_document,

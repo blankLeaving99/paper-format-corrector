@@ -19,8 +19,8 @@ from typing import Any
 
 import pytest
 
-from paper_format_corrector.infra.remote_template_client import RemoteTemplateClient
-from paper_format_corrector.infra.template_repository import TemplateRepository
+from paper_format_corrector.infrastructure.remote_template_client import RemoteTemplateClient
+from paper_format_corrector.infrastructure.template_repository import TemplateRepository
 
 # ── Helpers ──────────────────────────────────────────────────────
 

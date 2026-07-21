@@ -39,14 +39,18 @@
 | **LLM 智能解析** | 使用 OpenAI/Anthropic/Ollama 理解复杂排版需求 |
 | **质量评分** | 矫正后对文档格式规范性打分（0-100） |
 | **差异对比** | 生成矫正前后的 HTML 对比报告 |
-| **多格式导出** | 支持 PDF、HTML、Markdown、TXT 导出 |
+| **多格式导出** | 支持 PDF、HTML、Markdown、TXT、LaTeX 导出 |
+| **BibTeX 解析** | 解析 .bib 文件，自动转换为项目参考文献格式 |
+| **PDF 反向学习** | 从 PDF 提取格式规则，支持 OCR 降级 |
 | **封面生成** | 根据元数据自动生成论文封面页 |
 | **图表编号** | 自动编号图、表、公式，支持按章节编号 |
 | **参考文献格式化** | GB/T 7714、IEEE、APA 等多种引用格式 |
 | **页眉页脚** | 自动设置页眉、页码 |
 | **目录生成** | 自动生成/更新目录 |
-| **批量处理** | 一键处理整个目录的文档 |
+| **批量处理** | 一键处理整个目录的文档，支持异步任务队列 |
+| **多语言字体** | 支持中文/日文/韩文东亚字体自动适配 |
 | **双 GUI** | 桌面 GUI（原生窗口，支持拖拽）+ Web GUI（浏览器） |
+| **Word 插件** | Office Add-in 插件，在 Word 内直接矫正格式 |
 | **插件系统** | 自定义矫正规则，支持第三方插件 |
 
 ---
@@ -79,6 +83,8 @@ pip install -r requirements.txt
 
 # 安装可选功能
 pip install "paper-format-corrector[all]"  # 全部功能
+pip install "paper-format-corrector[ocr]"  # OCR 支持（扫描件 PDF）
+pip install "paper-format-corrector[remote]"  # 远程服务（数据库+认证）
 ```
 
 ---
@@ -116,6 +122,20 @@ python -m paper_format_corrector --desktop-gui    # 桌面 GUI（原生窗口）
 ```bash
 python -m paper_format_corrector.api.app
 # API 文档：http://localhost:8000/docs
+```
+
+### 异步批量处理
+
+```bash
+python -m paper_format_corrector batch input/ -o output/ --async
+# 提交到任务队列，通过 API 查询进度: GET /tasks/{task_id}
+```
+
+### LaTeX 导出
+
+```bash
+python -m paper_format_corrector -f input/paper.docx --export latex
+# 或通过 API: POST /export/latex
 ```
 
 ---
@@ -173,13 +193,19 @@ paper-format-corrector/
 │   ├── cli.py                      # CLI 入口
 │   ├── gui.py                      # Web GUI (Gradio)
 │   ├── desktop_gui.py              # 桌面 GUI (tkinter)
-│   ├── core/                       # 核心处理引擎
-│   ├── parsers/                    # 文档解析与检测
-│   ├── handlers/                   # 文档组件处理器
-│   ├── quality/                    # 质量评估
+│   ├── infrastructure/             # 基础设施层
+│   │   ├── converters/             # 文件转换与格式化
+│   │   ├── exporters/              # 多格式导出（PDF/HTML/LaTeX）
+│   │   ├── handlers/               # 文档组件处理器
+│   │   ├── parsers/                # 解析器（BibTeX/PDF/LLM）
+│   │   ├── queue/                  # 任务队列与 Worker
+│   │   └── adapters/               # 外部适配器
+│   ├── application/                # 应用服务层
 │   ├── api/                        # REST API (FastAPI)
-│   └── infra/                      # 基础设施
-├── tests/                          # 测试套件
+│   ├── shared/                     # 共享工具（字体/错误消息）
+│   └── core/                       # 兼容性 shim（已废弃）
+├── interfaces/word_addin/          # Word Add-in 插件
+├── tests/                          # 测试套件（569 tests）
 ├── docs/                           # 文档
 ├── examples/                       # 示例文件
 └── template/                       # 默认模板

@@ -1,0 +1,9 @@
+schema_version: 1
+module_path: examples_and_data
+title: 示例文档与插件样例
+scope:
+    - examples/
+    - plugins/
+source_files: []
+depends_on: []
+related_to: []

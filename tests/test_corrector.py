@@ -17,12 +17,12 @@ def test_sample_paper_correction(sample_paper_path, template_path, config, tmp_p
     corrector = PaperFormatCorrector.__new__(PaperFormatCorrector)
     corrector.config = config
     corrector.template_path = template_path
-    from paper_format_corrector.core.format_corrector import FormatCorrector
-    from paper_format_corrector.core.format_exporter import FormatExporter
-    from paper_format_corrector.infra.logger import Logger
-    from paper_format_corrector.quality.diff_reporter import DiffReporter
-    from paper_format_corrector.quality.quality_scorer import QualityScorer
-    from paper_format_corrector.quality.rule_engine import RuleEngine
+    from paper_format_corrector.domain.correction.engine import FormatCorrector
+    from paper_format_corrector.infrastructure.exporters.format_exporter import FormatExporter
+    from paper_format_corrector.infrastructure.logger import Logger
+    from paper_format_corrector.domain.quality.diff_reporter import DiffReporter
+    from paper_format_corrector.domain.quality.quality_scorer import QualityScorer
+    from paper_format_corrector.domain.quality.rule_engine import RuleEngine
 
     corrector.corrector = FormatCorrector(template_path, config)
     corrector.exporter = FormatExporter()
@@ -47,12 +47,12 @@ def test_sample_paper_quality_score(sample_paper_path, template_path, config, tm
     corrector = PaperFormatCorrector.__new__(PaperFormatCorrector)
     corrector.config = config
     corrector.template_path = template_path
-    from paper_format_corrector.core.format_corrector import FormatCorrector
-    from paper_format_corrector.core.format_exporter import FormatExporter
-    from paper_format_corrector.infra.logger import Logger
-    from paper_format_corrector.quality.diff_reporter import DiffReporter
-    from paper_format_corrector.quality.quality_scorer import QualityScorer
-    from paper_format_corrector.quality.rule_engine import RuleEngine
+    from paper_format_corrector.domain.correction.engine import FormatCorrector
+    from paper_format_corrector.infrastructure.exporters.format_exporter import FormatExporter
+    from paper_format_corrector.infrastructure.logger import Logger
+    from paper_format_corrector.domain.quality.diff_reporter import DiffReporter
+    from paper_format_corrector.domain.quality.quality_scorer import QualityScorer
+    from paper_format_corrector.domain.quality.rule_engine import RuleEngine
 
     corrector.corrector = FormatCorrector(template_path, config)
     corrector.exporter = FormatExporter()
@@ -76,12 +76,12 @@ def test_sample_paper_diff_report(sample_paper_path, template_path, config, tmp_
     corrector = PaperFormatCorrector.__new__(PaperFormatCorrector)
     corrector.config = config
     corrector.template_path = template_path
-    from paper_format_corrector.core.format_corrector import FormatCorrector
-    from paper_format_corrector.core.format_exporter import FormatExporter
-    from paper_format_corrector.infra.logger import Logger
-    from paper_format_corrector.quality.diff_reporter import DiffReporter
-    from paper_format_corrector.quality.quality_scorer import QualityScorer
-    from paper_format_corrector.quality.rule_engine import RuleEngine
+    from paper_format_corrector.domain.correction.engine import FormatCorrector
+    from paper_format_corrector.infrastructure.exporters.format_exporter import FormatExporter
+    from paper_format_corrector.infrastructure.logger import Logger
+    from paper_format_corrector.domain.quality.diff_reporter import DiffReporter
+    from paper_format_corrector.domain.quality.quality_scorer import QualityScorer
+    from paper_format_corrector.domain.quality.rule_engine import RuleEngine
 
     corrector.corrector = FormatCorrector(template_path, config)
     corrector.exporter = FormatExporter()

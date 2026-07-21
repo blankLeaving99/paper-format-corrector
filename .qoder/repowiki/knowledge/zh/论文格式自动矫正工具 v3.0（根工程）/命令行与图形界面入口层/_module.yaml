@@ -1,0 +1,12 @@
+schema_version: 1
+module_path: cli_and_gui
+title: 命令行与图形界面入口层
+scope:
+    - src/paper_format_corrector/cli.py
+    - src/paper_format_corrector/app.py
+    - src/paper_format_corrector/gui.py
+    - src/paper_format_corrector/desktop_gui.py
+    - src/paper_format_corrector/__main__.py
+source_files: []
+depends_on: []
+related_to: []

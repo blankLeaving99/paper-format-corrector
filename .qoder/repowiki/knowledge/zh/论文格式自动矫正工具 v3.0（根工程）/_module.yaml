@@ -1,0 +1,22 @@
+schema_version: 1
+module_path: ""
+title: 论文格式自动矫正工具 v3.0（根工程）
+scope:
+    - README.md
+    - CONTRIBUTING.md
+    - CLAUDE.md
+    - AGENTS.md
+    - T3_plan.md
+    - pyproject.toml
+    - requirements.txt
+    - build.py
+    - run.py
+    - .gitignore
+    - .gitattributes
+    - CHANGELOG.md
+    - optimization_plan.md
+    - zhinan.md
+    - 论文格式矫正工具.spec
+source_files: []
+depends_on: []
+related_to: []

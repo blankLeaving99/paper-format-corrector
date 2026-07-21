@@ -15,7 +15,7 @@ from docx.shared import Pt
 class TestCodeDetection:
     def test_monospace_font_detected_as_code(self, config):
         """Paragraphs with Consolas font should be detected as CODE."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -29,7 +29,7 @@ class TestCodeDetection:
 
     def test_courier_new_detected_as_code(self, config):
         """Paragraphs with Courier New font should be detected as CODE."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -42,7 +42,7 @@ class TestCodeDetection:
 
     def test_indented_code_detected(self, config):
         """Indented text with code chars should be detected as CODE."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -54,7 +54,7 @@ class TestCodeDetection:
 
     def test_normal_text_not_detected_as_code(self, config):
         """Normal body text should not be detected as CODE."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -66,7 +66,7 @@ class TestCodeDetection:
 
     def test_english_body_not_detected_as_code(self, config):
         """Normal English body text should not be detected as CODE."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -80,7 +80,7 @@ class TestCodeDetection:
 class TestFormulaContentDetection:
     def test_cambria_math_detected_as_formula(self, config):
         """Paragraphs with Cambria Math font should be detected as FORMULA_CONTENT."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -93,7 +93,7 @@ class TestFormulaContentDetection:
 
     def test_math_unicode_detected_as_formula(self, config):
         """Paragraphs with math Unicode should be detected as FORMULA_CONTENT."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -105,7 +105,7 @@ class TestFormulaContentDetection:
 
     def test_formula_numbering_still_detected(self, config):
         """Formula numbering lines like (1-1) should still be FORMULA."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -117,7 +117,7 @@ class TestFormulaContentDetection:
 
     def test_normal_text_not_detected_as_formula(self, config):
         """Normal text should not be detected as FORMULA_CONTENT."""
-        from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+        from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
         detector = SectionDetector(config)
         doc = Document()
@@ -133,7 +133,7 @@ class TestFormulaContentDetection:
 class TestCodeFormatPreservation:
     def test_code_font_not_changed(self, config, tmp_path):
         """Code paragraphs should preserve their original font."""
-        from paper_format_corrector.core.format_corrector import FormatCorrector
+        from paper_format_corrector.domain.correction.engine import FormatCorrector
 
         doc = Document()
         p = doc.add_paragraph()
@@ -161,7 +161,7 @@ class TestCodeFormatPreservation:
     def test_code_line_spacing_not_changed(self, config, tmp_path):
         """Code paragraphs should preserve their original line spacing."""
 
-        from paper_format_corrector.core.format_corrector import FormatCorrector
+        from paper_format_corrector.domain.correction.engine import FormatCorrector
 
         doc = Document()
         p = doc.add_paragraph()
@@ -187,7 +187,7 @@ class TestCodeFormatPreservation:
 
     def test_body_text_still_corrected(self, config, tmp_path):
         """Normal body text should still be corrected."""
-        from paper_format_corrector.core.format_corrector import FormatCorrector
+        from paper_format_corrector.domain.correction.engine import FormatCorrector
 
         doc = Document()
         p = doc.add_paragraph()
@@ -208,7 +208,7 @@ class TestCodeFormatPreservation:
 class TestFormulaContentPreservation:
     def test_formula_content_font_not_changed(self, config, tmp_path):
         """Formula content paragraphs should preserve their original font."""
-        from paper_format_corrector.core.format_corrector import FormatCorrector
+        from paper_format_corrector.domain.correction.engine import FormatCorrector
 
         doc = Document()
         p = doc.add_paragraph()

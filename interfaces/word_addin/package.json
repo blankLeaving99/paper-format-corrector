@@ -1,0 +1,22 @@
+{
+  "name": "paper-format-corrector-addin",
+  "version": "1.0.0",
+  "description": "论文格式矫正 Word 插件 - 一键矫正论文格式",
+  "main": "src/taskpane.js",
+  "scripts": {
+    "start": "webpack-dev-server --mode development --open",
+    "build": "webpack --mode production",
+    "validate": "office-toolbox validate -m manifest.xml"
+  },
+  "keywords": ["office-addin", "word", "paper-format", "academic"],
+  "author": "PaperFormatCorrector",
+  "license": "MIT",
+  "dependencies": {},
+  "devDependencies": {
+    "@types/office-js": "^1.0.0",
+    "webpack": "^5.90.0",
+    "webpack-cli": "^5.1.0",
+    "webpack-dev-server": "^5.0.0",
+    "html-webpack-plugin": "^5.6.0"
+  }
+}

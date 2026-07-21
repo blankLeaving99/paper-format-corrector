@@ -10,7 +10,7 @@ from pathlib import Path
 from docx import Document
 from docx.shared import Pt
 
-from paper_format_corrector.core.format_corrector import FormatCorrector
+from paper_format_corrector.domain.correction.engine import FormatCorrector
 
 
 def _correct(doc, template_path, config, tmp_path, name="edge"):

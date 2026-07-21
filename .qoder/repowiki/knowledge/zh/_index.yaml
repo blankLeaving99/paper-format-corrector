@@ -1,0 +1,96 @@
+# 知识卡导出索引文件
+schema_version: 1
+locale: zh-CN
+branch: main
+nodes_managed: true
+exported_at: "2026-07-21T10:56:14Z"
+modules:
+    "":
+        dir_name: 论文格式自动矫正工具 v3.0（根工程）
+        title: 论文格式自动矫正工具 v3.0（根工程）
+        scope:
+            - README.md
+            - CONTRIBUTING.md
+            - CLAUDE.md
+            - AGENTS.md
+            - T3_plan.md
+            - pyproject.toml
+            - requirements.txt
+            - build.py
+            - run.py
+            - .gitignore
+            - .gitattributes
+            - CHANGELOG.md
+            - optimization_plan.md
+            - zhinan.md
+            - 论文格式矫正工具.spec
+        source_files: []
+        children:
+            - cli_and_gui
+            - docs
+            - examples_and_data
+            - presets_and_templates
+            - reference_material
+            - tests
+        depends_on: []
+        related_to: []
+    cli_and_gui:
+        dir_name: 命令行与图形界面入口层
+        title: 命令行与图形界面入口层
+        scope:
+            - src/paper_format_corrector/cli.py
+            - src/paper_format_corrector/app.py
+            - src/paper_format_corrector/gui.py
+            - src/paper_format_corrector/desktop_gui.py
+            - src/paper_format_corrector/__main__.py
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    docs:
+        dir_name: 项目文档集（PRD _ API _ 模板 _ 用户手册）
+        title: 项目文档集（PRD / API / 模板 / 用户手册）
+        scope:
+            - docs/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    examples_and_data:
+        dir_name: 示例文档与插件样例
+        title: 示例文档与插件样例
+        scope:
+            - examples/
+            - plugins/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    presets_and_templates:
+        dir_name: 预设模板库与全局配置
+        title: 预设模板库与全局配置
+        scope:
+            - presets/
+            - config/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    reference_material:
+        dir_name: 参考材料与第三方库源码（python-docx 与 Word-Formatter-Pro）
+        title: 参考材料与第三方库源码（python-docx 与 Word-Formatter-Pro）
+        scope:
+            - cankao/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []
+    tests:
+        dir_name: 论文格式矫正器测试套件
+        title: 论文格式矫正器测试套件
+        scope:
+            - tests/
+        source_files: []
+        children: []
+        depends_on: []
+        related_to: []

@@ -9,10 +9,10 @@ from docx import Document
 from docx.enum.table import WD_CELL_VERTICAL_ALIGNMENT, WD_TABLE_ALIGNMENT
 from docx.shared import Cm
 
-from paper_format_corrector.handlers.figure_table_handler import FigureTableHandler
-from paper_format_corrector.handlers.image_handler import ImageHandler
-from paper_format_corrector.handlers.table_handler import TableHandler
-from paper_format_corrector.parsers.section_detector import SectionDetector, SectionType
+from paper_format_corrector.domain.document.elements.figure_table_handler import FigureTableHandler
+from paper_format_corrector.domain.document.elements.image_handler import ImageHandler
+from paper_format_corrector.domain.document.elements.table_handler import TableHandler
+from paper_format_corrector.domain.document.parser.structure import SectionDetector, SectionType
 
 # ========== ImageHandler tests ==========
 
@@ -273,7 +273,7 @@ def test_detect_english_table_caption(config):
 
 def test_compat_check():
     """check_dependencies should return a list."""
-    from paper_format_corrector.infra.compat import check_dependencies
+    from paper_format_corrector.infrastructure.compat import check_dependencies
     warnings = check_dependencies()
     assert isinstance(warnings, list)
     # Should have no ERROR-level warnings if deps are installed

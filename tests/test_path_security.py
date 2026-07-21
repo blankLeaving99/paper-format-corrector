@@ -2,7 +2,7 @@
 
 import pytest
 
-from paper_format_corrector.infra.path_security import (
+from paper_format_corrector.infrastructure.path_security import (
     _DANGEROUS_CHARS_RE,
     _is_safe_path,
     _validate_path_safety,

@@ -18,7 +18,7 @@ from docx.oxml import OxmlElement
 from docx.oxml.ns import qn
 from docx.shared import Cm, Pt
 
-from ...shared.utils.docx_utils import set_east_asian_font
+from paper_format_corrector.shared.docx_utils import set_east_asian_font
 
 
 class CoverPageGenerator:

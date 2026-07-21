@@ -18,7 +18,7 @@ router = APIRouter(tags=["health"])
 def _check_template_library() -> str:
     """Check if template library (SQLite) is accessible."""
     try:
-        from paper_format_corrector.infra.template_repository import TemplateRepository
+        from paper_format_corrector.infrastructure.template_repository import TemplateRepository
         repo = TemplateRepository()
         templates = repo.list_templates()
         return "ok"

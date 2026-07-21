@@ -236,3 +236,28 @@ concurrency:
   max_workers: null  # null = auto (min(文件数, CPU核心数))
   # 单文档内后处理（评分/导出/对比）的最大并行线程数
   post_process_workers: 3
+
+# MySQL 数据库配置
+# ===========================================
+database:
+  # 连接参数
+  host: "127.0.0.1"
+  port: 3306
+  user: "root"
+  password: "123456"
+  database: "paper_format_corrector"
+  charset: "utf8mb4"
+  # 超时设置（秒）
+  connect_timeout: 10
+  read_timeout: 30
+  write_timeout: 30
+  # 连接池（未来扩展）
+  pool_size: 5
+  pool_recycle: 3600
+
+# 也可以通过环境变量覆盖：
+#   DB_HOST=127.0.0.1
+#   DB_PORT=3306
+#   DB_USER=root
+#   DB_PASSWORD=your_password
+#   DB_NAME=paper_format_corrector

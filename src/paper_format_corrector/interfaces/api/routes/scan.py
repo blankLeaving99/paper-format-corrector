@@ -16,7 +16,7 @@ router = APIRouter(tags=["scan"])
 
 def _analyze_document(doc_path: str) -> dict[str, Any]:
     """Run the DocumentAnalyzer and return a serializable dict."""
-    from paper_format_corrector.infrastructure.parsers.document_analyzer import DocumentAnalyzer
+    from paper_format_corrector.domain.document.analyzer import DocumentAnalyzer
 
     analyzer = DocumentAnalyzer()
     analysis = analyzer.analyze(Path(doc_path))

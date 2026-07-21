@@ -14,6 +14,7 @@ dependencies = [
     "pyyaml>=6.0,<7.0",
     "lxml>=5.0,<7.0",
     "Pillow>=9.0",
+    "pymysql>=1.1.0,<2.0",
 ]
 classifiers = [
     "Development Status :: 4 - Beta",
@@ -40,13 +41,16 @@ pdf-import = ["pdfplumber>=0.10.0"]
 doc-convert = ["docx2docx>=0.1.0"]
 gui = ["gradio>=4.0.0"]
 drag-drop = ["tkinterdnd2>=0.4.0"]
-all = ["docx2pdf>=0.1.8", "mammoth>=1.6.0", "pdfplumber>=0.10.0", "docx2docx>=0.1.0", "gradio>=4.0.0", "tkinterdnd2>=0.4.0"]
+remote = ["sqlalchemy>=2.0,<3.0", "bcrypt>=4.0,<5.0", "pyjwt>=2.8,<3.0"]
+ocr = ["pytesseract>=0.3.10", "pdf2image>=1.16.0"]
+pymupdf = ["PyMuPDF>=1.23.0"]
+all = ["docx2pdf>=0.1.8", "mammoth>=1.6.0", "pdfplumber>=0.10.0", "docx2docx>=0.1.0", "gradio>=4.0.0", "tkinterdnd2>=0.4.0", "sqlalchemy>=2.0,<3.0", "bcrypt>=4.0,<5.0", "pyjwt>=2.8,<3.0", "pymysql>=1.1.0,<2.0"]
 sync = ["httpx>=0.24.0"]
 dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.4.0", "httpx>=0.24.0"]
 
 [project.scripts]
-paper-fmt = "paper_format_corrector.cli:main"
-paper-correct = "paper_format_corrector.cli:main"
+paper-fmt = "paper_format_corrector.interfaces.cli.main:main"
+paper-correct = "paper_format_corrector.interfaces.cli.main:main"
 
 [tool.setuptools.packages.find]
 where = ["src"]
@@ -58,7 +62,7 @@ addopts = "-v --tb=short"
 
 [tool.coverage.run]
 source = ["src/paper_format_corrector"]
-omit = ["*/gui.py", "*/desktop_gui.py"]
+omit = ["*/interfaces/web/app.py", "*/interfaces/desktop/app.py"]
 
 [tool.coverage.report]
 show_missing = true

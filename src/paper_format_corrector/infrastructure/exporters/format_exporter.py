@@ -9,8 +9,8 @@
 
 import re
 
-from ...infra.external_tools import find_libreoffice
-from ...shared.utils.path_security import (
+from ...infrastructure.external_tools import find_libreoffice
+from ..path_security import (
     ALLOWED_INPUT_EXTENSIONS,
     ALLOWED_OUTPUT_EXTENSIONS,
     validate_input_path,
@@ -21,7 +21,7 @@ from ...shared.utils.path_security import (
 class FormatExporter:
     """论文格式导出器"""
 
-    SUPPORTED_FORMATS = ("pdf", "html", "txt", "md", "markdown")
+    SUPPORTED_FORMATS = ("pdf", "html", "txt", "md", "markdown", "tex", "latex")
 
     def __init__(self, config=None):
         self._docx2pdf = None
@@ -42,6 +42,8 @@ class FormatExporter:
         fmt = fmt.lower().strip(".")
         if fmt == "markdown":
             fmt = "md"
+        elif fmt == "latex":
+            fmt = "tex"
 
         if fmt not in self.SUPPORTED_FORMATS:
             raise ValueError(
@@ -64,6 +66,8 @@ class FormatExporter:
             return self._export_txt(docx_path, output_path)
         elif fmt == "md":
             return self._export_markdown(docx_path, output_path)
+        elif fmt == "tex":
+            return self._export_latex(docx_path, output_path)
 
     def _export_pdf(self, docx_path, output_path):
         """导出为 PDF"""
@@ -281,3 +285,14 @@ class FormatExporter:
 
     def _is_table_caption(self, text):
         return bool(self._tab_re.match(text))
+
+    def _export_latex(self, docx_path, output_path):
+        """导出为 LaTeX 格式"""
+        try:
+            from ..converters.latex_exporter import LaTeXExporter
+            exporter = LaTeXExporter(self._config)
+            return exporter.export(str(docx_path), str(output_path))
+        except ImportError:
+            raise RuntimeError(
+                "LaTeX 导出需要 latex_exporter 模块"
+            )

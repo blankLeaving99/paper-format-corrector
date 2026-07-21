@@ -1,0 +1,12 @@
+{
+  "id": "c58f081d-e237-4670-9415-3de4c229c862",
+  "status": "failed",
+  "file_path": "test_paper.docx",
+  "template_id": null,
+  "created_at": "2026-07-21T20:07:21.554152",
+  "updated_at": "2026-07-21T20:07:22.228952",
+  "result_path": null,
+  "error": "[WinError 2] 系统找不到指定的文件。",
+  "progress": 40,
+  "filename": "test_paper.docx"
+}

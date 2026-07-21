@@ -9,15 +9,15 @@ from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_LINE_SPACING
 from docx.oxml import OxmlElement
 from docx.shared import Cm, Pt
 
-from ...shared.utils.docx_utils import set_east_asian_font
-from ..handlers.figure_table_handler import FigureTableHandler
-from ..handlers.header_footer_handler import HeaderFooterHandler
-from ..handlers.image_handler import ImageHandler
-from ..handlers.table_handler import TableHandler
-from ..handlers.toc_handler import TOCHandler
-from ..parsers.cross_reference import CrossReferenceUpdater
-from ..parsers.reference_formatter import ReferenceFormatter
-from ..parsers.section_parser import (
+from paper_format_corrector.shared.docx_utils import get_east_asian_font, set_east_asian_font
+from ...domain.document.elements.figure_table_handler import FigureTableHandler
+from ...domain.document.elements.header_footer_handler import HeaderFooterHandler
+from ...domain.document.elements.image_handler import ImageHandler
+from ...domain.document.elements.table_handler import TableHandler
+from ...domain.document.elements.toc_handler import TOCHandler
+from ...domain.document.cross_reference import CrossReferenceUpdater
+from ...domain.document.parser.reference import ReferenceFormatter
+from ...domain.document.parser.section_parser import (
     SectionDetector,
     SectionType,
     detect_document_language,
@@ -47,7 +47,7 @@ class FormatCorrector:
         self.template_margins = {}
         if self.template_path:
             try:
-                from .style_extractor import StyleExtractor
+                from ..adapters.docx_adapter import StyleExtractor
                 extractor = StyleExtractor(self.template_path)
                 self.template_styles = extractor.extract_all_styles()
                 self.template_margins = extractor.extract_page_margins()
@@ -536,7 +536,7 @@ class FormatCorrector:
         font_rules = rules.get("font", {})
         for run in paragraph.runs:
             run.font.name = font_rules.get("english", "Times New Roman")
-            set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
+            set_east_asian_font(run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese'), is_heading=True))
             run.font.size = Pt(tp.get("title_font_size", 22))
             run.font.bold = tp.get("title_bold", True)
         align_map = {
@@ -555,7 +555,7 @@ class FormatCorrector:
         font_rules = rules.get("font", {})
         for run in paragraph.runs:
             run.font.name = font_rules.get("english", "Times New Roman")
-            set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+            set_east_asian_font(run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese')))
             run.font.size = Pt(tp.get("author_font_size", 12))
             run.font.bold = False
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -568,7 +568,7 @@ class FormatCorrector:
         font_rules = rules.get("font", {})
         for run in paragraph.runs:
             run.font.name = font_rules.get("english", "Times New Roman")
-            set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+            set_east_asian_font(run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese')))
             run.font.size = Pt(tp.get("affiliation_font_size", 10.5))
             run.font.bold = False
         paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
@@ -587,14 +587,14 @@ class FormatCorrector:
         if is_title_line:
             for run in paragraph.runs:
                 run.font.name = font_rules.get("english", "Times New Roman")
-                set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
+                set_east_asian_font(run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese'), is_heading=True))
                 run.font.size = Pt(abs_config.get("title_font_size", 16))
                 run.font.bold = abs_config.get("title_bold", True)
             paragraph.alignment = WD_ALIGN_PARAGRAPH.CENTER
         else:
             for run in paragraph.runs:
                 run.font.name = font_rules.get("english", "Times New Roman")
-                set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+                set_east_asian_font(run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese')))
                 run.font.size = Pt(abs_config.get("content_font_size", 12))
                 run.font.bold = False
             self._apply_line_spacing(paragraph, abs_config.get("content_line_spacing", 1.5))
@@ -624,17 +624,17 @@ class FormatCorrector:
             paragraph.runs[0].font.bold = kw_config.get("bold_label", True)
             paragraph.runs[0].font.size = Pt(kw_config.get("font_size", 12))
             paragraph.runs[0].font.name = font_rules.get("english", "Times New Roman")
-            set_east_asian_font(paragraph.runs[0], font_rules.get("chinese", "宋体"))
+            set_east_asian_font(paragraph.runs[0], get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese')))
             if content_part:
                 content_run = paragraph.add_run(content_part)
                 content_run.font.bold = False
                 content_run.font.size = Pt(kw_config.get("font_size", 12))
                 content_run.font.name = font_rules.get("english", "Times New Roman")
-                set_east_asian_font(content_run, font_rules.get("chinese", "宋体"))
+                set_east_asian_font(content_run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese')))
         else:
             for run in paragraph.runs:
                 run.font.name = font_rules.get("english", "Times New Roman")
-                set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+                set_east_asian_font(run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese')))
                 run.font.size = Pt(kw_config.get("font_size", 12))
 
         paragraph.paragraph_format.space_before = Pt(6)
@@ -647,7 +647,7 @@ class FormatCorrector:
 
         for run in paragraph.runs:
             self._set_run_font(run, font_rules, heading_rules)
-            set_east_asian_font(run, font_rules.get("heading_chinese", "黑体"))
+            set_east_asian_font(run, get_east_asian_font(font_rules, getattr(self, '_detected_language', 'chinese'), is_heading=True))
 
         align_map = {
             "center": WD_ALIGN_PARAGRAPH.CENTER,
@@ -763,11 +763,11 @@ class FormatCorrector:
         # 根据检测到的语言选择正确的 east_asian 字体键
         lang = getattr(self, '_detected_language', 'chinese')
         if lang == "japanese":
-            ea_font = font_rules.get("japanese", font_rules.get("chinese", "宋体"))
+            ea_font = get_east_asian_font(font_rules, "japanese")
         elif lang == "korean":
-            ea_font = font_rules.get("korean", font_rules.get("chinese", "宋体"))
+            ea_font = get_east_asian_font(font_rules, "korean")
         else:
-            ea_font = font_rules.get("chinese", "宋体")
+            ea_font = get_east_asian_font(font_rules, "chinese")
         set_east_asian_font(run, ea_font)
         if style_rules.get("bold"):
             run.font.bold = True

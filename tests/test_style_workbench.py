@@ -3,7 +3,7 @@
 from docx import Document
 from docx.shared import Pt
 
-from paper_format_corrector.application.services.style_workbench import (
+from paper_format_corrector.application.style_workbench import (
     build_application_report,
     build_correction_plan,
     explain_style_profile,
@@ -61,7 +61,7 @@ def test_profile_explanation_and_coverage_report(sample_paper_path):
 
 
 def test_build_correction_plan_identifies_elements(sample_paper_path):
-    from paper_format_corrector.infra.preset_loader import load_preset
+    from paper_format_corrector.infrastructure.preset_loader import load_preset
     config = load_preset("ieee")
     plan = build_correction_plan(sample_paper_path, config.get("format_rules", {}))
     assert plan.total_affected >= 0
@@ -69,7 +69,7 @@ def test_build_correction_plan_identifies_elements(sample_paper_path):
 
 
 def test_plan_to_dict_is_serializable(sample_paper_path):
-    from paper_format_corrector.infra.preset_loader import load_preset
+    from paper_format_corrector.infrastructure.preset_loader import load_preset
     config = load_preset("ieee")
     plan = build_correction_plan(sample_paper_path, config.get("format_rules", {}))
     d = plan_to_dict(plan)
@@ -181,7 +181,7 @@ def test_build_application_report_includes_all_sections(sample_paper_path):
 
 def test_type_override_mapping():
     """Test that type override mapping works correctly."""
-    from paper_format_corrector.infrastructure.parsers.section_parser import (
+    from paper_format_corrector.domain.document.parser.section_parser import (
         map_override_to_section_type,
         SectionType,
     )

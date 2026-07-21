@@ -15,8 +15,8 @@ import subprocess
 import tempfile
 from pathlib import Path
 
-from ...infra.external_tools import find_libreoffice
-from ...shared.utils.path_security import ALLOWED_INPUT_EXTENSIONS, validate_input_path
+from ...infrastructure.external_tools import find_libreoffice
+from ..path_security import ALLOWED_INPUT_EXTENSIONS, validate_input_path
 
 
 class FileConverter:

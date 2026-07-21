@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: docs
+title: 项目文档集（PRD / API / 模板 / 用户手册）
+scope:
+    - docs/
+source_files: []
+depends_on: []
+related_to: []

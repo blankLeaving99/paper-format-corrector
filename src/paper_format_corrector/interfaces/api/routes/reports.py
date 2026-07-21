@@ -10,7 +10,7 @@ from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
 
-from paper_format_corrector.infra.template_repository import TemplateRepository
+from paper_format_corrector.infrastructure.template_repository import TemplateRepository
 
 router = APIRouter(tags=["reports"])
 

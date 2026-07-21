@@ -71,7 +71,7 @@ if __name__ == "__main__":
         "--noconfirm",
         "--clean",
         "--onefile",                         # 打包为单个 exe 文件
-        "--windowed",                        # 不显示控制台窗口
+        "--console",                         # 控制台模式（run.py 需要终端交互）
         "--name=论文格式矫正工具",             # exe 文件名
         "--icon=static/tubiao02.ico",          # exe 图标
         # 数据文件：只打包 src、config、template

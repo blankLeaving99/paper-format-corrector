@@ -1,0 +1,8 @@
+schema_version: 1
+module_path: reference_material
+title: 参考材料与第三方库源码（python-docx 与 Word-Formatter-Pro）
+scope:
+    - cankao/
+source_files: []
+depends_on: []
+related_to: []

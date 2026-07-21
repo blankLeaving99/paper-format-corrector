@@ -1,6 +1,7 @@
 """多语言字体测试
 
 测试 _get_script_type()、_apply_mixed_font()、_set_run_font() 对中文/日文/韩文/英文的正确处理。
+测试 get_east_asian_font() 工具方法的语言感知字体选择。
 """
 
 import sys
@@ -190,3 +191,60 @@ class TestSetRunFont:
 
         corrector._set_run_font(run, font_rules, style_rules)
         assert run.font.name == "Times New Roman"
+
+
+class TestGetEastAsianFont:
+    """测试 get_east_asian_font() 工具方法"""
+
+    def test_chinese_body_default(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "chinese", False) == "宋体"
+
+    def test_chinese_heading_default(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "chinese", True) == "黑体"
+
+    def test_japanese_body_default(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "japanese", False) == "MS Mincho"
+
+    def test_japanese_heading_default(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "japanese", True) == "MS Gothic"
+
+    def test_korean_body_default(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "korean", False) == "Batang"
+
+    def test_korean_heading_default(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "korean", True) == "Dotum"
+
+    def test_chinese_with_custom_font_rules(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        rules = {"chinese": "楷体", "heading_chinese": "仿宋"}
+        assert get_east_asian_font(rules, "chinese", False) == "楷体"
+        assert get_east_asian_font(rules, "chinese", True) == "仿宋"
+
+    def test_japanese_with_custom_font_rules(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        rules = {"japanese": "Yu Mincho", "japanese_heading": "Yu Gothic"}
+        assert get_east_asian_font(rules, "japanese", False) == "Yu Mincho"
+        assert get_east_asian_font(rules, "japanese", True) == "Yu Gothic"
+
+    def test_korean_with_custom_font_rules(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        rules = {"korean": "Gulim", "korean_heading": "DotumChe"}
+        assert get_east_asian_font(rules, "korean", False) == "Gulim"
+        assert get_east_asian_font(rules, "korean", True) == "DotumChe"
+
+    def test_unknown_language_falls_back_to_chinese(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "english", False) == "宋体"
+        assert get_east_asian_font({}, "", False) == "宋体"
+
+    def test_empty_font_rules_uses_defaults(self):
+        from paper_format_corrector.shared.docx_utils import get_east_asian_font
+        assert get_east_asian_font({}, "chinese") == "宋体"
+        assert get_east_asian_font({}, "japanese") == "MS Mincho"
+        assert get_east_asian_font({}, "korean") == "Batang"

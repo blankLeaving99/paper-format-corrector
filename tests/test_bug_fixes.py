@@ -44,7 +44,7 @@ class TestTableHandlerTblPr:
 
     def test_get_or_create_tblPr_attaches_to_table(self):
         """新建的 tblPr 应挂载到表格元素树"""
-        from paper_format_corrector.handlers.table_handler import TableHandler
+        from paper_format_corrector.domain.document.elements.table_handler import TableHandler
 
         handler = TableHandler({})
         doc = Document()
@@ -59,7 +59,7 @@ class TestTableHandlerTblPr:
 
     def test_set_table_borders_on_new_table(self):
         """新表格设置边框不应报错"""
-        from paper_format_corrector.handlers.table_handler import TableHandler
+        from paper_format_corrector.domain.document.elements.table_handler import TableHandler
 
         handler = TableHandler({})
         doc = Document()
@@ -75,7 +75,7 @@ class TestTableHandlerTblPr:
 
     def test_remove_table_borders_on_new_table(self):
         """新表格设置三线表不应报错"""
-        from paper_format_corrector.handlers.table_handler import TableHandler
+        from paper_format_corrector.domain.document.elements.table_handler import TableHandler
 
         handler = TableHandler({})
         doc = Document()
@@ -93,7 +93,7 @@ class TestTOCHandlerPosition:
 
     def test_insert_toc_at_position_0(self):
         """position=0 应插入到文档开头"""
-        from paper_format_corrector.handlers.toc_handler import TOCHandler
+        from paper_format_corrector.domain.document.elements.toc_handler import TOCHandler
 
         handler = TOCHandler({})
         doc = Document()
@@ -109,7 +109,7 @@ class TestTOCHandlerPosition:
 
     def test_insert_toc_at_position_1(self):
         """position=1 应插入到第一个段落之后"""
-        from paper_format_corrector.handlers.toc_handler import TOCHandler
+        from paper_format_corrector.domain.document.elements.toc_handler import TOCHandler
 
         handler = TOCHandler({})
         doc = Document()
@@ -131,7 +131,7 @@ class TestReferenceFormatterEndIdx:
 
     def test_format_references_respects_end_idx(self):
         """ref_end_idx 应限制格式化范围"""
-        from paper_format_corrector.parsers.reference_formatter import ReferenceFormatter
+        from paper_format_corrector.domain.document.parser.reference import ReferenceFormatter
 
         formatter = ReferenceFormatter({})
         doc = Document()
@@ -156,7 +156,7 @@ class TestPathSecurityExtensions:
 
     def test_html_extension_accepted(self):
         """HTML 扩展名应被接受"""
-        from paper_format_corrector.infra.path_security import ALLOWED_OUTPUT_EXTENSIONS
+        from paper_format_corrector.infrastructure.path_security import ALLOWED_OUTPUT_EXTENSIONS
 
         assert ".html" in ALLOWED_OUTPUT_EXTENSIONS
 
@@ -175,7 +175,7 @@ class TestImageHandlerMargins:
 
     def test_zero_margin_not_treated_as_none(self):
         """margin 为 0 不应触发 fallback"""
-        from paper_format_corrector.handlers.image_handler import ImageHandler
+        from paper_format_corrector.domain.document.elements.image_handler import ImageHandler
 
         handler = ImageHandler({})
         doc = Document()
@@ -191,7 +191,7 @@ class TestImageHandlerMargins:
 
     def test_none_margin_uses_fallback(self):
         """没有 section 时应返回 fallback"""
-        from paper_format_corrector.handlers.image_handler import ImageHandler
+        from paper_format_corrector.domain.document.elements.image_handler import ImageHandler
 
         handler = ImageHandler({})
         # 创建空文档（理论上 python-docx 总有至少一个 section）
@@ -208,7 +208,7 @@ class TestDiffReporterEscaping:
 
     def test_quote_is_escaped(self):
         """引号应被转义"""
-        from paper_format_corrector.utils.docx_utils import escape_html
+        from paper_format_corrector.shared.docx_utils import escape_html
 
         result = escape_html('He said "hello"')
         assert "&quot;" in result
@@ -216,7 +216,7 @@ class TestDiffReporterEscaping:
 
     def test_all_special_chars_escaped(self):
         """所有特殊字符都应被转义"""
-        from paper_format_corrector.utils.docx_utils import escape_html
+        from paper_format_corrector.shared.docx_utils import escape_html
 
         result = escape_html('<a href="test">&')
         assert "&lt;" in result

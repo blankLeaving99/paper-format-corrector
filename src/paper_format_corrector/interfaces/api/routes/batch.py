@@ -38,13 +38,13 @@ def _run_batch_correction(
         处理结果字典
     """
     try:
-        from paper_format_corrector.application.services.batch_service import (
+        from paper_format_corrector.application.batch_service import (
             BatchCorrectionService,
         )
 
         config: dict[str, Any] = {}
         if template_id:
-            from paper_format_corrector.infra.preset_loader import load_preset
+            from paper_format_corrector.infrastructure.preset_loader import load_preset
 
             config = load_preset(template_id)
 

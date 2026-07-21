@@ -2,7 +2,7 @@
 
 import pytest
 
-from paper_format_corrector.parsers.rule_parser import (
+from paper_format_corrector.domain.document.rule_parser import (
     CHINESE_SIZE_MAP,
     RuleParser,
     parse_requirement_file,
