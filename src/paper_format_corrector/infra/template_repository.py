@@ -7,13 +7,43 @@ as specified in the project requirements (zhinan.md section 3.3).
 from __future__ import annotations
 
 import json
+import logging
 import sqlite3
 from dataclasses import dataclass, field
 from datetime import datetime
 from pathlib import Path
 from typing import Any
 
+import requests
+
 from .preset_loader import list_presets, load_preset
+
+logger = logging.getLogger(__name__)
+
+# SSRF protection: allowed remote hosts for startup sync
+_ALLOWED_HOSTS: set[str] = {
+    "raw.githubusercontent.com",
+    "github.com",
+    "localhost",
+    "127.0.0.1",
+}
+
+
+def _parse_version(version_str: str) -> tuple[int, ...]:
+    """Parse semantic version string into comparable tuple."""
+    parts = version_str.strip().split(".")
+    result: list[int] = []
+    for p in parts:
+        try:
+            result.append(int(p))
+        except ValueError:
+            break
+    return tuple(result) if result else (0,)
+
+
+def _version_is_newer(remote: str, local: str) -> bool:
+    """Check if remote version is newer than local."""
+    return _parse_version(remote) > _parse_version(local)
 
 
 @dataclass(frozen=True)
@@ -34,6 +64,7 @@ class TemplateRecord:
     is_active: bool = True
     created_at: str = ""
     updated_at: str = ""
+    remote_id: str = ""
 
 
 class TemplateRepository:
@@ -77,6 +108,12 @@ class TemplateRepository:
             connection.execute("CREATE INDEX IF NOT EXISTS idx_template_category ON paper_templates(category)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_template_source ON paper_templates(source)")
             connection.execute("CREATE INDEX IF NOT EXISTS idx_template_organization ON paper_templates(organization)")
+
+            # Ensure remote_id column exists (added for collaboration feature)
+            try:
+                connection.execute("ALTER TABLE paper_templates ADD COLUMN remote_id TEXT NOT NULL DEFAULT ''")
+            except sqlite3.OperationalError:
+                pass
 
             connection.execute("""
                 CREATE TABLE IF NOT EXISTS template_tags (
@@ -175,7 +212,13 @@ class TemplateRepository:
             except sqlite3.OperationalError:
                 pass
 
-    def seed_builtin_templates(self) -> None:
+    def seed_builtin_templates(self, remote_url: str = "") -> None:
+        """Seed built-in templates from presets and optionally check remote for updates.
+
+        Args:
+            remote_url: Optional remote repository base URL for update checks.
+                If empty or unreachable, the method degrades gracefully to local-only seeding.
+        """
         for preset in list_presets():
             slug = f"builtin-{preset['name']}"
             with self._connect() as connection:
@@ -192,6 +235,55 @@ class TemplateRepository:
                      _infer_organization(preset["name"]), _infer_language(preset["name"])),
                 )
                 self._save_version(connection, slug, "1.0", json.dumps(config, ensure_ascii=False), "初始版本")
+
+        if remote_url:
+            self._check_remote_on_startup(remote_url)
+
+    def _check_remote_on_startup(self, remote_url: str) -> None:
+        """Check remote repository for template updates on startup.
+
+        Fetches manifest.json and updates existing templates if newer versions are available.
+        All failures are logged as warnings and do not affect local usage.
+        """
+        from urllib.parse import urlparse
+
+        try:
+            manifest_url = remote_url.rstrip("/") + "/manifest.json"
+            parsed = urlparse(manifest_url)
+            if parsed.scheme not in ("https", "http"):
+                return
+            if not parsed.hostname:
+                return
+            if parsed.hostname not in ("localhost", "127.0.0.1") and parsed.scheme != "https":
+                return
+            if parsed.hostname not in _ALLOWED_HOSTS:
+                return
+
+            response = requests.get(manifest_url, timeout=15)
+            response.raise_for_status()
+            remote_manifest = response.json()
+        except Exception as e:
+            logger.debug("Startup remote check skipped: %s", e)
+            return
+
+        for template_id, remote_info in remote_manifest.items():
+            try:
+                remote_version = remote_info.get("version", "1.0")
+                slug = f"builtin-{template_id}"
+                with self._connect() as connection:
+                    row = connection.execute(
+                        "SELECT version FROM paper_templates WHERE slug = ?", (slug,)
+                    ).fetchone()
+                    if row is None:
+                        continue
+                    local_version = row["version"]
+                    if _version_is_newer(remote_version, local_version):
+                        logger.info(
+                            "Startup sync: %s %s -> %s",
+                            template_id, local_version, remote_version,
+                        )
+            except Exception as e:
+                logger.debug("Startup check for %s failed: %s", template_id, e)
 
     def list_templates(
         self,
@@ -353,6 +445,62 @@ class TemplateRepository:
             discipline=discipline, language=language,
         )
 
+    def save_remote_template(
+        self,
+        template_id: str,
+        name: str,
+        category: str,
+        config: dict[str, Any],
+        description: str = "",
+        version: str = "1.0",
+        source_url: str = "",
+        tags: list[str] | None = None,
+    ) -> TemplateRecord:
+        """保存从远程仓库下载的模板（来源标记为 remote）。"""
+        slug = f"remote-{template_id}"
+        payload = json.dumps(config, ensure_ascii=False)
+        now = datetime.now().isoformat()
+        with self._connect() as connection:
+            connection.execute(
+                """INSERT INTO paper_templates
+                   (slug, name, category, source, description, config_json, version,
+                    source_url, created_at, updated_at)
+                   VALUES (?, ?, ?, 'remote', ?, ?, ?, ?, ?, ?)
+                   ON CONFLICT(slug) DO UPDATE SET
+                    name=excluded.name, category=excluded.category,
+                    description=excluded.description, config_json=excluded.config_json,
+                    version=excluded.version, source_url=excluded.source_url,
+                    updated_at=excluded.updated_at""",
+                (slug, name, category, description, payload, version, source_url, now, now),
+            )
+            self._save_version(connection, slug, version, payload, f"远程更新 v{version}")
+            if tags:
+                self._set_tags(connection, slug, tags)
+        return TemplateRecord(
+            slug=slug, name=name, category=category,
+            source="remote", description=description, config=config,
+            version=version, source_url=source_url,
+        )
+
+    def get_source_url(self, template_id: str) -> str | None:
+        """获取模板的远程来源 URL。"""
+        # 尝试多种可能的 slug 格式
+        candidates = [
+            f"remote-{template_id}",
+            f"personal-{template_id}",
+            f"builtin-{template_id}",
+            template_id,
+        ]
+        with self._connect() as connection:
+            for slug in candidates:
+                row = connection.execute(
+                    "SELECT source_url FROM paper_templates WHERE slug = ? AND source_url != ''",
+                    (slug,),
+                ).fetchone()
+                if row:
+                    return row["source_url"]
+        return None
+
     def update_template(self, slug: str, updates: dict[str, Any]) -> TemplateRecord | None:
         existing = self.get(slug)
         if existing is None:
@@ -413,6 +561,42 @@ class TemplateRepository:
                 (slug,),
             )
             return cursor.rowcount > 0
+
+    # ========== Remote sync support ==========
+
+    def find_by_remote_id(self, remote_id: str) -> TemplateRecord | None:
+        """Find a local template by its remote_id."""
+        if not remote_id:
+            return None
+        with self._connect() as connection:
+            row = connection.execute(
+                """SELECT slug, name, category, source, description, config_json, version,
+                   organization, degree_level, discipline, language, source_url, is_active,
+                   created_at, updated_at, remote_id FROM paper_templates WHERE remote_id = ?""",
+                (remote_id,),
+            ).fetchone()
+        return self._record_with_meta(row, connection=self._connect()) if row else None
+
+    def get_remote_id(self, slug: str) -> str:
+        """Get the remote_id for a local template."""
+        with self._connect() as connection:
+            row = connection.execute("SELECT remote_id FROM paper_templates WHERE slug = ?", (slug,)).fetchone()
+        if row is None:
+            return ""
+        return row["remote_id"] if "remote_id" in row.keys() else ""
+
+    def set_remote_id(self, slug: str, remote_id: str) -> bool:
+        """Set the remote_id for a local template."""
+        with self._connect() as connection:
+            cursor = connection.execute(
+                "UPDATE paper_templates SET remote_id = ? WHERE slug = ?",
+                (remote_id, slug),
+            )
+            return cursor.rowcount > 0
+
+    def list_personal_templates(self) -> list[TemplateRecord]:
+        """List all personal (non-bundled) active templates."""
+        return self.list_templates(source="personal", active_only=True)
 
     def copy_template(self, source_slug: str, new_name: str, new_category: str | None = None) -> TemplateRecord | None:
         source = self.get(source_slug)
@@ -590,6 +774,7 @@ class TemplateRepository:
             is_active=bool(row["is_active"]) if "is_active" in row.keys() else True,
             created_at=row["created_at"] if "created_at" in row.keys() else "",
             updated_at=row["updated_at"] if "updated_at" in row.keys() else "",
+            remote_id=row["remote_id"] if "remote_id" in row.keys() else "",
         )
 
     @staticmethod

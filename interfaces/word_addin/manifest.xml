@@ -1,0 +1,63 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<OfficeApp xmlns="http://schemas.microsoft.com/office/appforoffice/1.1"
+           xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+           xsi:type="DocumentApp">
+  <Id>paper-format-corrector</Id>
+  <Version>1.0.0</Version>
+  <ProviderName>PaperFormatCorrector</ProviderName>
+  <DefaultLocale>zh-CN</DefaultLocale>
+  <DisplayName>论文格式矫正</DisplayName>
+  <Description>一键矫正论文格式，支持 IEEE、APA、Nature 等模板</Description>
+  <Hosts>
+    <Host Name="Document" />
+  </Hosts>
+  <Permissions>ReadWriteDocument</Permissions>
+  <AppDomains>
+    <AppDomain>http://localhost:8000</AppDomain>
+  </AppDomains>
+  <DefaultSettings>
+    <SourceLocation DefaultValue="https://localhost:3000/src/taskpane.html"/>
+  </DefaultSettings>
+  <VersionOverrides xmlns="http://schemas.microsoft.com/office/appforoffice/1.1">
+    <Hosts>
+      <Host Name="Document">
+        <DesktopFormFactor>
+          <FunctionFile Resid="function-file" />
+          <ExtensionPoint xsi:type="Taskpane">
+            <OfficeTab id="TabHome">
+              <Group id="cmdGroup">
+                <Label resid="groupLabel" />
+                <Control xsi:type="Button" id="cmdShowTaskpane">
+                  <Label resid="taskpaneButtonLabel" />
+                  <Supertip>
+                    <Title resid="taskpaneButtonLabel" />
+                    <Description resid="taskpaneButtonTooltip" />
+                  </Supertip>
+                  <Image sizetype="Icon" value="icon.png" />
+                  <Action xsi:type="ShowTaskpane">
+                    <TaskpaneId>paper-format-corrector</TaskpaneId>
+                    <SourceLocation resid="taskpaneUrl" />
+                  </Action>
+                </Control>
+              </Group>
+            </OfficeTab>
+          </ExtensionPoint>
+        </DesktopFormFactor>
+      </Host>
+    </Hosts>
+    <Resources>
+      <bt:Images xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/2010">
+        <bt:Image id="icon.png" DefaultValue="https://localhost:3000/assets/icon.png"/>
+      </bt:Images>
+      <bt:Urls xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/2010">
+        <bt:Url id="function-file" DefaultValue="https://localhost:3000/src/functions.html"/>
+        <bt:Url id="taskpaneUrl" DefaultValue="https://localhost:3000/src/taskpane.html"/>
+      </bt:Urls>
+      <bt:ShortStrings xmlns:bt="http://schemas.microsoft.com/office/officeappbasictypes/2010">
+        <bt:String id="groupLabel" DefaultValue="论文格式矫正"/>
+        <bt:String id="taskpaneButtonLabel" DefaultValue="打开矫正面板"/>
+        <bt:String id="taskpaneButtonTooltip" DefaultValue="打开论文格式矫正工具面板"/>
+      </bt:ShortStrings>
+    </Resources>
+  </VersionOverrides>
+</OfficeApp>

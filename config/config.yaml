@@ -220,6 +220,15 @@ styles_to_correct:
   - "Heading2"
   - "Heading3"
 
+# 云端模板同步配置
+template_sync:
+  # 是否启用自动同步
+  enabled: false
+  # 同步间隔（小时）
+  interval_hours: 24
+  # 远程模板仓库基础 URL
+  remote_url: ""
+
 # 并行处理配置
 concurrency:
   # 最大并行进程数（默认为 CPU 核心数）

@@ -41,7 +41,7 @@ class TitleModule(SectionModule):
             return False
         names = re.split(r"[,，、\s]+", text)
         if len(names) >= 2:
-            cn_names = [n for n in names if re.match(r"^[一-鿿]{2,4}$", n)]
+            cn_names = [n for n in names if re.match(r"^[一-鿿ぁ-んァ-ヶ가-힣]{2,4}$", n)]
             if len(cn_names) >= 2:
                 return True
         if re.match(r"^[A-Z][a-z]+\.?\s+[A-Z][a-z]+", text):

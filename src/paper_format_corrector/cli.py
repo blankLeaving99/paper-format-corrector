@@ -182,6 +182,8 @@ def cmd_template(args: argparse.Namespace) -> None:
         _template_delete(repo, args)
     elif sub == "info":
         _template_info(repo, args)
+    elif sub == "update":
+        _template_update(repo, args)
     else:
         print(f"未知的模板操作: {sub}")
         sys.exit(1)
@@ -309,6 +311,80 @@ def _template_info(repo, args):
         print(f"\n  版本历史 ({len(versions)} 个版本):")
         for v in versions[:5]:
             print(f"    v{v['version']} ({v['created_at'][:10]}): {v.get('changelog', '无说明')}")
+
+
+def _template_update(repo, args):
+    """检查云端模板更新"""
+    import yaml
+
+    # 加载更新配置
+    config_path = Path("config/updater.yaml")
+    remote_url = getattr(args, "remote_url", None)
+
+    if not remote_url and config_path.exists():
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                updater_config = yaml.safe_load(f) or {}
+            remote_url = updater_config.get("updater", {}).get("remote_url", "")
+        except Exception:
+            pass
+
+    if not remote_url:
+        print("错误: 未配置远程仓库地址。请在 config/updater.yaml 中设置 remote_url 或使用 --remote-url 参数。")
+        sys.exit(1)
+
+    from .infra.updater import VersionChecker
+
+    checker = VersionChecker(remote_url)
+
+    # 获取本地模板版本
+    local_versions: dict[str, str] = {}
+    for t in repo.list_templates(active_only=False):
+        # 去掉 slug 前缀得到 template_id
+        template_id = t.slug
+        for prefix in ("remote-", "personal-", "builtin-"):
+            if template_id.startswith(prefix):
+                template_id = template_id[len(prefix):]
+                break
+        local_versions[template_id] = t.version
+
+    print("\n正在检查云端模板更新...")
+    print(f"远程仓库: {remote_url}")
+
+    try:
+        updates = checker.check_updates(local_versions)
+    except Exception as e:
+        print(f"\n检查更新失败（网络不可用或仓库地址错误）: {e}")
+        print("已降级为跳过更新检查，不影响本地模板使用。")
+        return
+
+    if not updates:
+        print("\n所有模板已是最新。")
+        return
+
+    print(f"\n发现 {len(updates)} 个更新:")
+    for u in updates:
+        if u["action"] == "new":
+            print(f"  + {u['name']} (新模板 v{u['version']})")
+        else:
+            print(f"  ~ {u['name']} {u['from_version']} -> {u['to_version']}")
+
+    # 询问是否应用
+    apply = getattr(args, "apply", False)
+    if not apply:
+        try:
+            confirm = input("\n是否更新？[y/N] ").strip().lower()
+        except (EOFError, KeyboardInterrupt):
+            confirm = "n"
+        if confirm != "y":
+            print("已取消。")
+            return
+
+    from .infra.updater import AutoUpdater
+
+    updater = AutoUpdater(repo, checker)
+    applied = updater._check_and_apply()
+    print(f"\n更新完成: {len(applied)} 个模板已更新。")
 
 
 # ======================================================================
@@ -739,6 +815,7 @@ def main() -> None:  # noqa: C901
   python -m paper_format_corrector template import file.yaml
   python -m paper_format_corrector template export builtin-ieee -o ieee.yaml
   python -m paper_format_corrector template delete personal-my-template
+  python -m paper_format_corrector template update
   python -m paper_format_corrector batch -i input/ -o output/
   python -m paper_format_corrector report -f paper.docx --score
 
@@ -806,6 +883,12 @@ def main() -> None:  # noqa: C901
     info_parser = template_sub.add_parser("info", help="查看模板详情")
     info_parser.add_argument("slug", help="模板Slug")
     _add_common_args(info_parser)
+
+    # template update
+    update_parser = template_sub.add_parser("update", help="检查云端模板更新")
+    update_parser.add_argument("--remote-url", help="远程仓库地址（覆盖配置）")
+    update_parser.add_argument("--apply", action="store_true", help="自动应用所有更新")
+    _add_common_args(update_parser)
 
     # --- batch ---
     batch_parser = subparsers.add_parser("batch", help="批量矫正多个文件")

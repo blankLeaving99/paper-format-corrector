@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="X-UA-Compatible" content="IE=edge">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>论文格式矫正</title>
+  <link rel="stylesheet" href="taskpane.css">
+  <script src="https://appsforoffice.microsoft.com/lib/1/hosted/office.js"></script>
+</head>
+<body>
+  <div class="container">
+    <header class="header">
+      <h1>论文格式矫正</h1>
+      <p class="subtitle">一键矫正论文格式</p>
+    </header>
+
+    <!-- 步骤1: 选择模板 -->
+    <section class="section">
+      <div class="section-header">
+        <span class="step-badge">1</span>
+        <label>选择模板</label>
+      </div>
+      <select id="templateSelect" class="select">
+        <option value="">-- 加载中 --</option>
+      </select>
+      <div class="preset-hint" id="presetHint"></div>
+    </section>
+
+    <!-- 步骤2: 扫描文档 -->
+    <section class="section">
+      <div class="section-header">
+        <span class="step-badge">2</span>
+        <label>扫描文档</label>
+      </div>
+      <button id="scanBtn" class="btn btn-primary">
+        <span class="btn-icon">&#128269;</span> 扫描文档
+      </button>
+      <div id="scanResult" class="scan-result" style="display:none;">
+        <div class="stat-grid">
+          <div class="stat-item">
+            <span class="stat-value" id="headingCount">0</span>
+            <span class="stat-label">标题</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="bodyCount">0</span>
+            <span class="stat-label">正文段落</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="imageCount">0</span>
+            <span class="stat-label">图片</span>
+          </div>
+          <div class="stat-item">
+            <span class="stat-value" id="tableCount">0</span>
+            <span class="stat-label">表格</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- 步骤3: 执行矫正 -->
+    <section class="section">
+      <div class="section-header">
+        <span class="step-badge">3</span>
+        <label>执行矫正</label>
+      </div>
+      <button id="correctBtn" class="btn btn-success" disabled>
+        <span class="btn-icon">&#9989;</span> 执行矫正
+      </button>
+    </section>
+
+    <!-- 进度 -->
+    <div id="progress" class="progress-container" style="display:none;">
+      <progress id="progressBar" value="0" max="100"></progress>
+      <span id="progressText" class="progress-text">0%</span>
+    </div>
+
+    <!-- 状态 -->
+    <div id="status" class="status"></div>
+
+    <!-- API 连接状态 -->
+    <footer class="footer">
+      <span id="apiStatus" class="api-status">检查连接中...</span>
+    </footer>
+  </div>
+
+  <script src="office.js"></script>
+  <script src="taskpane.js"></script>
+</body>
+</html>

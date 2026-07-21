@@ -1,13 +1,19 @@
 """Template query endpoints.
 
-GET  /api/v1/templates             — list templates with pagination & filters
-GET  /api/v1/templates/categories  — list all categories
-GET  /api/v1/templates/search      — search by keyword
-GET  /api/v1/templates/{id}        — get full template config
+GET  /api/v1/templates                — list templates with pagination & filters
+GET  /api/v1/templates/categories     — list all categories
+GET  /api/v1/templates/search         — search by keyword
+GET  /api/v1/templates/{id}           — get full template config
+GET  /api/v1/templates/sync/list      — list public templates for remote sync
+GET  /api/v1/templates/sync/{id}      — get a single remote template by ID
+POST /api/v1/templates/sync/push      — push a new template to the remote
+POST /api/v1/templates/sync/{id}      — update an existing remote template
 """
 
 from __future__ import annotations
 
+import uuid
+from datetime import datetime
 from typing import Any
 
 from fastapi import APIRouter, HTTPException, Query
@@ -210,6 +216,157 @@ def get_template(template_id: str) -> dict[str, Any]:
         "description": record.description,
         "config": record.config,
         "is_active": record.is_active,
+        "created_at": record.created_at,
+        "updated_at": record.updated_at,
+    }
+
+
+# ── Sync endpoints (for remote template server) ──────────────────
+
+
+@router.get(
+    "/api/v1/templates/sync/list",
+    summary="同步模板列表",
+    description="返回所有公共模板列表，供远程客户端拉取同步使用。",
+    response_model=list[dict[str, Any]],
+)
+def sync_list_templates() -> list[dict[str, Any]]:
+    """List all public templates for remote synchronization."""
+    repo = _repo()
+    templates = repo.list_templates(active_only=True)
+    return [_sync_template_summary(t) for t in templates if t.source == "bundled" or t.remote_id]
+
+
+@router.get(
+    "/api/v1/templates/sync/{remote_id}",
+    summary="获取远程模板详情",
+    description="按 remote_id 获取模板完整配置，供远程客户端拉取。",
+    responses={200: {"description": "模板详情"}, 404: {"description": "模板不存在"}},
+)
+def sync_get_template(remote_id: str) -> dict[str, Any]:
+    """Get a single template by remote_id for synchronization."""
+    repo = _repo()
+    record = repo.find_by_remote_id(remote_id)
+    if record is None:
+        # Fallback: try slug lookup for backward compatibility
+        record = repo.get(remote_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"远程模板不存在: {remote_id}")
+    return _sync_template_full(record)
+
+
+@router.post(
+    "/api/v1/templates/sync/push",
+    summary="推送新模板",
+    description="将本地模板推送到远程服务器。如果未提供 id，则创建新模板并分配 remote_id。",
+    response_model=dict[str, Any],
+)
+def sync_push_template(payload: dict[str, Any]) -> dict[str, Any]:
+    """Push a new template to the remote repository.
+
+    Request body:
+        name (str): Template name
+        category (str): Template category
+        config (dict): Format rules configuration
+        organization (str, optional): Organization name
+        version (str, optional): Version string
+        description (str, optional): Description
+        tags (list[str], optional): Tags
+        is_public (str, optional): Visibility ('true'/'false'/'share_link')
+    """
+    name = payload.get("name", "").strip()
+    if not name:
+        raise HTTPException(status_code=400, detail="模板名称不能为空")
+
+    category = payload.get("category", "同步模板")
+    config = payload.get("config", {})
+    description = payload.get("description", "")
+    organization = payload.get("organization", "")
+    tags = payload.get("tags", [])
+
+    remote_id = str(uuid.uuid4())
+    repo = _repo()
+    saved = repo.save_personal_template(
+        name=name,
+        category=category,
+        config=config,
+        description=description,
+        tags=tags,
+        organization=organization,
+    )
+    repo.set_remote_id(saved.slug, remote_id)
+    repo.update_template(saved.slug, {"source_url": f"remote:{remote_id}"})
+
+    return {
+        "id": remote_id,
+        "slug": saved.slug,
+        "name": saved.name,
+        "category": saved.category,
+        "created_at": datetime.now().isoformat(),
+    }
+
+
+@router.post(
+    "/api/v1/templates/sync/{remote_id}",
+    summary="更新远程模板",
+    description="按 remote_id 更新已有模板的配置和元信息。",
+    response_model=dict[str, Any],
+)
+def sync_update_template(remote_id: str, payload: dict[str, Any]) -> dict[str, Any]:
+    """Update an existing remote template by remote_id."""
+    repo = _repo()
+    record = repo.find_by_remote_id(remote_id)
+    if record is None:
+        raise HTTPException(status_code=404, detail=f"远程模板不存在: {remote_id}")
+
+    updates: dict[str, Any] = {}
+    for field in ("name", "category", "organization", "version", "description"):
+        if field in payload:
+            updates[field] = payload[field]
+    if "config" in payload:
+        updates["config"] = payload["config"]
+    if "tags" in payload:
+        updates["tags"] = payload["tags"]
+
+    if updates:
+        repo.update_template(record.slug, updates)
+
+    return {
+        "id": remote_id,
+        "slug": record.slug,
+        "name": payload.get("name", record.name),
+        "updated_at": datetime.now().isoformat(),
+    }
+
+
+def _sync_template_summary(t: Any) -> dict[str, Any]:
+    return {
+        "id": t.remote_id or t.slug,
+        "slug": t.slug,
+        "name": t.name,
+        "category": t.category,
+        "source": t.source,
+        "organization": t.organization,
+        "version": t.version,
+        "config": t.config,
+        "tags": t.tags,
+        "is_public": "true",
+        "updated_at": t.updated_at,
+    }
+
+
+def _sync_template_full(record: Any) -> dict[str, Any]:
+    return {
+        "id": record.remote_id or record.slug,
+        "slug": record.slug,
+        "name": record.name,
+        "category": record.category,
+        "organization": record.organization,
+        "version": record.version,
+        "config": record.config,
+        "description": record.description,
+        "tags": record.tags,
+        "is_public": "true",
         "created_at": record.created_at,
         "updated_at": record.updated_at,
     }

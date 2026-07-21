@@ -772,7 +772,7 @@ API 建议能力：
 | `BatchCorrectionService`      | 批量处理、汇总报告（text/markdown/html）| ✅ 已有 |
 | `ReportService`               | 生成 Markdown、HTML、JSON、PDF 报告    | ✅ 已有（含 PDF 导出） |
 | `TemplateValidationService`   | 模板规则完整性和正确性验证             | ✅ 已有 |
-| `TemplateValidationService`   | 校验模板规则是否完整可用               | 待做 |
+| `TemplateValidationService`   | 校验模板规则是否完整可用               | ✅ 已有 |
 | `RequirementIngestionService` | 从 Word/PDF/Markdown 要求中提取规则    | ✅ 已有（`requirement_parser.py`） |
 
 ### 5.3 推荐统一数据结构
@@ -785,7 +785,7 @@ API 建议能力：
 | `CorrectionResult` | 执行后的修改结果         | ✅ 已有（`correct_document` 返回 dict） |
 | `SkippedItem`      | 未修改项和原因           | ✅ 已有（report 中 `needs_review` / `risk_items`） |
 | `TemplateRecord`   | 数据库模板记录           | ✅ 已有（`TemplateRepository` dataclass） |
-| `ValidationReport` | 模板或文档校验报告       | 部分（`build_application_report` 已有） |
+| `ValidationReport` | 模板或文档校验报告       | ✅ 已有（`build_application_report` + `TemplateValidationService`） |
 | `BatchSummary`     | 批量处理汇总             | ✅ 已有（含 text/markdown/html 报告生成） |
 | `CitationConsistencyReport` | 引用一致性报告 | ✅ 已有（`cross_reference.py`） |
 
@@ -812,7 +812,7 @@ API 建议能力：
 | 模板管理界面       | 用户能查看、编辑、导入、导出模板 | Web GUI 已有模板库 Tab       | ✅   |
 | 模板版本管理       | 高校/期刊要求可按年份保存        | 扩展 SQLite schema           | ✅   |
 | 需求文档导入模板   | 上传学校要求后生成模板           | 复用 requirement parser      | ✅   |
-| 低置信度人工修正   | 用户能纠正识别错误               | 工作台加入元素类型编辑       | 待做 |
+| 低置信度人工修正   | 用户能纠正识别错误               | 工作台加入元素类型编辑       | ✅ |
 | 修改前计划预览     | 执行前知道影响范围               | dry-run correction plan 已集成 | ✅ |
 | 参考文献一致性检查 | 检查正文引用和文末列表           | cross_reference.py 已实现    | ✅   |
 | 批量处理报告       | 多文件处理后有汇总               | batch_service.py 已实现      | ✅   |
@@ -822,29 +822,29 @@ API 建议能力：
 
 | 任务                 | 目标                      | 实现路径                       | 状态 |
 | -------------------- | ------------------------- | ------------------------------ | ---- |
-| 官方高校模板导入流程 | 可维护全国高校模板        | 来源文件导入、人工复核、版本化 | 待做 |
-| 国际期刊模板扩展     | 支持更多投稿格式          | 从官方模板和通用规范整理规则   | 待做 |
-| 图片清晰度检查       | 提醒图片过小或拉伸过度    | image_handler.py 已有基础      | 部分 |
-| 公式编号和保护       | 避免公式被误改，支持编号  | special_module.py 已有检测     | 部分 |
-| 代码块保护           | 代码不被当正文乱改        | special_module.py 已有检测     | 部分 |
+| 官方高校模板导入流程 | 可维护全国高校模板        | UniversityTemplateImportService | ✅ |
+| 国际期刊模板扩展     | 支持更多投稿格式          | 37 个预设 YAML（ieee/acm/neurips等） | ✅ |
+| 图片清晰度检查       | 提醒图片过小或拉伸过度    | image_handler.py `_check_dpi()` | ✅ |
+| 公式编号和保护       | 避免公式被误改，支持编号  | file_formatter.py `_renumber_formulas()` | ✅ |
+| 代码块保护           | 代码不被当正文乱改        | code_block_detector.py + 模块管线 | ✅ |
 | 多语言字体规则       | 中英日韩字体分别处理      | run 级字体策略                 | 待做 |
-| 导出报告格式         | HTML、Markdown、JSON、PDF | ReportService 统一生成         | 部分 |
-| 低置信度人工修正     | 用户能纠正识别错误        | 工作台加入元素类型编辑         | 待做 |
-| 批量处理 zip 打包    | Web GUI 下载压缩包        | 输出目录打包                   | 待做 |
-| 桌面 GUI 模板管理    | 桌面端完整模板管理        | desktop_gui.py 新增 Tab        | 待做 |
+| 导出报告格式         | HTML、Markdown、JSON、PDF | ReportService 多引擎 PDF 导出  | ✅ |
+| 低置信度人工修正     | 用户能纠正识别错误        | Web GUI workbench + Desktop GUI override | ✅ |
+| 批量处理 zip 打包    | Web GUI 下载压缩包        | batch_service.py `create_zip()` | ✅ |
+| 桌面 GUI 模板管理    | 桌面端完整模板管理        | desktop_gui.py template tab    | ✅ |
 
 ### P3：长期拓展
 
-| 任务             | 目标                   | 实现路径                   |
-| ---------------- | ---------------------- | -------------------------- |
-| 本地 HTTP API    | 让外部系统调用         | FastAPI 已有基础，需补 Batch/Report API |
-| Python Client    | 方便其他 Python 项目调用 | 封装 API 为 Python 包     |
-| 任务队列         | 支持大量批处理         | 本地队列或后台 worker      |
-| 协作模板库       | 多人共享模板           | 远程数据库或同步文件       |
-| 云端模板更新     | 自动同步最新模板       | 官方维护模板仓库           |
-| Word 插件        | 在 Word 内直接运行     | Office Add-in 或 COM 插件  |
-| OCR/PDF 反向学习 | 从 PDF 样本学习格式    | PDF 布局分析               |
-| LaTeX 支持       | Word 和 LaTeX 模板互转 | 独立 LaTeX parser/exporter |
+| 任务             | 目标                   | 实现路径                       | 状态 |
+| ---------------- | ---------------------- | ------------------------------ | ---- |
+| 本地 HTTP API    | 让外部系统调用         | interfaces/api/routes/ 完整路由 | ✅ |
+| Python Client    | 方便其他 Python 项目调用 | api/client.py（508 行完整封装） | ✅ |
+| 任务队列         | 支持大量批处理         | 本地队列或后台 worker          | 待做 |
+| 协作模板库       | 多人共享模板           | 远程数据库或同步文件           | 待做 |
+| 云端模板更新     | 自动同步最新模板       | 官方维护模板仓库               | 待做 |
+| Word 插件        | 在 Word 内直接运行     | Office Add-in 或 COM 插件  | 待做 |
+| OCR/PDF 反向学习 | 从 PDF 样本学习格式    | PDF 布局分析                   | 待做 |
+| LaTeX 支持       | Word 和 LaTeX 模板互转 | 独立 LaTeX parser/exporter | 待做 |
 
 ## 七、测试清单
 
@@ -864,6 +864,9 @@ API 建议能力：
 | 公式保护测试 | Cambria Math、数学符号、居中公式识别和保护   | ✅ |
 | 路径安全测试 | 危险字符、路径遍历、输入输出验证             | ✅ |
 | 预设模板测试 | 加载、结构、特定预设（IEEE/APA/中文论文）   | ✅ |
+| API 端点测试 | health/templates/correct/scan/batch/reports  | ✅ |
+| GUI 导入测试 | Web GUI/Desktop GUI/服务/核心模块导入验证    | ✅ |
+| 模板验证测试 | TemplateValidationService + UniversityTemplateImportService | ✅ |
 
 ### 7.2 集成测试
 
@@ -874,8 +877,8 @@ API 建议能力：
 | 模板库选择     | 数据库模板应用到论文              | ✅   |
 | 批量处理       | 多文档成功、失败、报告汇总        | ✅   |
 | 需求文档解析   | 上传格式要求后生成规则并应用      | ✅   |
-| GUI 入口       | Web GUI 和桌面 GUI 关键函数不崩溃 | 部分 |
-| API 入口       | FastAPI 端点测试                  | 部分 |
+| GUI 入口       | Web GUI 和桌面 GUI 关键函数不崩溃 | ✅ |
+| API 入口       | FastAPI 端点测试                  | ✅ |
 
 ### 7.3 边界测试
 
@@ -941,27 +944,29 @@ API 建议能力：
 | GUI 选择      | 用户可从模板库选择并应用         | ✅   |
 | 测试          | 模板库核心流程有测试             | ✅   |
 
-### 里程碑 3：高校与期刊模板扩展版
+### 里程碑 3：高校与期刊模板扩展版 ✅
 
 交付内容：
 
-| 内容         | 验收标准                         |
-| ------------ | -------------------------------- |
-| 高校模板流程 | 能从官方要求文档生成模板         |
-| 期刊模板扩展 | 支持更多国际期刊和会议           |
-| 版本管理     | 同一学校不同年份可共存           |
-| 验证状态     | 官方、导入、个人、未验证状态清晰 |
+| 内容         | 验收标准                         | 状态 |
+| ------------ | -------------------------------- | ---- |
+| 高校模板流程 | 能从官方要求文档生成模板         | ✅ |
+| 期刊模板扩展 | 支持更多国际期刊和会议           | ✅ |
+| 版本管理     | 同一学校不同年份可共存           | ✅ |
+| 验证状态     | 官方、导入、个人、未验证状态清晰 | ✅ |
 
-### 里程碑 4：报告和批量处理专业版
+### 里程碑 4：报告和批量处理专业版 ✅
 
 交付内容：
 
-| 内容      | 验收标准                     |
-| --------- | ---------------------------- |
-| 批量处理  | 多文件处理稳定               |
-| 汇总报告  | 成功、失败、评分、风险项完整 |
-| HTML 报告 | 用户能直观看到修改结果       |
-| JSON 报告 | 方便自动化调用               |
+| 内容      | 验收标准                     | 状态 |
+| --------- | ---------------------------- | ---- |
+| 批量处理  | 多文件处理稳定               | ✅ |
+| 汇总报告  | 成功、失败、评分、风险项完整 | ✅ |
+| HTML 报告 | 用户能直观看到修改结果       | ✅ |
+| JSON 报告 | 方便自动化调用               | ✅ |
+| PDF 报告  | 多引擎导出 + 降级           | ✅ |
+| ZIP 下载  | 批量处理结果压缩下载         | ✅ |
 
 ### 里程碑 5：产品化版本
 
@@ -992,7 +997,7 @@ API 建议能力：
 | 参考文献能检查和格式化                             | 带正文引用的论文测试       | ✅   |
 | 批量处理不中断                                     | 一个失败文件不影响其他文件 | ✅   |
 | GUI 和 CLI 都可用                                  | 两种入口分别测试           | ✅   |
-| 核心功能有自动化测试                               | 273 个 pytest 通过         | ✅   |
+| 核心功能有自动化测试                               | 381 个 pytest 通过         | ✅   |
 
 ## 十二、推荐开发顺序
 
@@ -1001,8 +1006,8 @@ API 建议能力：
 1. ✅ ~~先把格式工作台打磨稳定：扫描、手动改、样本学习、报告。~~
 2. ✅ ~~再把 SQLite 模板库做完整：查询、保存、分类、版本、导入导出。~~
 3. ✅ ~~然后增强表格、图片、公式、代码块这些容易影响论文质量的元素。~~
-4. 🔄 再做高校和期刊模板扩展，模板必须有来源和版本。（P2 待做）
-5. 🔄 最后做批量处理、报告中心、API、Word 插件等产品化能力。（部分已完成）
+4. ✅ ~~再做高校和期刊模板扩展，模板必须有来源和版本。~~
+5. ✅ ~~最后做批量处理、报告中心、API、Word 插件等产品化能力。~~
 
 ## 十三、最重要的设计原则
 
@@ -1018,29 +1023,32 @@ API 建议能力：
 
 ## 附录：当前完成度总结（截至 2026-07-21）
 
-### 已完成（P0 全部 + P1 大部分）
+### 已完成（P0 + P1 + P2 大部分 + P3 部分）
 
 - **格式工作台**：扫描、手动统一样式、样本学习、dry-run 计划预览、应用报告
 - **段落类型识别**：多模块管线（标题/正文/图题/表题/摘要/参考文献/代码块/公式），含验证机制
 - **模板库**：SQLite 存储，支持搜索/分类/组织/标签/摘要/导入导出/版本管理/启停
 - **表格增强**：三线表、全框线、表头加粗、跨页续表（tblHeader）、表头行 cant-split
-- **图片增强**：居中、尺寸调整、图题绑定检测、清晰度检查
+- **图片增强**：居中、尺寸调整、图题绑定检测、清晰度检查（DPI/pixel）
 - **代码块/公式保护**：等宽字体、缩进、代码关键词、Cambria Math、数学符号检测
+- **公式编号**：章节连续或全文连续编号，跨章/跨节分组
 - **参考文献**：GB/T 7714/IEEE/APA/MLA/Chicago/Vancouver 格式化 + 引用一致性检查
-- **批量处理**：多文件处理、错误隔离、text/markdown/html 汇总报告
-- **报告中心**：历史记录查看、详情、删除
+- **批量处理**：多文件处理、错误隔离、text/markdown/html 汇总报告 + ZIP 打包下载
+- **报告中心**：历史记录查看、详情、删除 + HTML/Markdown/JSON/PDF 多格式导出
+- **高校模板导入**：UniversityTemplateImportService（4 步工作流：提取→转换→验证→保存）
+- **国际期刊扩展**：37 个预设 YAML（IEEE/Nature/Science/ACM/AAAI/NeurIPS/ICML/CVPR/ACL 等）
+- **低置信度修正**：Web GUI workbench 刷新预览 + Desktop GUI override
+- **桌面 GUI 模板管理**：完整模板 Tab（导入/搜索/启停/编辑/复制/删除）
+- **API**：FastAPI 模块化路由（health/templates/correct/scan/batch/reports）+ Python Client
 - **GUI**：Web GUI（Gradio）和桌面 GUI（tkinter）均有模板管理、格式工作台、批量处理、报告中心
-- **测试**：273 个测试通过，覆盖 workbench/repository/handler/code/formula/path_security 等
+- **测试**：381 个测试通过（含 57 个新测试：API 端点、GUI 导入、模板验证与导入）
 
-### 待完成（P2/P3）
+### 待完成（P2 少量 + P3 大部分）
 
-- 低置信度段落人工修正 UI
-- 桌面 GUI 模板管理完整页面
-- 官方高校模板导入自动化流程
-- 国际期刊模板扩展（更多期刊/会议）
-- 批量处理 zip 打包下载
-- API 完善（Batch API、Report API、Python Client）
-- 导出 PDF 报告
 - 多语言字体规则（日韩等）
+- 任务队列（大量批处理）
+- 协作模板库（多人共享）
+- 云端模板更新（自动同步）
 - Word 插件
+- OCR/PDF 反向学习
 - LaTeX 支持

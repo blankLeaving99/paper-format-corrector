@@ -424,7 +424,7 @@ class FileConverter:
         # 数字编号标题：必须是 "1.1 xxx" 或 "1. xxx" 格式且长度适中
         if re.match(r"^\d+\.\d+\.?\s+\S", text) and len(text) < 80:
             return True
-        if re.match(r"^\d+\.\s+[A-Z一-鿿]", text) and len(text) < 80:
+        if re.match(r"^\d+\.\s+[A-Z一-鿿ぁ-んァ-ヶ가-힣]", text) and len(text) < 80:
             return True
         # 全大写英文（至少10个字符，避免误匹配缩写）
         if text.isupper() and 10 < len(text) < 100:
@@ -524,9 +524,18 @@ class FileConverter:
                     break
         if pandoc:
             try:
+                cmd = [
+                    pandoc,
+                    str(input_path),
+                    "-o", str(output_path),
+                    "--from=latex",
+                    "--to=docx",
+                    "--standalone",
+                    "--wrap=none",
+                ]
                 result = subprocess.run(
-                    [pandoc, str(input_path), "-o", str(output_path), "--from=latex", "--to=docx"],
-                    capture_output=True, text=True, timeout=60,
+                    cmd,
+                    capture_output=True, text=True, timeout=120,
                 )
                 if result.returncode == 0 and output_path.exists():
                     return str(output_path)
@@ -546,9 +555,18 @@ class FileConverter:
 
     @staticmethod
     def _extract_text_from_latex(tex: str) -> str:
-        """从 LaTeX 源码中提取纯文本内容"""
-        # 移除注释行
-        tex = re.sub(r"^%.*$", "", tex, flags=re.MULTILINE)
+        r"""从 LaTeX 源码中提取文本内容，保留基本格式标记
+
+        提取规则：
+        - 移除注释行、preamble、\end{document}
+        - 保留 \textbf{} → **bold**、\textit{} → *italic*、\emph{} → *italic*
+        - 保留 \texttt{} → `code`
+        - 提取 \includegraphics 的 alt 文本占位
+        - 保留表格内容（tabular 环境提取为 Markdown 表格）
+        - 章节标题映射为 Markdown 格式
+        """
+        # 移除注释行（行首 %）
+        tex = re.sub(r"(?m)^%.*$", "", tex)
 
         # 移除 preamble（\documentclass 到 \begin{document} 之间）
         tex = re.sub(r"\\documentclass.*?\\begin\{document\}", "", tex, flags=re.DOTALL)
@@ -556,32 +574,108 @@ class FileConverter:
         # 移除 \end{document} 及之后
         tex = re.sub(r"\\end\{document\}.*", "", tex, flags=re.DOTALL)
 
-        # 提取章节标题
+        # ── 提取表格内容（tabular 环境 → Markdown 表格）──
+        def _tabular_to_markdown(match: re.Match) -> str:
+            tabular = match.group(1)
+            # 提取列对齐信息
+            col_match = re.search(r"\{([lcr|]+)\}", tabular)
+            col_spec = col_match.group(1) if col_match else ""
+            # 按 \\ 分行
+            rows = re.split(r"\\\\", tabular)
+            md_rows = []
+            for row in rows:
+                # 移除 \hline、\midrule 等
+                row = re.sub(r"\\(?:hline|midrule|toprule|bottomrule|cline\{[^}]*\})", "", row)
+                row = row.strip()
+                if not row:
+                    continue
+                cells = [c.strip() for c in row.split("&")]
+                md_rows.append("| " + " | ".join(cells) + " |")
+            if md_rows and len(md_rows) >= 1:
+                # 插入分隔行
+                sep_cells = ["---"] * (len(md_rows[0].split("|")) - 2)
+                sep = "| " + " | ".join(sep_cells) + " |"
+                md_rows.insert(1, sep)
+            return "\n\n" + "\n".join(md_rows) + "\n\n" if md_rows else ""
+
+        tex = re.sub(
+            r"\\begin\{tabular\}.*?\n(.*?)\\end\{tabular\}",
+            _tabular_to_markdown,
+            tex,
+            flags=re.DOTALL,
+        )
+
+        # ── 提取章节标题 ──
         tex = re.sub(r"\\(?:part|chapter)\*?\{(.+?)\}", r"\n\n# \1\n", tex)
         tex = re.sub(r"\\section\*?\{(.+?)\}", r"\n\n## \1\n", tex)
         tex = re.sub(r"\\subsection\*?\{(.+?)\}", r"\n\n### \1\n", tex)
         tex = re.sub(r"\\subsubsection\*?\{(.+?)\}", r"\n\n#### \1\n", tex)
+        tex = re.sub(r"\\paragraph\*?\{(.+?)\}", r"\n\n##### \1\n", tex)
 
-        # 提取摘要
-        tex = re.sub(r"\\begin\{abstract\}", "\n\n摘要\n", tex)
+        # ── 提取摘要 ──
+        tex = re.sub(r"\\begin\{abstract\}", "\n\n**摘要**\n\n", tex)
         tex = re.sub(r"\\end\{abstract\}", "\n\n", tex)
 
-        # 移除命令但保留内容
-        tex = re.sub(r"\\(?:textbf|textit|emph|texttt|underline)\{([^}]*)\}", r"\1", tex)
-        tex = re.sub(r"\\(?:cite|ref|label|pageref)\{[^}]*\}", "", tex)
+        # ── 保留行内格式（转为 Markdown） ──
+        tex = re.sub(r"\\textbf\{([^}]*)\}", r"**\1**", tex)
+        tex = re.sub(r"\\(?:textit|emph)\{([^}]*)\}", r"*\1*", tex)
+        tex = re.sub(r"\\texttt\{([^}]*)\}", r"`\1`", tex)
+        # underline/sout 转换放在清理之后处理，避免 _ 和 ~ 被清除
 
-        # 移除环境标记
-        tex = re.sub(r"\\begin\{(?:figure|table|equation|enumerate|itemize|tabular|lstlisting|verbatim)\}.*?\\end\{(?:figure|table|equation|enumerate|itemize|tabular|lstlisting|verbatim)\}", "", tex, flags=re.DOTALL)
+        # ── 图片占位 ──
+        tex = re.sub(
+            r"\\includegraphics(?:\[[^\]]*\])?\{([^}]*)\}",
+            r"[图片: \1]",
+            tex,
+        )
 
-        # 移除剩余的 LaTeX 命令
-        tex = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^}]*\})*", "", tex)
+        # ── 移除引用/标签命令 ──
+        tex = re.sub(r"\\(?:cite|ref|label|pageref|autoref|eqref)\{[^}]*\}", "", tex)
 
-        # 移除特殊字符
-        tex = tex.replace("~", " ")
-        tex = re.sub(r"[{}$\\&^_~]", "", tex)
+        # ── 提取列表项 ──
+        tex = re.sub(r"\\item\s+", "- ", tex)
 
-        # 清理空行
+        # ── 提取脚注 ──
+        tex = re.sub(r"\\footnote\{([^}]*)\}", r" (脚注: \1)", tex)
+
+        # ── 移除环境标记（保留内容） ──
+        # 对于 figure/equation 等，移除 begin/end 标记但保留内容
+        env_names = "figure|table|equation|align|gather|itemize|enumerate|description|lstlisting|verbatim|quote|quotation|theorem|lemma|proof"
+        tex = re.sub(rf"\\begin\{{(?:{env_names})\}}", "", tex)
+        tex = re.sub(rf"\\end\{{(?:{env_names})\}}", "", tex)
+
+        # ── 移除剩余的 LaTeX 命令（保留参数内容） ──
+        # 匹配 \command[opts]{args} 形式，保留最内层花括号内容
+        def _strip_command(match: re.Match) -> str:
+            # 返回最后一个 { } 内的内容
+            groups = re.findall(r"\{([^{}]*)\}", match.group(0))
+            return groups[-1] if groups else ""
+
+        tex = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?(?:\{[^}]*\})+", _strip_command, tex)
+
+        # ── 移除单独的 \command（无参数） ──
+        # 保留常见换行/分页命令的语义
+        tex = re.sub(r"\\(?:newline|linebreak|pagebreak)\b", "\n", tex)
+        tex = re.sub(r"\\(?:newpage)\b", "\n\n", tex)
+        tex = re.sub(r"\\(?:par|bigskip|medskip|smallskip)\b", "\n\n", tex)
+        tex = re.sub(r"\\[a-zA-Z]+\*?(?:\[[^\]]*\])?\s*", "", tex)
+
+        # ── 清理特殊字符 ──
+        tex = re.sub(r"[{}$\\]", "", tex)
+        # 保留 & （表格分隔符已被处理）
+        tex = re.sub(r"[&^]", "", tex)
+
+        # ── 行内格式后置处理（避免 _ 和 ~ 被清理误删） ──
+        # 注意：此时 \underline 和 \sout 已被通用命令清理移除，
+        # 因此这些转换仅用于处理未被清理的残留情况
+        # \underline{...} → <u>...</u>（HTML 格式在 docx 中更可靠）
+        tex = re.sub(r"\\underline\{([^}]*)\}", r"<u>\1</u>", tex)
+        tex = re.sub(r"\\sout\{([^}]*)\}", r"<s>\1</s>", tex)
+
+        # ── 清理空行和空格 ──
         tex = re.sub(r"\n{3,}", "\n\n", tex)
+        tex = re.sub(r"[ \t]+\n", "\n", tex)
+        tex = re.sub(r"\n[ \t]+", "\n", tex)
         tex = tex.strip()
 
         return tex

@@ -54,7 +54,7 @@ class UniversityTemplateImportService:
         Args:
             template_repository: Optional TemplateRepository instance
         """
-        from ..infra.template_repository import TemplateRepository
+        from ...infra.template_repository import TemplateRepository
         self.repo = template_repository or TemplateRepository()
 
     def create_workflow(

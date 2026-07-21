@@ -856,6 +856,11 @@ class PaperFormatDesktopApp:
         ttk.Button(op_row2, text="导入模板", command=self._import_template_dialog).pack(side=tk.LEFT, padx=3)
         ttk.Button(op_row2, text="删除", command=self._delete_template).pack(side=tk.RIGHT, padx=3)
 
+        # 第三行：云端更新
+        op_row3 = ttk.Frame(op_frame)
+        op_row3.pack(fill=tk.X, pady=2)
+        ttk.Button(op_row3, text="检查模板更新", command=self._check_template_updates).pack(side=tk.LEFT, padx=3)
+
         # ── 最近使用区 ──
         usage_frame = ttk.LabelFrame(right_panel, text="最近使用", padding=5)
         usage_frame.pack(fill=tk.X, padx=5, pady=(0, 5))
@@ -1335,6 +1340,81 @@ class PaperFormatDesktopApp:
             self.tm_detail_text.config(state=tk.DISABLED)
         else:
             messagebox.showerror("删除失败", f"模板不存在: {slug}")
+
+    def _check_template_updates(self):
+        """检查云端模板更新（后台线程）"""
+        import yaml as _yaml
+
+        config_path = Path("config/updater.yaml")
+        remote_url = ""
+        if config_path.exists():
+            try:
+                with open(config_path, encoding="utf-8") as f:
+                    updater_config = _yaml.safe_load(f) or {}
+                remote_url = updater_config.get("updater", {}).get("remote_url", "")
+            except Exception:
+                pass
+
+        if not remote_url:
+            messagebox.showwarning("提示", "未配置远程仓库地址，请在 config/updater.yaml 中设置 remote_url")
+            return
+
+        self.tm_status_var.set("正在检查云端更新...")
+
+        def do_check():
+            try:
+                from .infra.updater import AutoUpdater, VersionChecker
+                repo = self._get_tm_repo()
+                checker = VersionChecker(remote_url)
+
+                local_versions = {}
+                for t in repo.list_templates(active_only=False):
+                    template_id = t.slug
+                    for prefix in ("remote-", "personal-", "builtin-"):
+                        if template_id.startswith(prefix):
+                            template_id = template_id[len(prefix):]
+                            break
+                    local_versions[template_id] = t.version
+
+                updates = checker.check_updates(local_versions)
+
+                if not updates:
+                    self.root.after(0, lambda: self.tm_status_var.set("所有模板已是最新"))
+                    self.root.after(0, lambda: messagebox.showinfo("检查完成", "所有模板已是最新"))
+                    return
+
+                update_text = "\n".join(
+                    f"  {'[新]' if u['action'] == 'new' else '[更新]'} {u['name']} "
+                    f"{'v' + u.get('version', '') if u['action'] == 'new' else u.get('from_version', '') + ' -> ' + u.get('to_version', '')}"
+                    for u in updates
+                )
+                msg = f"发现 {len(updates)} 个更新:\n{update_text}\n\n是否更新？"
+
+                def on_confirm():
+                    if messagebox.askyesno("确认更新", msg):
+                        self.tm_status_var.set("正在下载更新...")
+                        threading.Thread(target=do_apply, daemon=True).start()
+
+                def do_apply():
+                    try:
+                        updater = AutoUpdater(repo, checker)
+                        applied = updater.check_now()
+                        self.root.after(0, lambda: self.tm_status_var.set(f"已更新 {len(applied)} 个模板"))
+                        self.root.after(0, lambda: messagebox.showinfo("更新完成", f"已更新 {len(applied)} 个模板"))
+                        self.root.after(0, self._refresh_template_list)
+                    except Exception as exc:
+                        err_msg = str(exc)
+                        self.root.after(0, lambda m=err_msg: self.tm_status_var.set(f"更新失败: {m}"))
+                        self.root.after(0, lambda m=err_msg: messagebox.showerror("更新失败", m))
+
+                self.root.after(0, on_confirm)
+
+            except Exception as outer_exc:
+                err_msg = str(outer_exc)
+                self.root.after(0, lambda m=err_msg: self.tm_status_var.set(f"检查失败: {m}"))
+                self.root.after(0, lambda m=err_msg: messagebox.showwarning("检查失败", f"网络不可用或地址错误:\n{m}\n\n已降级为跳过，不影响本地模板使用。"))
+
+        threading.Thread(target=do_check, daemon=True).start()
 
     def _refresh_usage_history(self):
         """刷新最近使用记录"""

@@ -546,6 +546,59 @@ def template_delete(slug):
     return f"模板不存在: {slug}"
 
 
+def template_check_update():
+    """检查云端模板更新"""
+    import yaml as _yaml
+
+    config_path = Path("config/updater.yaml")
+    remote_url = ""
+    if config_path.exists():
+        try:
+            with open(config_path, encoding="utf-8") as f:
+                updater_config = _yaml.safe_load(f) or {}
+            remote_url = updater_config.get("updater", {}).get("remote_url", "")
+        except Exception:
+            pass
+
+    if not remote_url:
+        return "未配置远程仓库地址，请在 config/updater.yaml 中设置 remote_url"
+
+    try:
+        from .infra.updater import AutoUpdater, VersionChecker
+
+        repo = _get_template_repo()
+        checker = VersionChecker(remote_url)
+
+        local_versions = {}
+        for t in repo.list_templates(active_only=False):
+            template_id = t.slug
+            for prefix in ("remote-", "personal-", "builtin-"):
+                if template_id.startswith(prefix):
+                    template_id = template_id[len(prefix):]
+                    break
+            local_versions[template_id] = t.version
+
+        updates = checker.check_updates(local_versions)
+
+        if not updates:
+            return "所有模板已是最新。"
+
+        lines = [f"发现 {len(updates)} 个更新:"]
+        for u in updates:
+            if u["action"] == "new":
+                lines.append(f"  + {u['name']} (新模板 v{u['version']})")
+            else:
+                lines.append(f"  ~ {u['name']} {u['from_version']} -> {u['to_version']}")
+
+        updater = AutoUpdater(repo, checker)
+        applied = updater.check_now()
+        lines.append(f"\n已更新 {len(applied)} 个模板。")
+        return "\n".join(lines)
+
+    except Exception as e:
+        return f"检查更新失败（网络不可用或地址错误）: {e}\n已降级为跳过，不影响本地模板使用。"
+
+
 def template_export(slug, fmt):
     """导出模板"""
     if not slug or not slug.strip():
@@ -1115,12 +1168,17 @@ def build_ui():
                         tm_delete_btn = gr.Button("删除", variant="stop")
                         tm_delete_output = gr.Textbox(label="删除结果", lines=2)
 
+                        gr.Markdown("#### 云端更新")
+                        tm_update_btn = gr.Button("检查模板更新", variant="secondary")
+                        tm_update_output = gr.Textbox(label="更新结果", lines=3)
+
                 tm_list_btn.click(fn=template_list, inputs=[tm_category], outputs=[tm_list_output])
                 tm_search_btn.click(fn=template_search, inputs=[tm_search_input], outputs=[tm_search_output])
                 tm_detail_btn.click(fn=template_detail, inputs=[tm_slug_input], outputs=[tm_detail_output])
                 tm_import_btn.click(fn=template_import, inputs=[tm_import_file, tm_import_name, tm_import_category], outputs=[tm_import_output])
                 tm_export_btn.click(fn=template_export, inputs=[tm_export_slug, tm_export_fmt], outputs=[tm_export_file, tm_export_output])
                 tm_delete_btn.click(fn=template_delete, inputs=[tm_delete_slug], outputs=[tm_delete_output])
+                tm_update_btn.click(fn=template_check_update, inputs=[], outputs=[tm_update_output])
 
             # Tab: 报告中心
             with gr.Tab("报告中心"):

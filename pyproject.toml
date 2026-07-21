@@ -41,7 +41,8 @@ doc-convert = ["docx2docx>=0.1.0"]
 gui = ["gradio>=4.0.0"]
 drag-drop = ["tkinterdnd2>=0.4.0"]
 all = ["docx2pdf>=0.1.8", "mammoth>=1.6.0", "pdfplumber>=0.10.0", "docx2docx>=0.1.0", "gradio>=4.0.0", "tkinterdnd2>=0.4.0"]
-dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.4.0"]
+sync = ["httpx>=0.24.0"]
+dev = ["pytest>=7.0", "pytest-cov>=4.0", "ruff>=0.4.0", "httpx>=0.24.0"]
 
 [project.scripts]
 paper-fmt = "paper_format_corrector.cli:main"

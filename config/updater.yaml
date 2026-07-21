@@ -1,0 +1,12 @@
+# 云端模板更新配置
+# ===========================================
+
+updater:
+  # 远程模板仓库基础 URL
+  remote_url: "https://raw.githubusercontent.com/your-org/templates/main/"
+  # 本地缓存目录
+  local_dir: "./templates_cache/"
+  # 检查间隔（秒），默认 24 小时
+  check_interval: 86400
+  # 是否自动更新
+  auto_update: true

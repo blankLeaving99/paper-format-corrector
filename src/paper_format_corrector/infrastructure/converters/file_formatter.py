@@ -194,6 +194,17 @@ class FormatCorrector:
                 self._runtime_font_overrides["heading_chinese"] = lang_fonts["heading"]
             if "english_in_chinese" in lang_fonts:
                 self._runtime_font_overrides["english"] = lang_fonts["english_in_chinese"]
+            # 日文/韩文专用字体键
+            if primary == "japanese":
+                if "body" in lang_fonts:
+                    self._runtime_font_overrides["japanese"] = lang_fonts["body"]
+                if "heading" in lang_fonts:
+                    self._runtime_font_overrides["japanese_heading"] = lang_fonts["heading"]
+            elif primary == "korean":
+                if "body" in lang_fonts:
+                    self._runtime_font_overrides["korean"] = lang_fonts["body"]
+                if "heading" in lang_fonts:
+                    self._runtime_font_overrides["korean_heading"] = lang_fonts["heading"]
         else:
             self._runtime_font_overrides = None
 
@@ -693,26 +704,53 @@ class FormatCorrector:
         else:
             paragraph.paragraph_format.line_spacing = spacing_value
 
+    @staticmethod
+    def _get_script_type(char: str) -> str:
+        """返回字符的脚本类型: 'zh' | 'ja' | 'ko' | 'en' | 'other'"""
+        if '\u4e00' <= char <= '\u9fff':
+            return 'zh'      # 中文
+        if '\u3040' <= char <= '\u309f' or '\u30a0' <= char <= '\u30ff':
+            return 'ja'      # 日文假名（平假名/片假名）
+        if '\uac00' <= char <= '\ud7af' or '\u1100' <= char <= '\u11ff':
+            return 'ko'      # 韩文（谚文/辅音）
+        if 'a' <= char <= 'z' or 'A' <= char <= 'Z':
+            return 'en'      # 英文
+        return 'other'
+
     def _apply_mixed_font(self, paragraph, font_rules, style_rules):
-        cn_font = font_rules.get("chinese", "宋体")
-        en_font = font_rules.get("english", "Times New Roman")
+        font_map = {
+            'zh': font_rules.get("chinese", "宋体"),
+            'ja': font_rules.get("japanese", "MS Mincho"),
+            'ko': font_rules.get("korean", "Batang"),
+            'en': font_rules.get("english", "Times New Roman"),
+        }
         font_size = style_rules.get("font_size", 12)
 
         for run in paragraph.runs:
             text = run.text
             if not text:
                 continue
-            has_chinese = bool(re.search(r"[一-鿿]", text))
-            has_english = bool(re.search(r"[a-zA-Z]", text))
 
-            if has_chinese and has_english:
-                run.font.name = en_font
-                set_east_asian_font(run, cn_font)
-            elif has_chinese:
-                run.font.name = cn_font
-                set_east_asian_font(run, cn_font)
+            script_counts = {'zh': 0, 'ja': 0, 'ko': 0, 'en': 0}
+            for char in text:
+                script = self._get_script_type(char)
+                if script in script_counts:
+                    script_counts[script] += 1
+
+            dominant_script = max(script_counts, key=script_counts.get)
+            if script_counts[dominant_script] == 0:
+                dominant_script = 'en'
+
+            primary_font = font_map.get(dominant_script, font_map['en'])
+            east_asian_font = None
+            if dominant_script in ('zh', 'ja', 'ko'):
+                east_asian_font = font_map.get(dominant_script)
+
+            if east_asian_font:
+                run.font.name = primary_font
+                set_east_asian_font(run, east_asian_font)
             else:
-                run.font.name = en_font
+                run.font.name = primary_font
 
             run.font.size = Pt(font_size)
             if style_rules.get("bold") is not None:
@@ -722,7 +760,15 @@ class FormatCorrector:
 
     def _set_run_font(self, run, font_rules, style_rules):
         run.font.name = font_rules.get("english", "Times New Roman")
-        set_east_asian_font(run, font_rules.get("chinese", "宋体"))
+        # 根据检测到的语言选择正确的 east_asian 字体键
+        lang = getattr(self, '_detected_language', 'chinese')
+        if lang == "japanese":
+            ea_font = font_rules.get("japanese", font_rules.get("chinese", "宋体"))
+        elif lang == "korean":
+            ea_font = font_rules.get("korean", font_rules.get("chinese", "宋体"))
+        else:
+            ea_font = font_rules.get("chinese", "宋体")
+        set_east_asian_font(run, ea_font)
         if style_rules.get("bold"):
             run.font.bold = True
         if style_rules.get("font_size"):

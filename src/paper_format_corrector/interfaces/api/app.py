@@ -16,7 +16,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from paper_format_corrector import __version__
-from .routes import batch, correct, health, reports, scan, templates
+from .routes import batch, correct, health, reports, scan, tasks, templates
 
 app = FastAPI(
     title="论文格式矫正 API",
@@ -60,6 +60,10 @@ app = FastAPI(
             "name": "reports",
             "description": "处理历史与报告查询",
         },
+        {
+            "name": "tasks",
+            "description": "统一任务状态查询",
+        },
     ],
 )
 
@@ -79,6 +83,7 @@ app.include_router(correct.router)
 app.include_router(scan.router)
 app.include_router(batch.router)
 app.include_router(reports.router)
+app.include_router(tasks.router)
 
 
 @app.get("/", include_in_schema=False)
